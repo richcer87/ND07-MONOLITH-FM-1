@@ -34,6 +34,15 @@ belong to their owners. Dinghy is not made or endorsed by them.
 
 ## ND-07 // MONOLITH
 
-`firmware/src/nd07.c`, `tools/gen_nd07_tables.py`, `tools/gen_samples.py`, `samples/` and `tests/scripts/nd07_tour.txt`: ND-07 // MONOLITH for the FM-1, a port of
+`firmware/src/nd07.c`, `firmware/src/nd07_sense.h`, `web/index.html`, `tools/gen_nd07_tables.py`, `tools/gen_samples.py`,
+`samples/`, `tests/sense_test.c` and `tests/scripts/` (`nd07_*`, `pad`, `import`, `chip`): ND-07 // MONOLITH for the FM-1, a port of
 the Noise Dungeon REAPER workstation by Rich Cervantes (Noise Dungeon), GPL-3.0-only like the platform it stands on
 (Dinghy by zvenson, after Felucca by Leo Kuroshita and SLOOP by isod89).
+
+The key velocity (`firmware/src/nd07_sense.h`; the non-blocking ADC reads in `firmware/hal/fm1_adc.h` and the row
+sampling and driving in `firmware/hal/fm1_input.h`, `FM1_ANALOG`) follows Velo / MONK-1 by Charles Vestal
+([charlesvestal/fm1-monk](https://github.com/charlesvestal/fm1-monk), GPL-3.0-only): the method, the thresholds and the
+velocity curve are his measurements, rewritten and cut down here.
+
+The CHIP OSC presets follow the idea of sfxr by Tomas Pettersson (DrPetter): a kind of sound as a recipe of random
+ranges. No sfxr code is used; the recipes here are ND-07's own.

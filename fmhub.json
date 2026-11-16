@@ -1,0 +1,7 @@
+{
+  "what": "ND-07 // MONOLITH: a sampler and synth for game-audio SFX design. Oscillators and 8 sample slots into a modal resonator, transient shaper, DESTROY, a resonant filter, grains, OTT, delay + flanger and a multiband reverb; HAPPY ACCIDENT, parameter locks, MORPH between two patches and BATCH variations. CHIP OSC: NES-style pulse, triangle and LFSR noise, the 60 Hz frame (sweep, arpeggio, 4-bit volume) and sfxr-style presets. A Chaos Pad from a phone or computer (Web MIDI) and sample import from the browser.",
+  "kinds": ["synth"],
+  "sounds": "own: the factory samples are synthesized by tools/gen_samples.py",
+  "image": "assets/fmhub.png",
+  "editor": "web/index.html"
+}

@@ -1,0 +1,7 @@
+# web/index.html's sample import over SysEx: a test sound into slot 5, saved; then played
+100 enc 6 4
+300 import 5
+400 shot
+500 midi 0x90 60 120
+1300 midi 0x80 60 0
+2000 end
