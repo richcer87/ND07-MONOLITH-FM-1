@@ -78,6 +78,15 @@ static int app_sysex(const uint8_t *p, uint32_t n);
 #else
 #define DSP_RAM static __attribute__((section(".ram_text"), noinline, used))
 #endif
+/* Flash code (XIP, 0x02xxxxxx) cannot call RAM code (0x01C0xxxx) directly: it is beyond the 23-bit jump range
+ * (the linker: "relocation truncated to fit: R_PI32V2_LONG_JUMP_23M2"). RAM_CALL goes through a pointer the compiler
+ * cannot fold back into a direct call (as fm1_flash.h's FL_FAR); on the host it is a plain call. */
+#ifdef DINGHY_HOST
+#define RAM_CALL(fn) fn
+#else
+static inline void *ram_far(void *p) { void *volatile q = p; return q; }
+#define RAM_CALL(fn) ((__typeof__(&fn))ram_far((void *)&fn))
+#endif
 
 #define DLY_N 44100u                            /* 1 s */
 #define FLG_N 1024u
@@ -1395,18 +1404,18 @@ static void dsp_block(int32_t *out, uint32_t n) /* one block of the chain */
     stage_src(n);
     if (V.pquiet < 4096u || on || V.stage != ST_OFF) {   /* the voice's own chain; ~90 ms after it fell silent only */
         uint32_t pq = V.pquiet;                         /* the FX tails are left to compute */
-        stage_pre(n);
-        if (K.rfmode) stage_flt(n);
-        if (K.ott && !K.opost) stage_ott(n);
+        RAM_CALL(stage_pre)(n);
+        if (K.rfmode) RAM_CALL(stage_flt)(n);
+        if (K.ott && !K.opost) RAM_CALL(stage_ott)(n);
         if (V.stage == ST_OFF && !K.gfrz) { for (i = 0; i < n; i++) pq = absi(blk_b[i]) <= 1 ? pq + 1u : 0u; }
         else pq = 0;
         V.pquiet = pq;
     } else { for (i = 0; i < n; i++) blk_b[i] = 0; tm_lvl = 0; }
-    stage_fx(n);
+    RAM_CALL(stage_fx)(n);
     if (!K.rv_wet) V.rv_off = 1;
-    if (K.ott && K.opost) stage_ott(n);         /* POST FX: on the tails too */
+    if (K.ott && K.opost) RAM_CALL(stage_ott)(n);         /* POST FX: on the tails too */
     if (!K.ott) tm_gd[0] = tm_gd[1] = tm_gd[2] = 0;
-    stage_out(out, n);
+    RAM_CALL(stage_out)(out, n);
     if (rec_state == REC_ON)                    /* the recorder: to 22.05 kHz through a [1 2 1] / 4 low-pass, mu-law */
         for (i = 0; i < n && rec_state == REC_ON; i++) {
             if (rec_odd ^= 1u) { rec_prev = blk_b[i]; continue; }
