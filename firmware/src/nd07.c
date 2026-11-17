@@ -1122,7 +1122,9 @@ DSP int32_t ott_tick(int32_t x)              /* split, detect, apply, mix (mono)
     if (!(++V.odet & 3u))                        /* the level: every 4th sample is plenty for a 5 ms RMS */
         for (b = 0; b < 3u; b++) {
             int32_t lv = bd[b] >> 8;            /* Q15 / 4 */
-            uint32_t sq = (uint32_t)(lv * lv);
+            uint32_t al = (uint32_t)(lv < 0 ? -lv : lv), sq;
+            if (al > 65535u) al = 65535u;      /* (a band driven far past full scale: the square stays in 32 bits) */
+            sq = al * al;
             V.oms[b] += (uint32_t)(int32_t)(((int64_t)((int64_t)sq - V.oms[b]) * K.o_rms) >> 16);
         }
     if (--V.ocnt <= 0) { V.ocnt = 16; ott_gains(); }
@@ -2274,6 +2276,9 @@ static void draw_footer(void)
 
 /* ======================================================================== the session in flash */
 typedef struct { uint32_t ver; int16_t p[NP]; uint32_t lk[4]; int16_t a[NP], b[NP]; uint8_t ab, mon; } session_t;
+_Static_assert(NP <= 4 * 32, "the locks: 4 words of bits, one a parameter");
+_Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session must fit the settings sector");
+_Static_assert(NPAGE <= 16, "a page's change flag (1 << PMOD) must stay below KG_NOTE");
 #define SESSION_VER (0x0D070600u + NP)
 _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session: one settings sector");
 static void session_save(void)
@@ -2318,6 +2323,7 @@ static sn_key_t sn[2 * 11];
 static uint8_t sn_cell[27];                     /* key -> its cell in sn[], 255 = none */
 static uint32_t sn_fl = SN_FLOOR;
 #ifdef FM1_ANALOG
+_Static_assert(FM1_NCOL == 11u, "sn[]: 2 rows of 11 columns");
 static void sense_sample(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t driven)
 {
     sn_sample(&sn[(rowbit - 3u) * 11u + col], v, driven, sn_fl);
