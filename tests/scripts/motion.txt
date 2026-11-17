@@ -1,0 +1,18 @@
+# 16 RTPC (LFO x3): SEL sweeps 0 -> 100 % with a note held; then 12 SPACE + MOTION (FX x5): a 3 s PASS-BY at DIST 30
+# btn: 2 FX, 3 SEL, 5 LFO; enc: 2..5 = K1..K4
+100 btn 5
+150 btn 5
+200 btn 5
+300 btn 3
+1800 shot
+3600 shot
+4000 btn 2
+4080 btn 2
+4160 btn 2
+4240 btn 2
+4320 btn 2
+4500 enc 4 30
+4600 enc 2 30
+4700 btn 3
+6200 shot
+9000 end

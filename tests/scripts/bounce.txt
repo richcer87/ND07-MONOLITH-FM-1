@@ -1,0 +1,21 @@
+# 01 SRC set B: REC = BOUNCE; SEL arms, a note is recorded into the slot, the chain goes dry (SOURCE: SAMPLE)
+# then BATCH (SEQ x5: set C) with MATCH ON, TARGET -3 dB: OUT is set so the hits' mean peak lands there
+# btn: 3 SEL, 8 HOME, 11 SEQ; enc: 2..5 = K1..K4
+100 btn 8
+200 enc 5 2
+300 btn 3
+400 keys 1
+1400 keys 0
+4000 shot
+4200 btn 11
+4250 btn 11
+4300 btn 11
+4350 btn 11
+4400 btn 11
+4500 enc 2 1
+4600 btn 3
+9000 shot
+15000 shot
+15100 btn 3
+21500 shot
+22000 end

@@ -25,6 +25,16 @@ run "SMK-37: velocity, a pad, an outer key, the pitch wheel" env BOARD=smk37 sh 
 run "ND-07: the CHAOS PAD and the aftertouch over MIDI" sh tests/run_host.sh tests/scripts/pad.txt
 run "ND-07: a sample over SysEx, as web/index.html sends it" sh tests/run_host.sh tests/scripts/import.txt
 run "ND-07: 14 CHIP OSC, a preset of each kind" sh tests/run_host.sh tests/scripts/chip.txt
+run "ND-07: VARIATION keys, the seeded hits" sh tests/run_host.sh tests/scripts/variation.txt
+run "ND-07: SUSTAIN loop, START > LOOP > STOP" sh tests/run_host.sh tests/scripts/sustain.txt
+run "ND-07: RTPC sweep, SPACE + MOTION pass-by" sh tests/run_host.sh tests/scripts/motion.txt
+run "ND-07: LAYER 3, the SHEPARD wave" sh tests/run_host.sh tests/scripts/layers.txt
+run "ND-07: REC BOUNCE, BATCH with level MATCH" sh tests/run_host.sh tests/scripts/bounce.txt
+run "ND-07: REC OVERDUB" sh tests/run_host.sh tests/scripts/overdub.txt
+run "ND-07: PHYSICS TRIGGER: BOUNCE, DEBRIS, SCATTER" sh tests/run_host.sh tests/scripts/physics.txt
+run "ND-07: SAMPLE LAB: REVERSE, HALF SPD, REVERT" sh tests/run_host.sh tests/scripts/lab.txt
+run "ND-07: MOD ENV, the HAPPY ACCIDENT's recipes" sh tests/run_host.sh tests/scripts/modenv.txt
+run "ND-07: the pad's GESTURE recorded and replayed" sh tests/run_host.sh tests/scripts/gesture.txt
 $CC -o "$OUT/sense_test" tests/sense_test.c
 run "ND-07: key velocity and aftertouch from synthetic presses" "$OUT/sense_test"
 

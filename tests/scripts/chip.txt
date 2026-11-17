@@ -1,18 +1,8 @@
-# 14 CHIP OSC (SELECT turned 13 steps): a preset of each kind with SEL, played at C4 (tests/run_host.sh tests/scripts/chip.txt)
-# btn: 3 SEL 8 HOME; enc: 0 SELECT, 4 = K3 (set B: PRESET)
-150 enc 0 1
-170 enc 0 1
-190 enc 0 1
-210 enc 0 1
-230 enc 0 1
-250 enc 0 1
-270 enc 0 1
-290 enc 0 1
-310 enc 0 1
-330 enc 0 1
-350 enc 0 1
-370 enc 0 1
-390 enc 0 1
+# 02 CHIP OSC (HOME pressed 3 times: 01 A B C, 02 A): a preset of each kind with SEL, played at C4 (tests/run_host.sh tests/scripts/chip.txt)
+# btn: 3 SEL 8 HOME; enc: 4 = K3 (set B: PRESET)
+150 btn 8
+200 btn 8
+250 btn 8
 500 btn 3
 600 shot
 1500 btn 8

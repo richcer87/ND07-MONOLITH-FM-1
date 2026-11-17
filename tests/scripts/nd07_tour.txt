@@ -1,4 +1,4 @@
-# ND-07 // MONOLITH v0.4 on the host: synth + sampler tour (tests/run_host.sh tests/scripts/nd07_tour.txt)
+# ND-07 // MONOLITH on the host (v0.8 pages): synth + sampler tour (tests/run_host.sh tests/scripts/nd07_tour.txt)
 # keys: bit k = key k (0 = F3, 7 = C4, 19 = C5). btn: 0 OCT- 1 OCT+ 2 FX 3 SEL 4 ENV 5 LFO 6 EDIT 7 GLO 8 HOME 9 SAVE 10 ARP 11 SEQ 12 PLAY 13 REC
 # enc: 0 SELECT 1 ALGORITHM 2..5 K1..K4 6 PRESETS
 # 01 OSC: a held saw C4, then a little melody
@@ -50,7 +50,7 @@
 7600 keys 0
 8200 shot
 # 07 REVERB: big, bright lows
-8400 btn 7
+8400 btn 2
 8500 enc 2 30
 8600 enc 3 15
 8700 enc 5 30
@@ -83,20 +83,20 @@
 16400 shot
 16600 btn 9
 # 05 OTT: deeper, then POST FX (on the reverb tail)
-16800 btn 11
+16800 btn 7
 16900 enc 2 60
 17000 keys 0x80
 17400 shot
 17500 keys 0
-17700 btn 11
+17700 btn 7
 17800 enc 5 1
 17900 keys 0x800
 18300 shot
 18400 keys 0
 # the OTT's other knob sets: C (band gains, threshold), D (crossovers, solo)
-18600 btn 11
-18700 btn 11
+18600 btn 7
+18700 btn 7
 18800 shot
-18900 btn 11
+18900 btn 7
 19000 shot
 19500 end

@@ -1,14 +1,15 @@
-# ND-07 // MONOLITH · FM-1 edition · v0.6
+# ND-07 // MONOLITH · FM-1 edition · v0.9
 
 Firmware personalizado para el **M-VAVE FM-1**: la estación de SFX ND-07 // MONOLITH (REAPER, Lua ReaImGui + JSFX),
-**sampler y sintetizador para diseño de SFX de videojuegos**. 14 páginas (resonador modal, transient shaper, DESTROY,
-OTT multibanda, MORPH A↔B y BATCH de variaciones, **CHAOS PAD** desde el teléfono, **CHIP OSC** de 8 bits), HAPPY ACCIDENT, locks de parámetros,
+**sampler y sintetizador para diseño de SFX de videojuegos**. 19 páginas (resonador modal, transient shaper, DESTROY,
+OTT multibanda, **VARIATION** con semilla, **BATCH + FIRE TEST**, **RTPC**, **SPACE + MOTION**, MORPH A↔B, **CHAOS PAD**
+desde el teléfono, **CHIP OSC** de 8 bits, loop START > LOOP > STOP), HAPPY ACCIDENT, locks de parámetros,
 UNDO de 16 pasos y los 4 temas, en C entero para el chip JieLi AC79 (sin FPU).
 
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 0.6, sin probar en hardware.** Compila y corre en el simulador de host (audio WAV + capturas). El `.fwsc` se
+> **Estado: 0.9.** La 0.6 ya corre en un FM-1 "New"; lo nuevo de la 0.7, 0.8 y 0.9 está probado en el simulador de host (audio WAV + capturas). El `.fwsc` se
 > compila en GitHub Actions con la toolchain de JieLi. Pruébalo primero en el emulador. Instalar firmware es bajo tu
 > propio riesgo; el [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-**
 > al encender entra al rescate USB. La sesión guardada de versiones anteriores no se carga (cambió el formato): arranca
@@ -25,11 +26,86 @@ pantalla y flash. Licencia GPL-3.0-only.
 3. Abre [joakimeriksson.github.io/fm1-emu](https://joakimeriksson.github.io/fm1-emu/), abre tu `nd07.fwsc` en la página
    y presiona Start.
 
-Para una versión publicada: `git tag v0.6 && git push --tags`.
+Para una versión publicada: `git tag v0.9 && git push --tags`.
+
+## Nuevo en v0.9: herramientas creativas
+
+| Herramienta | Dónde | Qué hace |
+| --- | --- | --- |
+| **MOD ENV** | 06 ENVELOPES, juego C | Una segunda envolvente de un disparo por nota: sube en M ATK, baja en M DEC (curva), y mueve **M AMT** (±) de cualquier parámetro (**M TGT**). La caída de pitch de un impacto, el barrido de un láser, un filtro que se abre. La pantalla dibuja la curva y el valor en vivo. |
+| **PHYSICS TRIGGER** | 16 (SEQ ×3) | Una tecla toca un patrón de golpes: **BOUNCE** (rebotes cada vez más juntos y más débiles), **DEBRIS** (muchos al principio, luego sueltos, cada uno a su nivel), **ROLL** (parejo e inquieto), **STUTTER** (ametralladora), **SCATTER** (al azar mientras sostienes la tecla: gotas, chispas, ambientes). HITS, TIME, FALL (cuánto baja el nivel), PITCH (cuánto cambia la afinación hacia el final), JITTER. El patrón sale de la SEED: misma semilla, mismo patrón. Con VARY, cada golpe es una variación. SEL lo toca con la última nota. |
+| **SAMPLE LAB** | 05 (ARP ×2) | Trabaja el slot activo en su sitio, sin gastar CPU al tocar: REVERSE, CROP (a la región del loop de 01 C), FADE IN / FADEOUT (sobre AMOUNT), 1/2 SPD (una octava abajo, el doble de largo, hasta 1.48 s), 2x SPD, MAX LVL (normalizar) y REVERT (el slot como está guardado). SEL aplica; SAVE lo guarda en flash. Con BOUNCE primero, cualquier sonido del motor se vuelve material. Pre-verb: REVERSE, BOUNCE con reverb, REVERSE. |
+| **HA KIND** (recetas) | 14, juego B | El HAPPY ACCIDENT (botón REC) dentro de una receta: FREE (como siempre), IMPACT, WHOOSH, UI, MAGIC, MONSTER, WEAPON, AMBIENT. Cada toque da un sonido nuevo de ese tipo; respeta los locks y HA AMT; no cambia de slot. |
+| **GESTURE** | 19, juego B · SEL | Graba un movimiento del Chaos Pad (hasta 4 s) y cada nota lo repite: 1-SHOT o LOOP. Se arma con SEL en la página 19 o con **● GESTO** en la página del teléfono; se guarda con la sesión. |
+
+**Teléfono como Chaos Pad:** `web/index.html` ahora tiene el botón ● GESTO, pantalla completa y mantiene la pantalla
+encendida. Ver "Conectar el teléfono".
+
+Son 19 páginas; la sesión de la 0.8 no se carga. *(Las secciones de versiones anteriores, abajo, citan los números
+de página de su momento; la tabla de módulos tiene los actuales.)*
+
+## Nuevo en v0.8: interfaz rediseñada y correcciones
+
+**La pantalla, de arriba a abajo:**
+
+- **Mapa de la cadena** (arriba, en lugar del rótulo "// MONOLITH"): una marca por módulo, agrupadas por botón. Alta y
+  de color = el módulo está actuando sobre el sonido; subrayada = la página en la que estás. De un vistazo sabes qué
+  está encendido sin recorrer páginas.
+- **Página:** el número en una pastilla, el nombre y los juegos de perillas (A B C D; sólo si hay más de uno).
+- **Perillas según lo que son:** las listas se dibujan como sus posiciones en fila (las de dos opciones, como un
+  interruptor; en OFF / BYPASS quedan apagadas); las ± se llenan desde el centro; el resto, desde la izquierda. El valor
+  va en blanco y el nombre en gris. **Naranja con candado** = con lock. **Punto + valor en color** = algo la está
+  modulando (LFO, RTPC, pad o aftertouch) y el número es su valor en ese instante.
+- **Pie:** qué hace **SEL** en esta página (REC ARM, NEW SFX, PLAY PASS, NEW SEED, BATCH / FIRE / STOP, SWEEP,
+  RANDOMIZE), candado + número de locks, la octava si no es 0, flecha + pasos de UNDO, un cuadro naranja si el sample
+  grabado no está en flash, el CPU (en el aparato) y un **medidor de salida** (−48..0 dBFS, los últimos 3 dB en
+  naranja, con retención de pico de 1 s).
+
+**Orden:**
+
+- **MORPH** ya no es una página con una sola perilla: está en **13 VARIATION + MORPH, juego B** (MORPH, HA AMT, EVOLVE),
+  junto a BATCH, que es quien usa A y B. **SEL + OCT− / OCT+** guardan A / B en ese juego. Son 17 páginas.
+- **LAYER** pasó de la envolvente a **01 OSC & SAMPLE, juego D** (es parte de la fuente), con su pantalla: cada capa,
+  su afinación y su nivel.
+- **Lista de destinos** (LFO, RTPC, pad, aftertouch): sólo lo que el sonido oye. Fuera 18 entradas que no hacían nada
+  (semilla, modos de batch, REC, MATCH…).
+- Los avisos "SEL: …" y los textos repetidos salieron de las pantallas (están en el pie); el CHAOS PAD ya no encima
+  sus textos; SPACE dibuja anillos de distancia y muestra nivel, low-pass real y reverb; BATCH muestra los huecos de
+  los golpes por venir.
+
+**Corregido:**
+
+- Al terminar un BATCH con RESEED, el aviso "NEW SEED" se perdía.
+- Teclas = variaciones: soltar una tecla cortaba la nota aunque otra siguiera presionada.
+- **BOUNCE** ahora deja OUT de modo que el sample suene al nivel con el que se grabó (hasta donde alcanza OUT 100 %).
+- Tras un OVERDUB los puntos del loop se vuelven a buscar en los cruces por cero del sample nuevo.
+- SPACE al encenderse ya no parte de un estado viejo del filtro (un clic posible).
+- La pantalla ya no se redibuja 20 veces por segundo en reposo en 7 de las páginas; sí mientras haya sonido (también
+  en las colas de reverb).
+- La sesión de la 0.7 no se carga (cambió la lista de destinos).
+
+## Nuevo en v0.7: un pilar para assets de juego
+
+Tomado como inspiración de la versión de REAPER, pensado para lo que un motor de juego hace con un sonido.
+**Las páginas cambiaron de número** (agrupadas por botón; tabla abajo, ya con el orden de la 0.8). La sesión de la 0.6 no se carga.
+
+| Qué | Dónde | Para qué |
+| --- | --- | --- |
+| **Teclas = variaciones** | 13 VARIATION · KEYS: VARIATNS | Cada tecla dispara la variación *n* de la última nota: misma semilla, mismo resultado, siempre. SEL: semilla nueva |
+| **Semilla, HA AMT, EVOLVE** | 13 VARIATION | VARY dosifica el azar por golpe; HA AMT cuánto mueve el HAPPY ACCIDENT; EVOLVE empuja 3 parámetros a cada nota (pasos con UNDO) |
+| **LFO HIT RND / AMP ENV** | 15 LFO · SHAPE | Un valor al azar por golpe (o por variación) y la envolvente como fuente de modulación |
+| **FIRE TEST** | 14 BATCH, juego B · SEL | Dispara a RATE (30..1200 rpm) desde un pool de variaciones: RANDOM, NO REPT o SHUFFLE, como un random container |
+| **Medidor + MATCH** | 14 BATCH, juego C | Pico de cada golpe en dBFS, SPREAD entre el más fuerte y el más débil, la media; con MATCH ON, al terminar el BATCH ajusta OUT para que la media caiga en TARGET |
+| **START > LOOP > STOP** | 01, juego C · LOOP: SUSTAIN | Mientras sostienes, el loop (L POS, L LEN, XFADE, en cruces por cero); al soltar sigue hasta el final del sample |
+| **REC: OVERDUB / BOUNCE** | 01, juego B · REC | OVERDUB suma la toma nueva al slot (mismo nivel, normalizado). BOUNCE graba el sonido al slot y deja la cadena seca (SAMPLE, efectos en 0, con UNDO) para seguir diseñando encima |
+| **LAYER 2 / 3** | 01, juego D | Capas de la misma fuente: L PITCH (p. ej. −12 st, cuerpo), DETUNE (una doble desafinada), L LEVEL |
+| **SHEPARD** | 01 · WAVE 15 | Seis senos en octavas bajo una campana: subida (COLOR > 50 %) o bajada (< 50 %) sin fin. Cargas, alarmas, tensión |
+| **RTPC** | 16 RTPC | Un valor 0..100 % (INTENS) por una curva (LINEAR, EXP, LOG, S-CURVE) hacia 3 destinos con su cantidad. SEL: barrido 0 → 100 % en SWEEP con la nota sostenida (motor acelerando, algo cargándose) |
+| **SPACE + MOTION** | 12 SPACE | DIST (nivel, absorción del aire, más reverb), OCCLUDE (una pared: apagado y −12 dB), PASS-BY (cada nota pasa de lado a lado en ese tiempo) con DOPPLER en semitonos. SEL: tocar una pasada |
 
 ## Nuevo en v0.6: 14 CHIP OSC
 
-Sonido de consola de 8 bits para SFX retro (botón **HOME**, tercera página).
+Sonido de consola de 8 bits para SFX retro (botón **HOME**, segunda página: 02 desde la 0.7).
 
 - **Tres ondas nuevas** en WAVE (o con ALGORITHM): **CHIP PLS** (el pulso del NES con sus 4 anchos: **DUTY** 12.5 /
   25 / 50 / 75 %), **CHIP TRI** (el triángulo de 32 escalones de 4 bits) y **CHIP NSE** (ruido de registro LFSR de 15
@@ -77,7 +153,7 @@ la nota se soltaba antes del ataque. Ahora dura 150 ms.
 
 | | Cómo |
 | --- | --- |
-| **Android** | Cable USB-C a USB-C (o adaptador OTG) del teléfono al FM-1. Abre la página en **Chrome**, CONECTAR, acepta el permiso MIDI. |
+| **Android** (lo mejor) | Cable USB-C a USB-C (o adaptador OTG) del teléfono al FM-1. Abre la página en **Chrome**, CONECTAR, acepta el permiso MIDI. El pad XY, la tira de presión, el teclado y ● GESTO funcionan con el dedo; ⛶ = pantalla completa. |
 | **Computadora** | Chrome o Edge (Windows, Mac, Linux), cable USB normal. |
 | **iPhone / iPad** | Safari no tiene Web MIDI. Usa una app de MIDI con pad XY (TouchOSC, Lemur, MIDI Designer…) con un adaptador USB y mándale CC16, CC17 y CC18. |
 | **Inalámbrico** | El FM-1 no tiene Bluetooth ni WiFi usables en este firmware. Desde la computadora puedes rebotar: teléfono → (WiFi, p. ej. TouchOSC) → computadora → USB → FM-1. |
@@ -89,7 +165,31 @@ Settings → Pages → "Deploy from a branch", `main`, carpeta `/ (root)`, y áb
 ## Los módulos
 
 Cada botón de página lleva a uno o dos módulos: presiónalo otra vez para el siguiente juego de perillas (A/B…) y,
-después del último, para el siguiente módulo del mismo botón. **SELECT** recorre las 14 páginas.
+después del último, para el siguiente módulo del mismo botón. **SELECT** recorre las 19 páginas.
+
+| # | Botón | Módulo | Perillas A | Perillas B (C) |
+| --- | --- | --- | --- | --- |
+| 01 | HOME | OSC & SAMPLE (A B C D) | SOURCE, WAVE (15 ondas), SAMPLE, BLEND | B: TUNE, COLOR, STRETCH, REC · C: LOOP, L POS, L LEN, XFADE · D: VOICES, L PITCH, DETUNE, L LEVEL |
+| 02 | HOME ×2 | **CHIP OSC** | DUTY, SWEEP, ARP, ARP SPD | STEPS, NOISE, PRESET |
+| 03 | HOME ×3 | **RESONATOR** | MATERL, PITCH, DECAY, RES MIX | DAMP, SPREAD, HIT POS, KEYTRK |
+| 04 | ARP | GRAIN ENGINE (sobre el sample) | POS, SIZE, DENS, SPRAY | REV %, GRAIN, FREEZE, RND PIT |
+| 05 | ARP ×2 | **SAMPLE LAB** | TOOL, AMOUNT | — |
+| 06 | ENV | ENVELOPES (A B C) | ATTACK, DECAY, SUSTAIN, RELEASE | B: GLIDE, VELO, PITCH, OUT · C: M ATK, M DEC, M AMT, M TGT |
+| 07 | ENV ×2 | **TRANSIENT** | ATTACK, SUSTAIN, TIME, OUT | — |
+| 08 | EDIT | **DESTROY** | DRIVE, SHAPE, BITS, RATE | RING HZ, RNG MIX, TONE, MIX |
+| 09 | EDIT ×2 | RES MOD FILTER | FREQ, RES, MODE, SLOPE | DEPTH, RATE, MOD SRC, ANALOG |
+| 10 | GLO | OTT MULTIBAND (A B C D) | A: DEPTH, TIME, UPWD, DOWNWD · B: IN, OUT, STYLE, PLACE | C: LOW, MID, HIGH, THRESH · D: X-LO, X-HI, SOLO |
+| 11 | FX | DELAY + FLANGER | TIME, FDBK, DLY MIX, ROUTE | RATE, DEPTH, REGEN, FLG MIX |
+| 12 | FX ×2 | MULTIBAND REVERB | SIZE, DECAY, PRE-DLY, REV MIX | LOW x, HIGH x, X-LO, X-HI |
+| 13 | FX ×3 | **SPACE + MOTION** | DIST, OCCLUDE, PASS-BY, DOPPLER | — |
+| 14 | SEQ | **VARIATION + MORPH** | VARY, SEED, KEYS, RESEED | MORPH, HA AMT, EVOLVE, HA KIND |
+| 15 | SEQ ×2 | **BATCH + FIRE TEST** (A B C) | BATCH (modo), COUNT, SPACE, GATE | B: RATE, POOL, ORDER · C: MATCH, TARGET |
+| 16 | SEQ ×3 | **PHYSICS TRIGGER** | TRIGGER, HITS, TIME, FALL | PITCH, JITTER |
+| 17 | LFO | LFO x2 | SHAPE, RATE, MIX, TARGET (LFO 1) | SHAPE, RATE, MIX, TARGET (LFO 2) |
+| 18 | LFO ×2 | **RTPC** (A B C) | INTENS, SWEEP, CURVE | B: DEST 1, AMT 1, DEST 2, AMT 2 · C: DEST 3, AMT 3 |
+| 19 | LFO ×3 | **CHAOS PAD + KEYS** (A B C) | A: X TGT, X AMT, Y TGT, Y AMT | B: PAD, GESTURE, KEY VEL, SENS · C: AT TGT, AT AMT |
+
+<details><summary>Tabla de la v0.6 (para comparar)</summary>
 
 | # | Botón | Módulo | Perillas A | Perillas B |
 | --- | --- | --- | --- | --- |
@@ -108,10 +208,14 @@ después del último, para el siguiente módulo del mismo botón. **SELECT** rec
 | 13 | LFO ×3 | **CHAOS PAD + KEYS** (A B C) | A: X TGT, X AMT, Y TGT, Y AMT | B: PAD, KEY VEL, SENS · C: AT TGT, AT AMT |
 | 14 | HOME ×3 | **CHIP OSC** | DUTY, SWEEP, ARP, ARP SPD | STEPS, NOISE, PRESET |
 
+</details>
+
 La cadena de audio (mono): FUENTE (osc / sample / granos) × ENV → RESONATOR → TRANSIENT → DESTROY → FILTER → OTT (PRE) →
-DELAY + FLANGER → REVERB → OTT (POST) → salida.
+DELAY + FLANGER → REVERB → OTT (POST) → SPACE (aire / pared / distancia) → salida. LAYER suma sus capas en la FUENTE.
 
 ### Nuevo en v0.4
+
+*(Los números de página de las secciones de v0.4 y v0.5 son los de entonces; la tabla de arriba tiene los actuales.)*
 
 - **02 RESONATOR:** un banco de 6 resonadores (modos) que convierte cualquier fuente en un objeto golpeado. **MATERL:**
   METAL (barra libre), GLASS, WOOD, STRING (armónico), BELL (hum, prime, tercera menor, quinta, nominal), DRUM
@@ -161,17 +265,17 @@ DELAY + FLANGER → REVERB → OTT (POST) → salida.
 | Control | Función |
 | --- | --- |
 | Botones de página | sus módulos; presiona otra vez: perillas A/B…, luego el siguiente módulo del botón |
-| **SELECT** | página anterior / siguiente (las 14) |
+| **SELECT** | página anterior / siguiente (las 19) |
 | **K1..K4** | parámetros · **SEL sostenido + girar** = lock/unlock |
 | **ALGORITHM / PRESETS** | onda del oscilador / slot de sample |
 | Teclas **F3..G5** | tocar (sostener = nota sostenida, monofónico, última nota gana, glide legato) · **OCT- / OCT+** octava |
 | **PLAY** | un C4 sostenido |
 | **REC** | ☢ HAPPY ACCIDENT (a veces enciende el resonador, DESTROY o el transient) · **SEL + REC** = UNDO |
 | **SAVE** | guardar sesión (con A y B, y el sample grabado) · **SEL + SAVE** = borrar todos los locks |
-| **SEL (toque)** | 01: REC ARM / STOP · 12: BATCH / detener · 13: destinos del pad al azar · 14: un sonido nuevo del PRESET · las demás: aleatorizar el módulo (respeta locks) |
-| **SEL + OCT-** / **SEL + OCT+** | reset del módulo / siguiente tema · en la página 12: **guardar A / guardar B** |
+| **SEL (toque)** | El pie de la pantalla dice qué hace en cada página. 01: REC ARM / STOP · 02: un sonido nuevo del PRESET · 05: aplicar la herramienta · 13: tocar una pasada · 14: semilla nueva · 15: BATCH (A, C) o FIRE TEST (B) / detener · 16: tocar el patrón · 18: barrido RTPC · 19: grabar un gesto · las demás: aleatorizar el módulo (respeta locks) |
+| **SEL + OCT-** / **SEL + OCT+** | reset del módulo / siguiente tema · en la página 14, juego B: **guardar A / guardar B** |
 | **SEL + PLAY** | el slot a su sonido de fábrica |
-| **MIDI in** | notas con velocity, pitch bend ±2, CC1 = MIX del LFO1, **CC11 = MORPH**, CC74 = FREQ del filtro, **CC16 / CC17 / CC18 = pad X / Y / tocar**, channel y poly pressure = aftertouch, CC123 = all notes off |
+| **MIDI in** | notas con velocity, pitch bend ±2, CC1 = MIX del LFO1, **CC11 = MORPH**, CC74 = FREQ del filtro, **CC16 / CC17 / CC18 = pad X / Y / tocar**, **CC19 = armar la grabación de gesto**, channel y poly pressure = aftertouch, CC123 = all notes off |
 | **SysEx** | `F0 7D 4E 37 cmd … F7`: samples desde `web/index.html` (HELLO, BEGIN slot largo, DATA μ-law en 7 bits, END guardar) |
 
 ## Tus propios samples de fábrica
@@ -196,6 +300,9 @@ señal a L y R): delay, flanger, reverb y OTT procesan un solo canal.
 | DESTROY (todo encendido) | ~110 | cada parte apagada no cuesta |
 | TRANSIENT | ~95 | ATTACK y SUSTAIN en 0 = 0 |
 | Delay / Flanger | ~80 / ~30 | MIX 0 = 0 |
+| LAYER 2 / 3 (0.7, estimado) | la FUENTE ×2 / ×3 (con SUPRSAW, lo más caro) | VOICES MONO = 0 · en SAMPLE sólo con STRETCH 1.00x |
+| SHEPARD (0.7, estimado) | ~ como SUPRSAW | — |
+| SPACE, RTPC (0.7) | muy poco | DIST, OCCLUDE, PASS-BY en 0 / INTENS 0 = 0 |
 
 Optimizaciones de esta versión:
 
@@ -236,11 +343,21 @@ cruje, usa la tabla de arriba.
 ## Desarrollo
 
 ```sh
-sh tests/run_host.sh tests/scripts/nd07_v04.txt    # los módulos nuevos, MORPH y BATCH: build/host/nd07.wav y PNG
+sh tests/run_host.sh tests/scripts/nd07_v04.txt    # resonador, transient, DESTROY, MORPH y BATCH: build/host/nd07.wav y PNG
 sh tests/run_host.sh tests/scripts/nd07_tour.txt   # el recorrido de los módulos anteriores
 sh tests/run_host.sh tests/scripts/pad.txt         # el CHAOS PAD y el aftertouch por MIDI
 sh tests/run_host.sh tests/scripts/import.txt      # un sample por SysEx, como lo manda la página web
-sh tests/run_host.sh tests/scripts/chip.txt        # 14 CHIP: un preset de cada tipo
+sh tests/run_host.sh tests/scripts/chip.txt        # 02 CHIP: un preset de cada tipo
+sh tests/run_host.sh tests/scripts/variation.txt   # 14 VARIATION: teclas = variaciones con semilla
+sh tests/run_host.sh tests/scripts/sustain.txt     # 01 LOOP SUSTAIN: START > LOOP > STOP
+sh tests/run_host.sh tests/scripts/motion.txt      # 18 RTPC (barrido) y 13 SPACE (PASS-BY)
+sh tests/run_host.sh tests/scripts/layers.txt      # 01 D: LAYER 3 y la onda SHEPARD
+sh tests/run_host.sh tests/scripts/bounce.txt      # REC BOUNCE y BATCH con MATCH
+sh tests/run_host.sh tests/scripts/overdub.txt     # REC OVERDUB
+sh tests/run_host.sh tests/scripts/physics.txt     # 16 PHYSICS TRIGGER: BOUNCE, DEBRIS, SCATTER
+sh tests/run_host.sh tests/scripts/lab.txt         # 05 SAMPLE LAB: REVERSE, 1/2 SPD, REVERT
+sh tests/run_host.sh tests/scripts/modenv.txt      # 06 C MOD ENV y las recetas del HAPPY ACCIDENT
+sh tests/run_host.sh tests/scripts/gesture.txt     # 19 GESTURE: grabado (SEL y CC19) y repetido por la nota
 cc -O2 -Wall -o /tmp/sense_test tests/sense_test.c && /tmp/sense_test   # la velocity con presiones sintéticas
 python3 tools/gen_nd07_tables.py                  # tablas (seno, tanh, filtros, dB, μ-law...)
 python3 tools/gen_samples.py                      # los samples de fábrica

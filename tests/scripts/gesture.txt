@@ -1,0 +1,37 @@
+# 19 CHAOS PAD (LFO x6): SEL arms GESTURE REC; the pad moved over MIDI for 1 s; then a note replays the move (1-SHOT)
+# btn: 3 SEL, 5 LFO
+100 btn 5
+130 btn 5
+160 btn 5
+190 btn 5
+220 btn 5
+250 btn 5
+400 btn 3
+500 midi 0xB0 18 127
+520 midi 0xB0 16 0
+540 midi 0xB0 17 0
+700 midi 0xB0 16 30
+900 midi 0xB0 16 60
+900 midi 0xB0 17 80
+1100 midi 0xB0 16 100
+1300 midi 0xB0 16 127
+1300 midi 0xB0 17 127
+1500 midi 0xB0 18 0
+1700 shot
+2000 keys 0x80
+2600 shot
+3500 keys 0
+# again, armed from the phone (CC19), a longer move; LOOP is not needed: 1-SHOT replays it on the next note
+3700 midi 0xB0 19 127
+3800 midi 0xB0 18 127
+3820 midi 0xB0 16 127
+3840 midi 0xB0 17 0
+4200 midi 0xB0 16 64
+4200 midi 0xB0 17 64
+4600 midi 0xB0 16 0
+4600 midi 0xB0 17 127
+5000 midi 0xB0 18 0
+5200 keys 0x80
+5700 shot
+6500 keys 0
+7500 end
