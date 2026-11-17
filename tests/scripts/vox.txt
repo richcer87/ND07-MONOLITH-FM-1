@@ -1,0 +1,49 @@
+# 09 VOWEL + SHIFT (EDIT x3 = A, x4 = B, x5 = C) on a SINE, then a SAW. (Knob turns of more than one step go 3 at a time.)
+#  1) the sine dry; 2) SHIFT +520 Hz, S MIX 100 %; 3) -500 Hz; 4) FDBK 84 % (the spiral), held; 5) saw, VOWEL U O A E I, V MIX 100 %
+# btn: 6 EDIT; enc: 1 ALGORITHM, 2..5 = K1..K4
+100 enc 1 -2
+200 btn 6
+230 btn 6
+260 btn 6
+290 btn 6
+400 keys 0x80
+900 keys 0
+1300 enc 5 34
+1350 enc 2 12
+1400 keys 0x80
+1700 shot
+1900 keys 0
+2300 enc 2 -34
+2400 keys 0x80
+2900 keys 0
+3300 enc 2 28
+3350 enc 3 28
+3400 keys 0x80
+4400 shot
+4600 keys 0
+6500 enc 3 -34
+6550 enc 5 -34
+6600 enc 1 1
+6610 enc 1 1
+6650 enc 0 -1
+6700 enc 0 1
+6800 enc 5 34
+6850 enc 2 -17
+6900 keys 0x80
+7300 shot
+7400 enc 2 8
+7410 enc 2 1
+7900 enc 2 8
+7910 enc 2 1
+8300 shot
+8400 enc 2 8
+8410 enc 2 1
+8900 enc 2 8
+8910 enc 2 1
+9200 shot
+9400 keys 0
+9500 btn 6
+9550 btn 6
+9600 enc 2 15
+9700 shot
+10000 end

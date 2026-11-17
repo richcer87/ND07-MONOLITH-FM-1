@@ -134,13 +134,11 @@ static uint32_t glyph(const felucca_font_t *f, uint32_t ch)
     return ch - f->first;
 }
 
-/* text, alpha-blended onto black with colour c; returns the end x */
+/* text in colour c; an edge pixel (alpha 1..14) is mixed with what is under it, so anti-aliased text sits clean on a
+ * coloured block as well as on black (pixel fonts have only 0 and 15: drawn as before). Returns the end x */
 static int32_t cv_text(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c)
 {
-    uint16_t ramp[16];
-    uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u, a;
-    for (a = 0; a < 16u; a++)
-        ramp[a] = (uint16_t)(((r * a / 15u) << 11) | ((g * a / 15u) << 5) | (b * a / 15u));
+    uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u;
     for (; *s; s++) {
         uint32_t gi = glyph(f, (uint8_t)*s), gx, gy, w, bpr;
         const uint8_t *gd;
@@ -150,9 +148,20 @@ static int32_t cv_text(int32_t x, int32_t y, const felucca_font_t *f, const char
         for (gy = 0; gy < f->h; gy++)
             for (gx = 0; gx < w; gx++) {
                 uint32_t v = gd[gy * bpr + gx / 2u];
+                int32_t px = x - f->pad + (int32_t)gx, py = y + (int32_t)gy + cv_oy;
                 v = (gx & 1u) ? (v & 15u) : (v >> 4);
-                if (v)
-                    cv_pset(x - f->pad + (int32_t)gx, y + (int32_t)gy, ramp[v]);
+                if (!v || (uint32_t)px >= cv_w || (uint32_t)py >= cv_h)
+                    continue;
+                if (v == 15u)
+                    cv_px[(uint32_t)py * cv_w + (uint32_t)px] = swap16(c);
+                else {                      /* (n * 4369 + 32768) >> 16 = n / 15, rounded: no divide */
+                    uint32_t d = swap16(cv_px[(uint32_t)py * cv_w + (uint32_t)px]), u = 15u - v;
+                    uint32_t dr = d >> 11, dg = (d >> 5) & 63u, db = d & 31u;
+                    dr = ((r * v + dr * u) * 4369u + 32768u) >> 16;
+                    dg = ((g * v + dg * u) * 4369u + 32768u) >> 16;
+                    db = ((b * v + db * u) * 4369u + 32768u) >> 16;
+                    cv_px[(uint32_t)py * cv_w + (uint32_t)px] = swap16((dr << 11) | (dg << 5) | db);
+                }
             }
         x += f->adv[gi];
     }

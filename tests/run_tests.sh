@@ -35,6 +35,12 @@ run "ND-07: PHYSICS TRIGGER: BOUNCE, DEBRIS, SCATTER" sh tests/run_host.sh tests
 run "ND-07: SAMPLE LAB: REVERSE, HALF SPD, REVERT" sh tests/run_host.sh tests/scripts/lab.txt
 run "ND-07: MOD ENV, the HAPPY ACCIDENT's recipes" sh tests/run_host.sh tests/scripts/modenv.txt
 run "ND-07: the pad's GESTURE recorded and replayed" sh tests/run_host.sh tests/scripts/gesture.txt
+run "ND-07: VOWEL + SHIFT: shift up and down, the feedback spiral, U O A E I" sh tests/run_host.sh tests/scripts/vox.txt
+run "ND-07: the slot back out as a WAV (SysEx LEN / READ)" sh tests/run_host.sh tests/scripts/export.txt
+run "ND-07 EVA-01 theme: every page and knob set on screen" sh tests/run_host.sh tests/scripts/screens.txt
+run "ND-07 EVA-01 theme: a knob just turned, a lock, HAPPY ACCIDENT, modulated" sh tests/run_host.sh tests/scripts/eva_states.txt
+$CC -DDINGHY_HOST -DAPP_VER='"dev"' -Ifirmware/hal -Ifirmware/src -Ifirmware/gen -o "$OUT/eva_fit_test" tests/eva_fit_test.c
+run "ND-07 EVA-01 theme: every name and every value of every knob fits its cell, no cut text" "$OUT/eva_fit_test"
 $CC -o "$OUT/sense_test" tests/sense_test.c
 run "ND-07: key velocity and aftertouch from synthetic presses" "$OUT/sense_test"
 

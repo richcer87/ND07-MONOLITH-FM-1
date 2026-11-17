@@ -153,7 +153,7 @@ typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int8_t enc, encn
  * P hit at velocity V, V 0 = let go), "T fader F V" (0..127), "T wheel W RAW" (0 pitch, 1 mod; raw ADC 0..1023),
  * "T xkey K V" (keybed key K 0..36 at V, 0 = let go: the outer keys 0..4, 32..36); any build: "T shot" (the screen
  * at T -> OUT-T.ppm) */
-enum { HS_NONE, HS_VEL, HS_PAD, HS_FADER, HS_WHEEL, HS_XKEY, HS_SHOT, HS_IMPORT };
+enum { HS_NONE, HS_VEL, HS_PAD, HS_FADER, HS_WHEEL, HS_XKEY, HS_SHOT, HS_IMPORT, HS_EXPORT };
 static const host_ev_t SCRIPT0[] = {
     {200, 1u << 7, -1, 0, 0, 0, -1, 0},                         /* C4 */
     {700, 1u << 7 | 1u << 11 | 1u << 14, -1, 0, 0, 0, -1, 0},   /* + E4 G4: a chord */
@@ -193,6 +193,7 @@ static void read_script(const char *path)
         else if (!strcmp(what, "wheel")) { sscanf(line, "%*u %*s %u %u", &a, &b); e.smk = HS_WHEEL; e.sa = (uint8_t)a; e.sb = (uint16_t)b; }
         else if (!strcmp(what, "xkey")) { sscanf(line, "%*u %*s %u %u", &a, &b); e.smk = HS_XKEY; e.sa = (uint8_t)a; e.sb = (uint16_t)b; }
         else if (!strcmp(what, "shot")) e.smk = HS_SHOT;   /* (any board: the screen now -> OUT-<ms>.ppm) */
+        else if (!strcmp(what, "export")) e.smk = HS_EXPORT;   /* the active slot, as web/index.html downloads it: build/host/export-<ms>.wav */
         else if (!strcmp(what, "import")) { sscanf(line, "%*u %*s %u", &a); e.smk = HS_IMPORT; e.sa = (uint8_t)a; }
         else if (!strcmp(what, "midi") || !strcmp(what, "trs")) {
             sscanf(line, "%*u %*s %i %u %u", (int *)&a, &b, &c);
@@ -285,9 +286,13 @@ static void perf_report(void)
 }
 
 /* the app's SysEx (APP_SYSEX: web/index.html's sample import), as the target's usb.c / ota.c would carry it */
+static uint8_t host_cap[512];
+static uint32_t host_capn;
 static int ota_wire_send(const uint8_t *p, uint32_t n)
 {
     uint32_t i;
+    if (n <= sizeof host_cap) { memcpy(host_cap, p, n); host_capn = n; }
+    if (n > 16u) { printf("%6u ms  SysEx out: %u bytes\n", fm1_ms, n); return 0; }
     printf("%6u ms  SysEx out", fm1_ms);
     for (i = 0; i < n; i++) printf(" %02X", p[i]);
     printf("\n");
@@ -344,6 +349,41 @@ static void host_import(uint32_t slot)          /* web/index.html's exchange: a 
     }
     f[3] = 4; f[4] = 1; APP_SYSEX(f, 5);
 }
+static void host_export(void)                   /* LEN, then READ after READ: the slot into build/host/export-<ms>.wav */
+{
+    static int16_t out[40000];
+    uint8_t f[8], hdr[44];
+    uint32_t len, off, i, n = 0;
+    FILE *w;
+    f[0] = 0x7D; f[1] = 'N'; f[2] = '7'; f[3] = 6;
+    host_capn = 0; APP_SYSEX(f, 4);
+    if (host_capn < 10u || host_cap[5]) { printf("export: LEN failed\n"); return; }
+    len = host_cap[6] | host_cap[7] << 7 | (uint32_t)host_cap[8] << 14;
+    printf("export: %u samples, \"%.*s\"\n", len, (int)(host_capn - 10u), (const char *)host_cap + 9);
+    for (off = 0; off < len && off < 40000u; off += 128u) {
+        uint32_t acc = 0, nb = 0, b = 0, k;
+        uint8_t by[300];
+        f[3] = 7; f[4] = (uint8_t)(off & 127u); f[5] = (uint8_t)(off >> 7 & 127u); f[6] = (uint8_t)(off >> 14);
+        host_capn = 0; APP_SYSEX(f, 7);
+        if (host_capn < 10u || host_cap[5]) { printf("export: READ %u failed\n", off); return; }
+        for (k = 9; k + 1u < host_capn; k++) {
+            acc |= (uint32_t)(host_cap[k] & 127u) << nb; nb += 7u;
+            if (nb >= 8u) { by[b++] = (uint8_t)acc; acc >>= 8; nb -= 8u; }
+        }
+        for (k = 0; k + 1u < b && n < 40000u && n < len; k += 2u) out[n++] = (int16_t)(by[k] | by[k + 1u] << 8);
+    }
+    {
+        char fn[64];
+        snprintf(fn, sizeof fn, "build/host/export-%u.wav", fm1_ms);
+        w = fopen(fn, "wb");
+    }
+    if (!w) return;
+    memcpy(hdr, "RIFF\0\0\0\0WAVEfmt \x10\0\0\0\x01\0\x01\0\x22\x56\0\0\x44\xac\0\0\x02\0\x10\0data\0\0\0\0", 44);
+    i = 36u + n * 2u; hdr[4] = (uint8_t)i; hdr[5] = (uint8_t)(i >> 8); hdr[6] = (uint8_t)(i >> 16); hdr[7] = (uint8_t)(i >> 24);
+    i = n * 2u; hdr[40] = (uint8_t)i; hdr[41] = (uint8_t)(i >> 8); hdr[42] = (uint8_t)(i >> 16); hdr[43] = (uint8_t)(i >> 24);
+    fwrite(hdr, 1, 44, w); fwrite(out, 2, n, w); fclose(w);
+    printf("export: %u samples written\n", n);
+}
 #endif
 static void platform_poll(void)                 /* one call = one millisecond */
 {
@@ -356,6 +396,10 @@ static void platform_poll(void)                 /* one call = one millisecond */
     while (step < script_n && script[step].t <= fm1_ms) {
         if (script[step].smk == HS_SHOT) {
             write_ppm(fm1_ms);
+        } else if (script[step].smk == HS_EXPORT) {
+#ifdef APP_SYSEX
+            host_export();
+#endif
         } else if (script[step].smk == HS_IMPORT) {
 #ifdef APP_SYSEX
             host_import(script[step].sa & 7u);

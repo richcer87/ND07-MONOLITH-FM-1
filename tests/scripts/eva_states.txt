@@ -1,0 +1,30 @@
+# EVA-01 theme states: a knob just turned (its cell lit), a lock, the HAPPY ACCIDENT message, a modulated knob
+100 keys 0x80
+200 enc 0 1
+220 enc 0 1
+240 enc 0 1
+260 enc 0 1
+280 enc 0 1
+300 enc 0 1
+320 enc 0 1
+340 enc 0 1
+500 enc 5 30
+520 enc 2 1
+700 enc 5 3
+800 shot
+900 btndown 3
+950 enc 4 1
+1000 btnup 3
+1200 shot
+2500 enc 3 1
+2600 shot
+3200 btn 13
+3300 shot
+4500 btn 5
+4600 enc 4 30
+4700 enc 2 2
+5000 shot
+5100 btn 4
+5300 enc 3 5
+5500 shot
+6000 end

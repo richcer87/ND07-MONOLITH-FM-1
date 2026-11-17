@@ -55,7 +55,9 @@
   <div class="row"><span class="lbl">MODO</span>
     <button id="m-spring" class="on" title="Suelta: vuelve a como estaba">SPRING</button>
     <button id="m-latch" title="Suelta: se queda">LATCH</button>
-    <span class="lbl">(el modo del FM-1 se elige en la página 13; PLAY dispara la última nota al tocar)</span></div>
+    <button id="gest" title="Graba el próximo movimiento del pad en el FM-1: cada nota lo repite">● GESTO</button>
+    <button id="full" title="Pantalla completa">⛶</button></div>
+  <div class="lbl" id="padhint">El FM-1 decide qué mueve cada eje en su página 20 (X TGT, Y TGT). ● GESTO graba tu próximo movimiento: cada nota lo repite.</div>
   <div id="pad"><div class="hx"></div><div class="hy"></div><div class="dot"></div><div class="read" id="padread">X 64  Y 64</div></div>
   <div class="lbl">PRESIÓN (aftertouch → AT TGT)</div>
   <div id="press"><div></div></div>
@@ -75,6 +77,8 @@
   </div>
   <div class="row"><button id="play" disabled>▶ ESCUCHAR (22.05 kHz μ-law)</button><button id="send" disabled>ENVIAR AL FM-1</button></div>
   <progress id="prog" max="1" value="0"></progress>
+  <div class="lbl" style="margin-top:6px">DEL FM-1 A LA COMPUTADORA: el slot activo tal como suena (una grabación, un BOUNCE, lo que hiciste en SAMPLE LAB o un sonido de fábrica), 16-bit a 22.05 kHz.</div>
+  <div class="row"><button id="dl" disabled>⇩ DESCARGAR EL SLOT (.wav)</button></div>
 </section>
 <div id="log">Conecta el FM-1 por USB y pulsa CONECTAR.</div>
 <footer>GPL-3.0-only · Chrome / Edge (PC, Mac, Linux) o Chrome Android + cable OTG · necesita https o localhost · iOS: sin Web MIDI</footer>
@@ -90,7 +94,7 @@ async function connect() {
   if (!navigator.requestMIDIAccess) return say("Este navegador no tiene Web MIDI (iOS / Safari / Firefox antiguo). Usa Chrome o Edge.", "bad");
   try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
   catch (e) { return say("Permiso MIDI denegado: " + e.message, "bad"); }
-  midi.onstatechange = listPorts; listPorts();
+  midi.onstatechange = listPorts; listPorts(); keepAwake();
 }
 function listPorts() {
   const sel = $("port"), prev = sel.value; sel.innerHTML = "";
@@ -107,13 +111,14 @@ function usePort(id) {
   if (inp) inp.onmidimessage = onMsg;
   $("led").classList.toggle("on", !!out);
   $("send").disabled = !out || !mu;
+  $("dl").disabled = !out;
   if (out) { say("Conectado: " + out.name, "ok"); sx([1]).then(r => { maxLen = r.a; say(`Conectado: ${out.name} · ND-07 responde, un slot guarda ${(maxLen / 22050).toFixed(2)} s`, "ok"); }, () => {}); }
 }
 const send = b => out && out.send(b);
 function onMsg(e) {
   const d = e.data;
   if (d[0] === 0xF0 && d[1] === 0x7D && d[2] === 0x4E && d[3] === 0x37 && d.length >= 10) {
-    const r = { cmd: d[4] & 0x3F, st: d[5], a: d[6] | d[7] << 7 | d[8] << 14 }, w = waiters.shift();
+    const r = { cmd: d[4] & 0x3F, st: d[5], a: d[6] | d[7] << 7 | d[8] << 14, data: d.slice(9, d.length - 1) }, w = waiters.shift();
     if (w) w(r);
   }
 }
@@ -122,7 +127,7 @@ function sx(body, ms = 1500) {
   return new Promise((res, rej) => {
     if (!out) return rej(new Error("sin puerto"));
     const t = setTimeout(() => { waiters = waiters.filter(w => w !== f); rej(new Error("el FM-1 no responde (¿firmware ND-07?)")); }, ms);
-    const f = r => { clearTimeout(t); r.st ? rej(new Error("FM-1: error " + r.st + " " + ["", "está grabando", "largo no válido", "no hay envío en curso", "faltan datos", "comando desconocido"][r.st])) : res(r); };
+    const f = r => { clearTimeout(t); r.st ? rej(new Error("FM-1: error " + r.st + " " + ["", "está ocupado (grabando o recibiendo)", "largo o posición no válidos", "no hay envío en curso", "faltan datos", "comando desconocido (¿firmware anterior a la v1.0?)"][r.st])) : res(r); };
     waiters.push(f);
     out.send([0xF0, 0x7D, 0x4E, 0x37, ...body, 0xF7]);
   });
@@ -134,7 +139,7 @@ for (const [b, s] of [["t-pad", "s-pad"], ["t-smp", "s-smp"]])
 $("connect").onclick = connect;
 $("port").onchange = e => usePort(e.target.value);
 
-/* ---- CHAOS PAD: CC16 X, CC17 Y, CC18 touch (the FM-1's page 13 routes them) */
+/* ---- CHAOS PAD: CC16 X, CC17 Y, CC18 touch (the FM-1's page 20 routes them) */
 const pad = $("pad"); let latch = false, px = 64, py = 64, sent = [-1, -1], raf = 0, ptr = null;
 $("m-spring").onclick = () => { latch = false; $("m-spring").classList.add("on"); $("m-latch").classList.remove("on"); };
 $("m-latch").onclick = () => { latch = true; $("m-latch").classList.add("on"); $("m-spring").classList.remove("on"); };
@@ -159,8 +164,21 @@ pad.onpointerdown = e => { if (ptr !== null) return; ptr = e.pointerId; pad.setP
 pad.onpointermove = e => { if (e.pointerId === ptr) padAt(e); };
 pad.onpointerup = pad.onpointercancel = e => {
   if (e.pointerId !== ptr) return; ptr = null;
-  if (!latch) { pad.classList.remove("touch"); send([0xB0, 18, 0]); }
+  if (!latch || gest) { pad.classList.remove("touch"); send([0xB0, 18, 0]); }   /* (a gesture ends when the finger lifts) */
+  if (gest) { gest = false; $("gest").classList.remove("on"); $("padhint").textContent = "Gesto grabado: toca una nota en el FM-1. GESTURE (página 20, perillas B): OFF / 1-SHOT / LOOP."; }
 };
+/* GESTURE REC: CC19 arms it on the FM-1; the next touch of the pad is recorded there until the finger lifts (4 s at most) */
+let gest = false;
+$("gest").onclick = () => {
+  gest = !gest; $("gest").classList.toggle("on", gest); send([0xB0, 19, gest ? 127 : 0]);
+  if (gest && pad.classList.contains("touch")) { pad.classList.remove("touch"); send([0xB0, 18, 0]); }
+  $("padhint").textContent = gest ? "Armado: mueve el dedo por el pad (hasta 4 s) y suéltalo." : "Grabación de gesto cancelada.";
+};
+$("full").onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); };
+/* the phone's screen stays on while the page is open */
+let wake = null;
+async function keepAwake() { try { if ("wakeLock" in navigator && !wake) { wake = await navigator.wakeLock.request("screen"); wake.onrelease = () => { wake = null; }; } } catch (e) {} }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && midi) keepAwake(); });
 window.addEventListener("resize", drawPad); drawPad();
 
 /* pressure strip: channel pressure */
@@ -254,6 +272,37 @@ $("send").onclick = async () => {
     say(`Slot ${slot + 1} listo${$("save").checked ? " y guardado en flash" : " (pulsa SAVE en el FM-1 para guardarlo)"}.`, "ok");
   } catch (e) { say(e.message, "bad"); try { out && out.send([0xF0, 0x7D, 0x4E, 0x37, 5, 0xF7]); } catch (_) {} }
   $("send").disabled = false;
+};
+/* ---- the other way: the active slot -> a WAV file (SysEx LEN, then READ 128 samples at a time) */
+function unpack7(a) { const o = []; let acc = 0, nb = 0; for (const b of a) { acc |= (b & 127) << nb; nb += 7; if (nb >= 8) { o.push(acc & 255); acc >>= 8; nb -= 8; } } return o; }
+function wav16(pcm, rate) {
+  const b = new ArrayBuffer(44 + pcm.length * 2), v = new DataView(b), str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, "RIFF"); v.setUint32(4, 36 + pcm.length * 2, true); str(8, "WAVE"); str(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) v.setInt16(44 + i * 2, pcm[i], true);
+  return new Blob([b], { type: "audio/wav" });
+}
+$("dl").onclick = async () => {
+  $("dl").disabled = true;
+  try {
+    const h = await sx([6]), n = h.a, name = String.fromCharCode(...h.data).trim().replace(/[^A-Za-z0-9]+/g, "_") || "SLOT";
+    const pcm = new Int16Array(n);
+    for (let off = 0; off < n; off += 128) {
+      const r = await sx([7, off & 127, off >> 7 & 127, off >> 14 & 127]), by = unpack7(r.data);
+      for (let k = 0; k + 1 < by.length && off + k / 2 < n; k += 2) pcm[off + k / 2] = (by[k] | by[k + 1] << 8) << 16 >> 16;
+      $("prog").value = off / n;
+    }
+    $("prog").value = 1;
+    const t = new Date(), st = `${t.getFullYear()}${String(t.getMonth() + 1).padStart(2, "0")}${String(t.getDate()).padStart(2, "0")}_${String(t.getHours()).padStart(2, "0")}${String(t.getMinutes()).padStart(2, "0")}${String(t.getSeconds()).padStart(2, "0")}`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(wav16(pcm, 22050)); a.download = `ND07_${name}_${st}.wav`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    mu = new Uint8Array(n); for (let i = 0; i < n; i++) mu[i] = ulaw(pcm[i]);   // (on the screen; ESCUCHAR plays it)
+    drawWave(); $("play").disabled = false;
+    say(`Descargado: ${a.download} (${(n / 22050).toFixed(2)} s).`, "ok");
+  } catch (e) { say(e.message, "bad"); }
+  $("dl").disabled = !out;
 };
 </script>
 </body>
