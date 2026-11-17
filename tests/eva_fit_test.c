@@ -4,6 +4,9 @@
 #define main host_main
 #include "../firmware/src/nd07.c"
 #undef main
+#ifndef FONT_D_CAP
+#error "firmware/src/nd07.c is older than this test (v1.1): it needs the v1.1 nd07.c, gfx.c and firmware/gen/eva_font.h"
+#endif
 int main(void)
 {
     static const char *const MODE[] = {"D", "M+u", "M", "TGT", "M name", "TERM", "CUT", "D word"};
