@@ -133,8 +133,8 @@ enum { P_MODE, P_WAVE, P_SLOT, P_BLEND, P_TUNE, P_COLOR, P_STR, P_SLOOP,
        P_PMODE, P_PHITS, P_PTIME, P_PFALL, P_PPIT, P_PJIT,
        P_STOOL, P_SAMT, P_RECIPE, P_GEST,
        P_VOWEL, P_VSIZE, P_VRES, P_VMIX, P_SHIFT, P_SFB, P_STIME, P_SMIX, P_GROWL, P_GRATE,
-       P_THEME, NP };
-#define NTGT_N (NP - 47)                        /* the mod targets: all but the slot, the theme, the target pickers, the PAD page */
+       P_THEME, P_ASSET, NP };
+#define NTGT_N (NP - 48)                        /* the mod targets: all but the slot, the theme, the asset, the target pickers, the PAD page */
 enum { F_VOWEL, F_SHZ, F_CENT, F_SEC10, F_RPM, F_INT, F_PCT, F_X100, F_ENUM, F_ATT, F_DEC, F_REL, F_GLIDE, F_RFHZ, F_RATE, F_DBH, F_XLO, F_XHI, F_PM, F_MS, F_DENS,
        F_SPR, F_SLOT, F_SEMI, F_BLEND, F_DTIME, F_FRATE, F_LRATE, F_RDEC, F_TGT, F_OXLO, F_OXHI, F_TSC,
        F_ZDEC, F_BITS, F_XSR, F_XRHZ, F_BSPC };
@@ -176,6 +176,10 @@ static const char *const E_CSTEP[] = {"OFF", "60 Hz", "30 Hz", "15 Hz"};
 static const char *const E_CNOISE[] = {"LONG", "SHORT 93"};
 static const char *const E_CPRE[] = {"COIN", "JUMP", "LASER", "HIT", "POWERUP", "EXPLODE", "BLIP"};
 static const char *const E_BCNT[] = {"4", "8", "12", "16"};
+/* 15 ASSETS: base sounds for game audio, three to a row (the screen's grid): hits, weapons, motion, UI, rewards, beings */
+static const char *const E_ASSET[] = {"EXPLODE", "IMPACT", "HIT", "DEBRIS", "GUNSHOT", "LASER", "ZAP", "WHOOSH", "RISER",
+                                      "UI OK", "UI ERR", "UI TICK", "PICKUP", "POWERUP", "MAGIC", "MONSTER", "ALARM", "ENGINE"};
+#define NASSET 18
 static const pdesc_t PD[NP] = {
     [P_MODE] = {"SOURCE", 0, 2, 0, 1, F_ENUM, E_MODE},     [P_WAVE] = {"WAVE", 0, NWAVE - 1, 2, 1, F_ENUM, E_WAVE},
     [P_SLOT] = {"SAMPLE", 0, 7, 0, 1, F_SLOT, 0},          [P_BLEND] = {"BLEND", 0, 100, 50, 2, F_BLEND, 0},
@@ -266,6 +270,7 @@ static const pdesc_t PD[NP] = {
     [P_STIME] = {"S TIME", 1, 90, 20, 1, F_MS, 0},          [P_SMIX] = {"S MIX", 0, 100, 0, 1, F_PCT, 0},
     [P_GROWL] = {"GROWL", 0, 100, 0, 1, F_PCT, 0},          [P_GRATE] = {"G RATE", 15, 120, 45, 1, F_INT, 0},
     [P_THEME] = {"THEME", 0, 4, 4, 1, F_ENUM, E_THEME},
+    [P_ASSET] = {"ASSET", 0, NASSET - 1, 0, 1, F_ENUM, E_ASSET},
 };
 static volatile int16_t P[NP];                  /* as set */
 static volatile int16_t E[NP];                  /* as heard: P plus the LFOs, rounded (for the screen) */
@@ -278,7 +283,7 @@ static int lock_get(uint32_t p) { return (int)(locks[p >> 5] >> (p & 31u) & 1u);
 /* the pages in the order of the sound: sources, envelope, shaping, dynamics, effects and space, variation, modulation;
  * each button holds its pages one after the other (PAGE_GRP), so its presses walk them in that order too */
 enum { PG_SRC, PG_CHIP, PG_RES, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY, PG_REV, PG_SPC,
-       PG_VAR, PG_BAT, PG_PHY, PG_LFO, PG_RTPC, PG_PAD, NPAGE };
+       PG_ASSET, PG_VAR, PG_BAT, PG_PHY, PG_LFO, PG_RTPC, PG_PAD, NPAGE };
 #define NO 255u                                 /* (an empty knob) */
 static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
     {{P_MODE, P_WAVE, P_SLOT, P_BLEND}, {P_TUNE, P_COLOR, P_STR, P_RECM}, {P_SLOOP, P_LPOS, P_LLEN, P_LXF}, {P_VOICES, P_LPIT, P_LDET, P_LLVL}},
@@ -295,6 +300,7 @@ static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
     {{P_DTIME, P_DFB, P_DMIX, P_DROUTE}, {P_FRATE, P_FDEPTH, P_FREGEN, P_FMIX}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_RSIZE, P_RDEC, P_RPRE, P_RMIX}, {P_RLOW, P_RHIGH, P_RXLO, P_RXHI}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_SDIST, P_SOCCL, P_SPASS, P_SDOPP}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
+    {{P_ASSET, P_VARY, P_RECIPE, P_VOL}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},   /* (VARY, HA KIND, OUT: here too) */
     {{P_VARY, P_VSEED, P_VKEYS, P_VLOCK}, {P_MORPH, P_HAAMT, P_EVOLVE, P_RECIPE}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_BMODE, P_BCNT, P_BSPC, P_BGATE}, {P_TRATE, P_TPOOL, P_TORDER, NO}, {P_LMATCH, P_LTGT, NO, NO}, {NO, NO, NO, NO}},
     {{P_PMODE, P_PHITS, P_PTIME, P_PFALL}, {P_PPIT, P_PJIT, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
@@ -305,11 +311,11 @@ static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
 static uint8_t NSUB[NPAGE];                     /* how many of A B C D a page has */
 static const char *const PAGE_NAME[NPAGE] = {"OSC & SAMPLE", "CHIP OSC", "RESONATOR", "GRAIN ENGINE", "SAMPLE LAB", "ENVELOPES",
                                              "TRANSIENT", "DESTROY", "VOWEL + SHIFT", "RES MOD FILTER", "OTT MULTIBAND", "DELAY + FLANGER",
-                                             "MULTIBAND REVERB", "SPACE + MOTION", "VARIATION + MORPH", "BATCH + FIRE TEST",
+                                             "MULTIBAND REVERB", "SPACE + MOTION", "ASSETS", "VARIATION + MORPH", "BATCH + FIRE TEST",
                                              "PHYSICS TRIGGER", "LFO 1 + 2", "RTPC", "CHAOS PAD + KEYS"};
 #define NGRP 8
 static const uint8_t GRP_BTN[NGRP] = {BTN_HOME, BTN_ARP, BTN_ENV, BTN_EDIT, BTN_GLO, BTN_FX, BTN_SEQ, BTN_LFO};
-static const uint8_t PAGE_GRP[NPAGE] = {0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7};   /* the button each module is under */
+static const uint8_t PAGE_GRP[NPAGE] = {0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7};   /* the button each module is under */
 static uint8_t PMOD[NP];                        /* the page of each parameter */
 static uint8_t TGT[NP], NTGT;                   /* the mod targets (LFOs, pad, aftertouch): see NTGT_N */
 /* 13 the CHAOS PAD (MIDI CC16 / 17 / 18) and the aftertouch (the keys, MIDI pressure): mod sources, 0..127 */
@@ -342,10 +348,10 @@ DSP int32_t tanh_q(int32_t x) { return tab_odd(T_TANH, x, 7); }
 DSP int32_t softk_q(int32_t x) { return tab_odd(T_SOFTK, x, 7); }
 DSP int32_t herm16(const int16_t *b, int32_t i1, uint32_t fr, int32_t len)   /* 4-point Hermite, frac Q12 */
 {
-    int32_t i0 = i1 > 0 ? i1 - 1 : 0, i2 = i1 + 1 < len ? i1 + 1 : len - 1, i3 = i1 + 2 < len ? i1 + 2 : len - 1;
-    int32_t y0, y1, y2, y3, c1, c2, c3, f = (int32_t)fr;
+    int32_t i0, i2, i3, y0, y1, y2, y3, c1, c2, c3, f = (int32_t)fr;
     if (i1 < 0) i1 = 0;
-    if (i1 > len - 1) i1 = len - 1;
+    if (i1 > len - 1) i1 = len - 1;         /* (first: a read past the end, as a loop wraps, stays in the sample) */
+    i0 = i1 > 0 ? i1 - 1 : 0; i2 = i1 + 1 < len ? i1 + 1 : len - 1; i3 = i1 + 2 < len ? i1 + 2 : len - 1;
     y0 = b[i0]; y1 = b[i1]; y2 = b[i2]; y3 = b[i3];
     c1 = (y2 - y0) >> 1;
     c2 = y0 - ((5 * y1) >> 1) + 2 * y2 - (y3 >> 1);
@@ -1886,12 +1892,13 @@ static void chip_preset(uint32_t kind)
     set_unlocked(P_REL, (d * 27 >> 5) + 6); set_unlocked(P_GLIDE, 0); set_unlocked(P_PITCH, 100);
 }
 static uint32_t aud_t;                          /* the audition's note-off time (0: none) */
-static void audition(void)                      /* a C4 held 150 ms (the gate released at once would skip the attack) */
+static void audition_ms(uint32_t ms)            /* a C4 held ms (the gate released at once would skip the attack) */
 {
     if (v_gate) return;
     note_on(60, 32767);
-    aud_t = fm1_ms + 150u; if (!aud_t) aud_t = 1;
+    aud_t = fm1_ms + ms; if (!aud_t) aud_t = 1;
 }
+static void audition(void) { audition_ms(150u); }
 static void rnd_module(uint32_t m)
 {
     switch (m) {
@@ -1949,7 +1956,7 @@ static void recipe(uint32_t kind)
     uint32_t i;
     for (i = 0; i < NP; i++) {
         uint32_t m = PMOD[i];
-        if (m == PG_LAB || m == PG_VAR || m == PG_BAT || m == PG_PHY || m == PG_PAD || m == PG_RTPC) continue;
+        if (m == PG_LAB || m == PG_VAR || m == PG_BAT || m == PG_PHY || m == PG_PAD || m == PG_RTPC || m == PG_ASSET) continue;
         if (i == P_SLOT || i == P_THEME || i == P_RECM || i == P_VOL) continue;
         set_unlocked(i, PD[i].def);
     }
@@ -2019,6 +2026,135 @@ static void recipe(uint32_t kind)
         RU(P_RMIX, 35, 55); RU(P_RSIZE, 80, 100); RU(P_RDEC, 44, 58); RU(P_DMIX, 10, 30); RU(P_DFB, 45, 75);
     }
 }
+/* 15 ASSETS: a base sound for each common game asset, as a starting point (not a variation: the same every time).
+ * Built from the defaults: the chain from scratch, then the asset's own values; locks are respected, the sample slot,
+ * the theme and the VARIATION page stay. Each sets HA KIND to its family, so HAPPY ACCIDENT then mutates inside it,
+ * and a VARY for BATCH. Only the oscillator: an asset sounds the same whatever is in the sample slots. */
+static const uint8_t ASSET_VOL[NASSET] = {45, 68, 36, 77, 79, 86, 80, 100, 42, 100, 100, 100, 100, 75, 36, 91, 36, 53};   /* (each asset about as loud as the others: tests/assets_test.c) */
+static uint8_t asset_cur = 255;                 /* the one loaded (255: none) and the patch it left, to show EDITED */
+static uint32_t asset_sum;
+static uint32_t patch_sum(void) { uint32_t i, h = 2166136261u; for (i = 0; i < NP; i++) if (i != P_ASSET && i != P_THEME && i != P_VSEED) { h ^= (uint16_t)P[i]; h *= 16777619u; } return h; }
+static uint16_t asset_hold_ms(uint32_t k)       /* how long its audition holds the key */
+{
+    static const uint16_t H[NASSET] = {150, 150, 150, 0, 150, 150, 400, 700, 1600, 150, 150, 150, 150, 150, 400, 900, 1200, 1200};
+    return H[k % NASSET];
+}
+static void asset_load(uint32_t k)
+{
+    uint32_t i;
+    k %= NASSET;
+    for (i = 0; i < NP; i++) {
+        uint32_t m = PMOD[i];
+        if (m == PG_LAB || m == PG_VAR || m == PG_BAT || m == PG_PAD || m == PG_ASSET) continue;
+        if (i == P_SLOT || i == P_THEME || i == P_RECM) continue;
+        set_unlocked(i, PD[i].def);
+    }
+    RS(P_MODE, 0); RS(P_RFMODE, 0); RS(P_RFDEP, 0); RS(P_OSTYLE, 0); RS(P_DMIX, 0); RS(P_RMIX, 0);
+    switch (k) {
+    case 0:                                     /* EXPLODE: noise through a closing low-pass, a drum body far down, a room */
+        RS(P_WAVE, 6); RS(P_COLOR, 60); RS(P_ATT, 0); RS(P_DEC, 48); RS(P_SUS, 0); RS(P_REL, 46);
+        RS(P_RFMODE, 1); RS(P_RFFREQ, 30); RS(P_RFRES, 12);
+        RS(P_MTGT, tgt_of(P_RFFREQ)); RS(P_MATK, 0); RS(P_MDEC, 42); RS(P_MAMT, 46);
+        RS(P_ZMIX, 45); RS(P_ZMAT, 5); RS(P_ZPITCH, -12); RS(P_ZDEC, 33); RS(P_ZTRK, 0); RS(P_ZDAMP, 40);
+        RS(P_TATK, 60); RS(P_XDRV, 24); RS(P_XSHP, 0);
+        RS(P_OSTYLE, 3); RS(P_ODEPTH, 50); RS(P_RMIX, 24); RS(P_RSIZE, 90); RS(P_RDEC, 27); RS(P_RPRE, 10);
+        RS(P_RECIPE, 1); RS(P_VARY, 25); break;
+    case 1:                                     /* IMPACT: a metal body struck, its pitch dropping */
+        RS(P_WAVE, 6); RS(P_COLOR, 50); RS(P_TUNE, -12); RS(P_ATT, 0); RS(P_DEC, 27); RS(P_SUS, 0); RS(P_REL, 27);
+        RS(P_MTGT, tgt_of(P_TUNE)); RS(P_MATK, 0); RS(P_MDEC, 20); RS(P_MAMT, 40);
+        RS(P_ZMIX, 65); RS(P_ZMAT, 0); RS(P_ZDEC, 32); RS(P_ZPITCH, -5); RS(P_ZTRK, 1); RS(P_ZDAMP, 35);
+        RS(P_TATK, 60); RS(P_XDRV, 20); RS(P_RFMODE, 1); RS(P_RFFREQ, 44); RS(P_RFRES, 25);
+        RS(P_OSTYLE, 3); RS(P_ODEPTH, 40); RS(P_RMIX, 15); RS(P_RSIZE, 70); RS(P_RDEC, 30);
+        RS(P_RECIPE, 1); RS(P_VARY, 25); break;
+    case 2:                                     /* HIT: a punch, a sine kick dropping fast, driven */
+        RS(P_WAVE, 0); RS(P_TUNE, -17); RS(P_ATT, 0); RS(P_DEC, 21); RS(P_SUS, 0); RS(P_REL, 18);
+        RS(P_MTGT, tgt_of(P_TUNE)); RS(P_MATK, 0); RS(P_MDEC, 12); RS(P_MAMT, 55);
+        RS(P_TATK, 70); RS(P_XDRV, 30); RS(P_OSTYLE, 3); RS(P_ODEPTH, 60); RS(P_RMIX, 6); RS(P_RDEC, 12);
+        RS(P_RECIPE, 1); RS(P_VARY, 20); break;
+    case 3:                                     /* DEBRIS: PHYSICS DEBRIS on short wooden knocks, each hit a variation */
+        RS(P_WAVE, 6); RS(P_COLOR, 55); RS(P_ATT, 0); RS(P_DEC, 15); RS(P_SUS, 0); RS(P_REL, 15);
+        RS(P_ZMIX, 55); RS(P_ZMAT, 2); RS(P_ZPITCH, 5); RS(P_ZDEC, 20); RS(P_ZTRK, 0);
+        RS(P_TATK, 40); RS(P_RFMODE, 1); RS(P_RFFREQ, 48); RS(P_RMIX, 12); RS(P_RDEC, 20);
+        RS(P_PMODE, 2); RS(P_PHITS, 14); RS(P_PTIME, 18); RS(P_PFALL, 70); RS(P_PPIT, -3); RS(P_PJIT, 50);
+        RS(P_RECIPE, 1); RS(P_VARY, 40); break;
+    case 4:                                     /* GUNSHOT: a bright noise crack, clipped and squashed, a slap back */
+        RS(P_WAVE, 6); RS(P_COLOR, 85); RS(P_ATT, 0); RS(P_DEC, 21); RS(P_SUS, 0); RS(P_REL, 30);
+        RS(P_TATK, 90); RS(P_XDRV, 40); RS(P_XSHP, 1);
+        RS(P_ZMIX, 25); RS(P_ZMAT, 0); RS(P_ZDEC, 18); RS(P_ZTRK, 0);
+        RS(P_RFMODE, 1); RS(P_RFFREQ, 52); RS(P_OSTYLE, 4); RS(P_ODEPTH, 70);
+        RS(P_DMIX, 18); RS(P_DTIME, 30); RS(P_DFB, 15); RS(P_RMIX, 20); RS(P_RSIZE, 80); RS(P_RDEC, 24);
+        RS(P_RECIPE, 6); RS(P_VARY, 25); break;
+    case 5:                                     /* LASER: a saw falling two octaves, flanged, echoing */
+        RS(P_WAVE, 2); RS(P_TUNE, 12); RS(P_ATT, 0); RS(P_DEC, 30); RS(P_SUS, 0); RS(P_REL, 24);
+        RS(P_MTGT, tgt_of(P_TUNE)); RS(P_MATK, 0); RS(P_MDEC, 24); RS(P_MAMT, 60);
+        RS(P_FMIX, 40); RS(P_FDEPTH, 70); RS(P_FRATE, 40); RS(P_XDRV, 10);
+        RS(P_DMIX, 20); RS(P_DTIME, 27); RS(P_DFB, 35); RS(P_RMIX, 10);
+        RS(P_RECIPE, 6); RS(P_VARY, 30); break;
+    case 6:                                     /* ZAP: noise folded, crushed and ring-modulated, a band-pass jumping */
+        RS(P_WAVE, 6); RS(P_COLOR, 95); RS(P_ATT, 0); RS(P_DEC, 36); RS(P_SUS, 40); RS(P_REL, 30);
+        RS(P_XDRV, 30); RS(P_XSHP, 2); RS(P_XSR, 30); RS(P_XRING, 45); RS(P_XRMIX, 60); RS(P_XBITS, 8);
+        RS(P_RFMODE, 2); RS(P_RFFREQ, 40); RS(P_RFRES, 60); RS(P_RFSRC, 2); RS(P_RFRATE, 54); RS(P_RFDEP, 80);
+        RS(P_RMIX, 10); RS(P_RECIPE, 6); RS(P_VARY, 35); break;
+    case 7:                                     /* WHOOSH: noise swelling through a band-pass that opens and closes */
+        RS(P_WAVE, 6); RS(P_COLOR, 60); RS(P_ATT, 44); RS(P_DEC, 44); RS(P_SUS, 0); RS(P_REL, 38);
+        RS(P_RFMODE, 2); RS(P_RFFREQ, 30); RS(P_RFRES, 40);
+        RS(P_MTGT, tgt_of(P_RFFREQ)); RS(P_MATK, 42); RS(P_MDEC, 44); RS(P_MAMT, 45);
+        RS(P_FMIX, 35); RS(P_FDEPTH, 60); RS(P_OSTYLE, 1); RS(P_ODEPTH, 70); RS(P_OIN, 36); RS(P_RMIX, 18);
+        RS(P_RECIPE, 2); RS(P_VARY, 30); break;
+    case 8:                                     /* RISER: the endless SHEPARD climb, a low-pass opening over it */
+        RS(P_WAVE, W_SHEP); RS(P_COLOR, 80); RS(P_TUNE, -12); RS(P_ATT, 57); RS(P_DEC, 63); RS(P_SUS, 100); RS(P_REL, 45);
+        RS(P_RFMODE, 1); RS(P_RFFREQ, 22); RS(P_RFRES, 35);
+        RS(P_MTGT, tgt_of(P_RFFREQ)); RS(P_MATK, 57); RS(P_MDEC, 48); RS(P_MAMT, 60);
+        RS(P_FMIX, 30); RS(P_FDEPTH, 50); RS(P_RMIX, 30); RS(P_RSIZE, 90); RS(P_RDEC, 33);
+        RS(P_RECIPE, 2); RS(P_VARY, 15); break;
+    case 9:                                     /* UI OK: a soft rise, up a fifth */
+        RS(P_WAVE, 1); RS(P_TUNE, 12); RS(P_ATT, 0); RS(P_DEC, 30); RS(P_SUS, 0); RS(P_REL, 27);
+        RS(P_CARP, 9); RS(P_CARPS, 4); RS(P_DMIX, 15); RS(P_DTIME, 24); RS(P_DFB, 20); RS(P_RMIX, 10);
+        RS(P_RECIPE, 3); RS(P_VARY, 10); break;
+    case 10:                                    /* UI ERR: low, buzzing, falling a little */
+        RS(P_WAVE, 3); RS(P_TUNE, -7); RS(P_ATT, 0); RS(P_DEC, 33); RS(P_SUS, 0); RS(P_REL, 27);
+        RS(P_MTGT, tgt_of(P_TUNE)); RS(P_MATK, 0); RS(P_MDEC, 33); RS(P_MAMT, 12);
+        RS(P_GROWL, 35); RS(P_GRATE, 40); RS(P_RFMODE, 1); RS(P_RFFREQ, 36); RS(P_RFRES, 10); RS(P_RMIX, 8);
+        RS(P_RECIPE, 3); RS(P_VARY, 10); break;
+    case 11:                                    /* UI TICK: a short high sine */
+        RS(P_WAVE, 0); RS(P_TUNE, 19); RS(P_ATT, 0); RS(P_DEC, 6); RS(P_SUS, 0); RS(P_REL, 6); RS(P_RMIX, 4);
+        RS(P_RECIPE, 3); RS(P_VARY, 15); break;
+    case 12:                                    /* PICKUP: the coin: a 25 % pulse jumping up a fourth */
+        RS(P_WAVE, W_CPLS); RS(P_CDUTY, 1); RS(P_TUNE, 19); RS(P_CARP, 8); RS(P_CARPS, 4); RS(P_CSTEP, 1);
+        RS(P_ATT, 0); RS(P_DEC, 32); RS(P_SUS, 0); RS(P_REL, 33); RS(P_RMIX, 6);
+        RS(P_RECIPE, 3); RS(P_VARY, 10); break;
+    case 13:                                    /* POWERUP: a rising major arpeggio on the console pulse */
+        RS(P_WAVE, W_CPLS); RS(P_CDUTY, 2); RS(P_CSWEEP, 18); RS(P_CARP, 4); RS(P_CARPS, 2); RS(P_CSTEP, 1);
+        RS(P_ATT, 0); RS(P_DEC, 40); RS(P_SUS, 0); RS(P_REL, 38); RS(P_DMIX, 12); RS(P_DTIME, 30); RS(P_DFB, 25); RS(P_RMIX, 8);
+        RS(P_RECIPE, 3); RS(P_VARY, 10); break;
+    case 14:                                    /* MAGIC: metallic FM in three voices, glass ringing, long echoes */
+        RS(P_WAVE, 9); RS(P_COLOR, 75); RS(P_TUNE, 7);
+        RS(P_VOICES, 2); RS(P_LPIT, 12); RS(P_LDET, 15); RS(P_LLVL, 60);
+        RS(P_ATT, 18); RS(P_DEC, 48); RS(P_SUS, 35); RS(P_REL, 48);
+        RS(P_ZMIX, 45); RS(P_ZMAT, 1); RS(P_ZDEC, 42); RS(P_ZTRK, 1);
+        RS(P_L1SHP, 0); RS(P_L1RATE, 50); RS(P_L1MIX, 8); RS(P_L1TGT, tgt_of(P_PITCH));
+        RS(P_DMIX, 32); RS(P_DFB, 55); RS(P_DTIME, 45); RS(P_RMIX, 38); RS(P_RSIZE, 90); RS(P_RDEC, 45);
+        RS(P_RECIPE, 4); RS(P_VARY, 20); break;
+    case 15:                                    /* MONSTER: a low formant voice, its vowel wandering, growling */
+        RS(P_WAVE, 8); RS(P_COLOR, 60); RS(P_TUNE, -17); RS(P_ATT, 21); RS(P_DEC, 50); RS(P_SUS, 60); RS(P_REL, 42);
+        RS(P_VMIX, 80); RS(P_VOWEL, 25); RS(P_VSIZE, -8); RS(P_VRES, 60);
+        RS(P_L2SHP, 6); RS(P_L2RATE, 40); RS(P_L2MIX, 40); RS(P_L2TGT, tgt_of(P_VOWEL));
+        RS(P_GROWL, 50); RS(P_GRATE, 30); RS(P_XDRV, 20); RS(P_OSTYLE, 1); RS(P_ODEPTH, 40); RS(P_RMIX, 15);
+        RS(P_RECIPE, 5); RS(P_VARY, 25); break;
+    case 16:                                    /* ALARM: a two-tone square, for as long as the key is held */
+        RS(P_WAVE, 3); RS(P_TUNE, 7); RS(P_ATT, 3); RS(P_DEC, 63); RS(P_SUS, 100); RS(P_REL, 18);
+        RS(P_L1SHP, 4); RS(P_L1RATE, 44); RS(P_L1MIX, 25); RS(P_L1TGT, tgt_of(P_PITCH));
+        RS(P_RFMODE, 1); RS(P_RFFREQ, 45); RS(P_RFRES, 20); RS(P_RMIX, 10);
+        RS(P_RECIPE, 3); RS(P_VARY, 0); break;
+    default:                                    /* ENGINE: a sub-saw firing (GROWL), drifting; RTPC revs it (pitch, filter) */
+        RS(P_WAVE, 7); RS(P_COLOR, 40); RS(P_TUNE, -24); RS(P_ATT, 9); RS(P_DEC, 63); RS(P_SUS, 100); RS(P_REL, 27);
+        RS(P_L2SHP, 6); RS(P_L2RATE, 30); RS(P_L2MIX, 10); RS(P_L2TGT, tgt_of(P_PITCH));
+        RS(P_GROWL, 55); RS(P_GRATE, 35); RS(P_XDRV, 24); RS(P_RFMODE, 1); RS(P_RFFREQ, 33); RS(P_RFRES, 30); RS(P_RMIX, 6);
+        RS(P_Q1T, tgt_of(P_PITCH)); RS(P_Q1A, 60); RS(P_Q2T, tgt_of(P_RFFREQ)); RS(P_Q2A, 40); RS(P_Q3A, 0);
+        RS(P_RECIPE, 0); RS(P_VARY, 10);
+    }
+    RS(P_VOL, ASSET_VOL[k]);
+}
 static void happy_accident(void)
 {
     uint32_t m, i;
@@ -2028,7 +2164,7 @@ static void happy_accident(void)
     morph_on = 0;
     if (P[P_RECIPE]) recipe((uint32_t)P[P_RECIPE]);
     else for (m = 0; m < NPAGE; m++) {
-        if (m == PG_PAD || m == PG_LAB || m == PG_PHY || m == PG_CHIP || m == PG_VAR || m == PG_BAT || m == PG_RTPC || m == PG_SPC ||
+        if (m == PG_PAD || m == PG_LAB || m == PG_PHY || m == PG_CHIP || m == PG_VAR || m == PG_BAT || m == PG_RTPC || m == PG_SPC || m == PG_ASSET ||
             (m == PG_LFO && rnd_range(0, 99) < 50)) continue;
         if (m == PG_RES && rnd_range(0, 99) < 65) { set_unlocked(P_ZMIX, 0); continue; }   /* the extra modules: sometimes */
         if (m == PG_DST && rnd_range(0, 99) < 60) { set_unlocked(P_XMIX, 0); continue; }
@@ -2469,6 +2605,19 @@ static void page_action(void)
         sp_off = fm1_ms + (P[P_SPASS] ? (uint32_t)P[P_SPASS] * 100u : 1000u);
         return;
     }
+    if (page == PG_ASSET) {                     /* load the asset, play it */
+        char t[24] = "ASSET: ";
+        uint32_t k = (uint32_t)P[P_ASSET] % NASSET;
+        push_undo();
+        morph_on = 0;
+        phys_stop();
+        asset_load(k);
+        touched();
+        asset_cur = (uint8_t)k; asset_sum = patch_sum();
+        cat(t, E_ASSET[k]); say(t);
+        if (P[P_PMODE]) phys_start(60, 32767, 999u); else audition_ms(asset_hold_ms(k));
+        return;
+    }
     if (page == PG_VAR) { P[P_VSEED] = (int16_t)rnd_range(1, 999); say("NEW SEED"); ui_dirty |= 2 | 4; audition(); return; }
     if (page == PG_CHIP) {                      /* a new sound of the PRESET's kind */
         char t[24] = "NEW ";
@@ -2736,6 +2885,7 @@ static int page_on(uint32_t m)                  /* is the module doing something
     case PG_BAT: return batch_on || ft_on;
     case PG_PHY: return P[P_PMODE] != 0;
     case PG_LAB: return SL[cur_slot].dirty != 0;
+    case PG_ASSET: return asset_cur != 255u;
     case PG_LFO: return P[P_L1MIX] || P[P_L2MIX];
     case PG_RTPC: return (rt_on || P[P_QINT]) && (P[P_Q1A] || P[P_Q2A] || P[P_Q3A]);
     default: return pad_on || pad_held || g_act || (P[P_ATAMT] && (at_keys || at_midi));
@@ -2761,7 +2911,7 @@ static void eva_header(void)
     for (m = 0; m < NPAGE; m++) {               /* 20 ticks, a gap between the buttons' groups */
         int on = (int)(map_drawn >> m & 1u);
         uint16_t c = m == page ? (on ? EV_LIM : EV_TXT) : m == PG_VAR && morph_on ? EV_PUR : on ? EV_GRN : EV_LN;
-        if (m && PAGE_GRP[m] != PAGE_GRP[m - 1u]) x += 4;
+        if (m && PAGE_GRP[m] != PAGE_GRP[m - 1u]) x += 3;   /* (21 ticks end at 168: clear of A B C D at 173) */
         cv_rect(x, on || m == page ? 27 : 32, 4, on || m == page ? 8 : 3, c);
         if (m == page) cv_rect(x - 1, 36, 6, 1, EV_LIM);
         x += 5;
@@ -2790,9 +2940,9 @@ static void draw_header(void)
     for (m = 0; m < NPAGE; m++) {               /* the chain: a tick a module, a gap between the buttons' groups */
         int on = (int)(map_drawn >> m & 1u);
         if (m && PAGE_GRP[m] != PAGE_GRP[m - 1u]) x += 4;
-        cv_rect(x, on ? 4 : 8, 5, on ? 10 : 6, m == PG_VAR && morph_on ? th->mut : on ? th->cyan : C_DK);
-        if (m == page) cv_rect(x - 1, 16, 7, 2, th->acc);
-        x += 7;
+        cv_rect(x, on ? 4 : 8, 4, on ? 10 : 6, m == PG_VAR && morph_on ? th->mut : on ? th->cyan : C_DK);
+        if (m == page) cv_rect(x - 1, 16, 6, 2, th->acc);
+        x += 6;                                 /* (21 ticks: 66 .. 220) */
     }
     cv_rect(0, 19, 240, 1, th->border);
     s[0] = (char)('0' + (page + 1u) / 10u); s[1] = (char)('0' + (page + 1u) % 10u); s[2] = 0;
@@ -3231,6 +3381,23 @@ static void draw_vis(void)
         if (!on) cv_text_fit(8, 44, 226, "A KEY PLAYS ONE HIT", C_MUTE, 1);
         break;
     }
+    case PG_ASSET: {                            /* the 18 assets, three to a row; the one chosen, the one loaded */
+        uint32_t q, sel = (uint32_t)P[P_ASSET] % NASSET, ed = asset_cur != 255u && patch_sum() != asset_sum;
+        s[0] = 0;
+        if (asset_cur == 255u) cat(s, "SEL: LOAD AN ASSET");
+        else { cat(s, E_ASSET[asset_cur]); cat(s, ed ? "  EDITED" : "  LOADED"); }
+        cv_text_fit(8, 0, 226, s, asset_cur == 255u ? C_MUTE : ed ? th->haz : th->cyan, 0);
+        for (q = 0; q < NASSET; q++) {
+            int32_t x = 4 + (int32_t)(q % 3u) * 78, y = 17 + (int32_t)(q / 3u) * 15, w = 76, tw;
+            int here = q == sel, live = q == asset_cur;
+            if (here) cv_rect(x, y, w, 14, th->acc);
+            else if (live) cv_frame(x, y, w, 14, th->cyan);
+            else cv_rect(x, y, w, 14, EVA ? EV_BG : th->box);
+            tw = text_w(&FONT_A, E_ASSET[q]);
+            cv_text(x + (w - tw) / 2, y + 3 - FONT_A_CAP, &FONT_A, E_ASSET[q], here ? RGB(0, 0, 0) : live ? th->cyan : C_TXT);
+        }
+        break;
+    }
     case PG_VAR: {                              /* A: the seed, the 27 keys as its variations; B: A and B, the morph */
         uint32_t last = lvl_v[lvl_n & 15u], q;
         if (sub == 1u) {
@@ -3569,12 +3736,12 @@ static void eva_knobs(void)
         kc = act ? EV_INK : mutant ? EV_PUR : cell;
         if (list) {                             /* its positions, the one it is on (OFF / BYPASS: grey) */
             const char *e0 = PD[p].en ? PD[p].en[0] : "";
-            int32_t q, x0 = x + 5;
+            int32_t q, x0 = x + 5, pitch = nopt * 6 <= 37 ? 6 : 37 / nopt;   /* (clear of K1..K4: 37 px at most) */
             off = P[p] == lo && !locked && ((e0[0] == 'O' && e0[1] == 'F') || (e0[0] == 'B' && e0[1] == 'Y'));
             for (q = 0; q < nopt; q++) {
-                int32_t qx = x0 + q * 6;
-                if (q == P[p] - lo) cv_rect(qx, cy - 3, 5, 6, off && !act ? EV_MUT : kc);
-                else { cv_rect(qx, cy + 2, 5, 1, act ? EV_INK : EV_LN); }
+                int32_t qx = x0 + q * pitch;
+                if (q == P[p] - lo) cv_rect(qx, cy - 3, pitch - 1, 6, off && !act ? EV_MUT : kc);
+                else { cv_rect(qx, cy + 2, pitch - 1, 1, act ? EV_INK : EV_LN); }
             }
         } else {                                /* an arc of dots from 7 o'clock (+-: from 12), the pointer */
             int32_t z = lo < 0 && PD[p].hi > 0 ? (-lo * 270) / rng : 0, from = norm < z ? norm : z, to = norm < z ? z : norm;
@@ -3660,6 +3827,7 @@ static const char *sel_hint(void)               /* what a tap on SEL does on thi
     case PG_LAB: return "APPLY";
     case PG_PHY: return ph_on ? "STOP" : "PLAY";
     case PG_PAD: return g_rec ? "CANCEL" : "REC GEST";
+    case PG_ASSET: return "LOAD";
     default: return "RANDOMIZE";
     }
 }
@@ -3734,6 +3902,7 @@ _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session must fit the settin
 _Static_assert(NPAGE <= 24, "a page's change flag (1 << PMOD) must stay below KG_NOTE");
 #define SESSION_VER (0x0D071000u + NP)
 _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session: one settings sector");
+_Static_assert(P_ASSET == NP - 1, "a new parameter goes after P_ASSET, and session_load learns the old layout");
 static void session_save(void)
 {
     session_t ss;
@@ -3748,20 +3917,29 @@ static void session_save(void)
     say(settings_save(&ss, sizeof ss) ? "SAVE FAILED" : "SESSION SAVED");
     session_dirty = 0;
 }
+/* the v1.0 / v1.1 session: the same parameters without P_ASSET (added last, so every index holds) */
+#define NP_V11 P_ASSET
+typedef struct { uint32_t ver; int16_t p[NP_V11]; uint32_t lk[NLOCKW]; int16_t a[NP_V11], b[NP_V11]; uint8_t ab, mon, gn, gx[GEST_MAX], gy[GEST_MAX]; } session_v11_t;
 static void session_load(void)
 {
-    session_t ss;
-    uint32_t i;
+    static union { session_t n; session_v11_t o; } u;    /* (static: 2.5 KB off the stack) */
+    uint32_t i, np = NP;
+    const int16_t *pp, *pa, *pb;
+    const uint32_t *lk;
+    const uint8_t *tail;
     for (i = 0; i < NP; i++) P[i] = PD[i].def;
-    if (settings_load(&ss, sizeof ss) || ss.ver != SESSION_VER) return;
-    for (i = 0; i < NP; i++) {
-        P[i] = (int16_t)clampi(ss.p[i], PD[i].lo, PD[i].hi);
-        snapA[i] = (int16_t)clampi(ss.a[i], PD[i].lo, PD[i].hi); snapB[i] = (int16_t)clampi(ss.b[i], PD[i].lo, PD[i].hi);
+    if (!settings_load(&u.n, sizeof u.n) && u.n.ver == SESSION_VER) { pp = u.n.p; pa = u.n.a; pb = u.n.b; lk = u.n.lk; tail = &u.n.ab; }
+    else if (!settings_load(&u.o, sizeof u.o) && u.o.ver == 0x0D071000u + NP_V11) { np = NP_V11; pp = u.o.p; pa = u.o.a; pb = u.o.b; lk = u.o.lk; tail = &u.o.ab; }
+    else return;
+    for (i = 0; i < np; i++) {
+        P[i] = (int16_t)clampi(pp[i], PD[i].lo, PD[i].hi);
+        snapA[i] = (int16_t)clampi(pa[i], PD[i].lo, PD[i].hi); snapB[i] = (int16_t)clampi(pb[i], PD[i].lo, PD[i].hi);
     }
-    for (i = 0; i < NLOCKW; i++) locks[i] = ss.lk[i];
-    has_ab = ss.ab & 3u; morph_on = has_ab == 3u && ss.mon;
-    for (i = 0; i < GEST_MAX; i++) { g_x[i] = ss.gx[i] & 127u; g_y[i] = ss.gy[i] & 127u; }
-    g_n = ss.gn <= GEST_MAX ? ss.gn : 0u;
+    for (; i < NP; i++) snapA[i] = snapB[i] = PD[i].def;
+    for (i = 0; i < NLOCKW; i++) locks[i] = lk[i];
+    has_ab = tail[0] & 3u; morph_on = has_ab == 3u && tail[1];   /* ab, mon, gn, gx[], gy[]: the same in both */
+    for (i = 0; i < GEST_MAX; i++) { g_x[i] = tail[3 + i] & 127u; g_y[i] = tail[3 + GEST_MAX + i] & 127u; }
+    g_n = tail[2] <= GEST_MAX ? tail[2] : 0u;
 }
 
 /* ======================================================================== input */
@@ -3972,25 +4150,24 @@ static void turn(uint32_t knob, int32_t e, int sel_held)
     touched();
 }
 
-static void app_main(void)
+static void app_init(void)                      /* the session, the tables, the screen, the engine (app_main, the host tests) */
 {
-    uint32_t prev_keys = 0, t_vis = 0, t_knob = 0, t_meter = 0, sel_used = 0, sel_down = 0, kpend = 0, i;
-    uint16_t kpend_t[27] = {0};
+    uint32_t i;
     session_load();
     sense_setup();
     for (i = 0; i < NP; i++) {                  /* the page of each parameter, the LFO targets */
         uint32_t m, s, k;
-        for (m = 0; m < NPAGE; m++) for (s = 0; s < 4u; s++) for (k = 0; k < 4u; k++) if (PAGE_P[m][s][k] == i) PMOD[i] = (uint8_t)m;
+        for (m = NPAGE; m-- > 0;) for (s = 0; s < 4u; s++) for (k = 0; k < 4u; k++) if (PAGE_P[m][s][k] == i) PMOD[i] = (uint8_t)m;   /* (its first page) */
         {                                       /* not a mod target: what no modulation could move (lists of actions, the
                                                    seed, the batch, the meters) */
             static const uint8_t NT[] = {P_SLOT, P_THEME, P_RECM, P_VSEED, P_VKEYS, P_VLOCK, P_HAAMT, P_EVOLVE, P_BMODE, P_BCNT, P_BSPC,
                                          P_BGATE, P_TRATE, P_TPOOL, P_TORDER, P_LMATCH, P_LTGT, P_QSWP, P_QCRV, P_SPASS,
-                                         P_MATK, P_MDEC, P_PMODE, P_PHITS, P_PTIME, P_PFALL, P_PPIT, P_PJIT, P_STOOL, P_SAMT, P_RECIPE};
+                                         P_MATK, P_MDEC, P_PMODE, P_PHITS, P_PTIME, P_PFALL, P_PPIT, P_PJIT, P_STOOL, P_SAMT, P_RECIPE, P_ASSET};
             int no = PD[i].fmt == F_TGT || PMOD[i] == PG_PAD;
             for (s = 0; s < sizeof NT; s++) if (NT[s] == i) no = 1;
             if (!no) TGT[NTGT++] = (uint8_t)i;
         }
-        NOMORPH[i] = i == P_SLOT || i == P_THEME || PD[i].fmt == F_TGT || PMOD[i] == PG_PAD ||
+        NOMORPH[i] = i == P_SLOT || i == P_THEME || i == P_ASSET || PD[i].fmt == F_TGT || PMOD[i] == PG_PAD ||
                      PMOD[i] == PG_VAR || PMOD[i] == PG_BAT || PMOD[i] == PG_LAB;
         CONT[i] = PD[i].fmt != F_ENUM && PD[i].fmt != F_SLOT && PD[i].fmt != F_TGT && PD[i].hi - PD[i].lo >= 10;
         E[i] = P[i];
@@ -4009,6 +4186,12 @@ static void app_main(void)
     lcd_fill(0, 0, 240, 240, C_BLACK);
     k_update(KG_ALL);
     fx_clear();
+}
+static void app_main(void)
+{
+    uint32_t prev_keys = 0, t_vis = 0, t_knob = 0, t_meter = 0, sel_used = 0, sel_down = 0, kpend = 0, i;
+    uint16_t kpend_t[27] = {0};
+    app_init();
     for (;;) {
         uint32_t keys, down, up, b, rel, k;
         int32_t e;
