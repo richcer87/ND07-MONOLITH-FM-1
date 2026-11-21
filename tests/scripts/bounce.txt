@@ -8,6 +8,7 @@
 1400 keys 0
 4000 shot
 4200 btn 11
+4205 btn 11
 4250 btn 11
 4300 btn 11
 4350 btn 11

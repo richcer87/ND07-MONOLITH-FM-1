@@ -1,7 +1,7 @@
-# ND-07 // MONOLITH · FM-1 edition · v1.1
+# ND-07 // MONOLITH · FM-1 edition · v1.2
 
 Firmware personalizado para el **M-VAVE FM-1**: la estación de SFX ND-07 // MONOLITH (REAPER, Lua ReaImGui + JSFX),
-**sampler y sintetizador para diseño de SFX de videojuegos**. 20 páginas (resonador modal, transient shaper, DESTROY, **VOWEL + SHIFT**,
+**sampler y sintetizador para diseño de SFX de videojuegos**. 21 páginas (**18 ASSETS** de partida, resonador modal, transient shaper, DESTROY, **VOWEL + SHIFT**,
 OTT multibanda, **VARIATION** con semilla, **BATCH + FIRE TEST**, **RTPC**, **SPACE + MOTION**, MORPH A↔B, **CHAOS PAD**
 desde el teléfono, **CHIP OSC** de 8 bits, loop START > LOOP > STOP), HAPPY ACCIDENT, locks de parámetros,
 UNDO de 16 pasos y 5 temas (EVA-01 por defecto), en C entero para el chip JieLi AC79 (sin FPU).
@@ -9,7 +9,7 @@ UNDO de 16 pasos y 5 temas (EVA-01 por defecto), en C entero para el chip JieLi 
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.1.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo nuevo de la 1.0 y la 1.1 está probado en el simulador de host (audio WAV + capturas). El `.fwsc` se
+> **Estado: 1.2.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo nuevo de la 1.0 a la 1.2 está probado en el simulador de host (audio WAV + capturas). El `.fwsc` se
 > compila en GitHub Actions con la toolchain de JieLi. Pruébalo primero en el emulador. Instalar firmware es bajo tu
 > propio riesgo; el [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-**
 > al encender entra al rescate USB. La sesión guardada de versiones anteriores no se carga (cambió el formato): arranca
@@ -26,7 +26,36 @@ pantalla y flash. Licencia GPL-3.0-only.
 3. Abre [joakimeriksson.github.io/fm1-emu](https://joakimeriksson.github.io/fm1-emu/), abre tu `nd07.fwsc` en la página
    y presiona Start.
 
-Para una versión publicada: `git tag v1.1 && git push --tags`.
+Para una versión publicada: `git tag v1.2 && git push --tags`.
+
+## Nuevo en v1.2: 15 ASSETS, puntos de partida para sound design
+
+Una página nueva, la primera del botón **SEQ**: 18 sonidos base de videojuego listos para tocar, cada uno armado con los
+módulos que ya tiene el ND-07 (no son samples: son patches, y todo se puede editar).
+
+| Familia | Assets |
+| --- | --- |
+| Impactos | **EXPLODE** (ruido que se cierra, un cuerpo grave del resonador y un cuarto), **IMPACT** (metal golpeado, el tono cayendo), **HIT** (un puñetazo: seno que cae rápido, saturado), **DEBRIS** (escombros: PHYSICS DEBRIS sobre golpes de madera, cada uno una variación) |
+| Armas | **GUNSHOT** (chasquido de ruido brillante, recortado y comprimido, con rebote), **LASER** (sierra que cae dos octavas, con flanger y eco), **ZAP** (descarga: ruido plegado, bitcrush, ring mod, un pasabanda que salta) |
+| Movimiento | **WHOOSH** (ruido que crece por un pasabanda que abre y cierra), **RISER** (subida SHEPARD sin fin, el filtro abriéndose) |
+| UI | **UI OK** (positivo: sube una quinta), **UI ERR** (negativo: grave, con zumbido, baja un poco), **UI TICK** (seno agudo y corto), **PICKUP** (la moneda: pulso de 25 % que salta una cuarta) |
+| Juego | **POWERUP** (arpegio mayor de 8 bits que sube), **MAGIC** (FM metálico a tres voces, resonador de vidrio, ecos largos), **MONSTER** (voz grave con VOWEL que se mueve y GROWL), **ALARM** (sirena de dos tonos mientras sostienes la tecla), **ENGINE** (motor: con RTPC, INTENS lo acelera) |
+
+- **Cómo:** **SEQ** → 15 ASSETS. **K1** escoge (la cuadrícula marca cuál), **SEL** lo carga y lo toca. Arriba dice
+  LOADED, o **EDITED** en naranja cuando ya le moviste algo. Las teclas lo tocan en cualquier nota.
+- **Cargar un asset** pone todo en su valor de fábrica y luego los ajustes del asset; no toca tus samples, la
+  SAMPLE LAB, el BATCH, el CHAOS PAD ni el tema. Se puede deshacer con **UNDO**.
+- **De ahí a variaciones:** cada asset trae su **VARY** (K2) y su familia de **HAPPY ACCIDENT** (K3 HA KIND: IMPACT,
+  WEAPON, WHOOSH, UI, MAGIC...): el HAPPY ACCIDENT muta sin salirse del tipo de sonido. Luego **SEQ ×3 → BATCH** con
+  MATCH saca 8–16 variaciones grabadas a un nivel parejo. **K4 OUT** es su volumen.
+- **Niveles:** los 18 suenan más o menos igual de fuerte (los 300 ms más fuertes cerca de −15 dBFS, picos debajo de
+  −1.5 dB), comprobado en `tests/assets_test.c`, que además los deja como WAV en `build/host/assets/`.
+- Las páginas de SEQ y LFO se recorren un número (15 VARIATION ahora es 16, y así hasta 21 CHAOS PAD); **SEQ** llega
+  primero a ASSETS y una vez más a VARIATION. La cadena de la cabecera tiene un trazo más.
+- Corregido: el sample podía leer 1 muestra después de su final al dar la vuelta un loop (sin efecto audible, pero
+  fuera del arreglo). El audio de todo lo demás no cambió (mismo resultado bit a bit).
+
+La sesión de la 1.1 sí se carga (el asset empieza en EXPLODE, sin cargar).
 
 ## Nuevo en v1.1: tema EVA-01 (Acid Eva-01)
 
@@ -210,7 +239,7 @@ Settings → Pages → "Deploy from a branch", `main`, carpeta `/ (root)`, y áb
 ## Los módulos
 
 Cada botón de página lleva a uno o dos módulos: presiónalo otra vez para el siguiente juego de perillas (A/B…) y,
-después del último, para el siguiente módulo del mismo botón. **SELECT** recorre las 20 páginas.
+después del último, para el siguiente módulo del mismo botón. **SELECT** recorre las 21 páginas.
 
 | # | Botón | Módulo | Perillas A | Perillas B (C) |
 | --- | --- | --- | --- | --- |
@@ -228,12 +257,13 @@ después del último, para el siguiente módulo del mismo botón. **SELECT** rec
 | 12 | FX | DELAY + FLANGER | TIME, FDBK, DLY MIX, ROUTE | RATE, DEPTH, REGEN, FLG MIX |
 | 13 | FX ×2 | MULTIBAND REVERB | SIZE, DECAY, PRE-DLY, REV MIX | LOW x, HIGH x, X-LO, X-HI |
 | 14 | FX ×3 | **SPACE + MOTION** | DIST, OCCLUDE, PASS-BY, DOPPLER | — |
-| 15 | SEQ | **VARIATION + MORPH** | VARY, SEED, KEYS, RESEED | MORPH, HA AMT, EVOLVE, HA KIND |
-| 16 | SEQ ×2 | **BATCH + FIRE TEST** (A B C) | BATCH (modo), COUNT, SPACE, GATE | B: RATE, POOL, ORDER · C: MATCH, TARGET |
-| 17 | SEQ ×3 | **PHYSICS TRIGGER** | TRIGGER, HITS, TIME, FALL | PITCH, JITTER |
-| 18 | LFO | LFO 1 + 2 | SHAPE, RATE, MIX, TARGET (LFO 1) | SHAPE, RATE, MIX, TARGET (LFO 2) |
-| 19 | LFO ×2 | **RTPC** (A B C) | INTENS, SWEEP, CURVE | B: DEST 1, AMT 1, DEST 2, AMT 2 · C: DEST 3, AMT 3 |
-| 20 | LFO ×3 | **CHAOS PAD + KEYS** (A B C) | A: X TGT, X AMT, Y TGT, Y AMT | B: PAD, GESTURE, KEY VEL, SENS · C: AT TGT, AT AMT |
+| 15 | SEQ | **ASSETS** (v1.2) | ASSET, VARY, HA KIND, OUT | — |
+| 16 | SEQ ×2 | **VARIATION + MORPH** | VARY, SEED, KEYS, RESEED | MORPH, HA AMT, EVOLVE, HA KIND |
+| 17 | SEQ ×3 | **BATCH + FIRE TEST** (A B C) | BATCH (modo), COUNT, SPACE, GATE | B: RATE, POOL, ORDER · C: MATCH, TARGET |
+| 18 | SEQ ×4 | **PHYSICS TRIGGER** | TRIGGER, HITS, TIME, FALL | PITCH, JITTER |
+| 19 | LFO | LFO 1 + 2 | SHAPE, RATE, MIX, TARGET (LFO 1) | SHAPE, RATE, MIX, TARGET (LFO 2) |
+| 20 | LFO ×2 | **RTPC** (A B C) | INTENS, SWEEP, CURVE | B: DEST 1, AMT 1, DEST 2, AMT 2 · C: DEST 3, AMT 3 |
+| 21 | LFO ×3 | **CHAOS PAD + KEYS** (A B C) | A: X TGT, X AMT, Y TGT, Y AMT | B: PAD, GESTURE, KEY VEL, SENS · C: AT TGT, AT AMT |
 
 <details><summary>Tabla de la v0.6 (para comparar)</summary>
 
@@ -403,7 +433,10 @@ sh tests/run_host.sh tests/scripts/overdub.txt     # REC OVERDUB
 sh tests/run_host.sh tests/scripts/physics.txt     # 16 PHYSICS TRIGGER: BOUNCE, DEBRIS, SCATTER
 sh tests/run_host.sh tests/scripts/lab.txt         # 05 SAMPLE LAB: REVERSE, 1/2 SPD, REVERT
 sh tests/run_host.sh tests/scripts/modenv.txt      # 06 C MOD ENV y las recetas del HAPPY ACCIDENT
+sh tests/run_host.sh tests/scripts/assets.txt      # 15 ASSETS: escoger, SEL carga y toca, HAPPY ACCIDENT en la familia
+cc -O2 -DDINGHY_HOST -Ifirmware/hal -Ifirmware/src -Ifirmware/gen -o /tmp/at tests/assets_test.c -lm && /tmp/at   # los 18 como WAV + niveles
 sh tests/run_host.sh tests/scripts/screens.txt     # todas las páginas y juegos (capturas para revisar el tema)
+python3 tools/gen_screens_tour.py                  # regenera screens.txt si cambian las páginas
 sh tests/run_host.sh tests/scripts/eva_states.txt  # EVA-01: perilla recién girada, lock, HAPPY ACCIDENT, modulación
 python3 tools/gen_eva_font.py                      # regenera firmware/gen/eva_font.h (fuentes del tema EVA-01)
 sh tests/run_host.sh tests/scripts/gesture.txt     # 20 GESTURE: grabado (SEL y CC19) y repetido por la nota

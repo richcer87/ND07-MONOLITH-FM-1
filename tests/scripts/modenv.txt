@@ -8,6 +8,7 @@
 500 shot
 900 keys 0
 1500 btn 11
+1505 btn 11
 1530 btn 11
 1560 enc 5 1
 1575 enc 5 1

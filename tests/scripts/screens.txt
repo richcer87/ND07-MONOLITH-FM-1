@@ -1,4 +1,4 @@
-# every page and knob set, a note held (screens for the theme check)
+# every page and knob set, a note held (screens for the theme check); made by tools/gen_screens_tour.py
 100 keys 0x80
 300 shot
 450 btn 8
@@ -75,7 +75,7 @@
 14700 shot
 14850 btn 11
 15100 shot
-15250 btn 5
+15250 btn 11
 15500 shot
 15650 btn 5
 15900 shot
@@ -91,4 +91,6 @@
 17900 shot
 18050 btn 5
 18300 shot
-18450 end
+18450 btn 5
+18700 shot
+18850 end
