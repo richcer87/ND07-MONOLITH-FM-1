@@ -341,15 +341,15 @@ DELAY + FLANGER → REVERB → OTT (POST) → SPACE (aire / pared / distancia) �
 | Control | Función |
 | --- | --- |
 | Botones de página | sus módulos; presiona otra vez: perillas A/B…, luego el siguiente módulo del botón |
-| **SELECT** | página anterior / siguiente (las 20) |
+| **SELECT** | página anterior / siguiente (las 21) |
 | **K1..K4** | parámetros · **SEL sostenido + girar** = lock/unlock |
 | **ALGORITHM / PRESETS** | onda del oscilador / slot de sample |
 | Teclas **F3..G5** | tocar (sostener = nota sostenida, monofónico, última nota gana, glide legato) · **OCT- / OCT+** octava |
 | **PLAY** | un C4 sostenido |
 | **REC** | ☢ HAPPY ACCIDENT (a veces enciende el resonador, DESTROY o el transient) · **SEL + REC** = UNDO |
 | **SAVE** | guardar sesión (con A y B, y el sample grabado) · **SEL + SAVE** = borrar todos los locks |
-| **SEL (toque)** | El pie de la pantalla dice qué hace en cada página. 01: REC ARM / STOP · 02: un sonido nuevo del PRESET · 05: aplicar la herramienta · 14: tocar una pasada · 15: semilla nueva · 16: BATCH (A, C) o FIRE TEST (B) / detener · 17: tocar el patrón · 19: barrido RTPC · 20: grabar un gesto · las demás: aleatorizar el módulo (respeta locks) |
-| **SEL + OCT-** / **SEL + OCT+** | reset del módulo / siguiente tema · en la página 15, juego B: **guardar A / guardar B** |
+| **SEL (toque)** | El pie de la pantalla dice qué hace en cada página. 01: REC ARM / STOP · 02: un sonido nuevo del PRESET · 05: aplicar la herramienta · 14: tocar una pasada · **15: cargar y tocar el asset** · 16: semilla nueva · 17: BATCH (A, C) o FIRE TEST (B) / detener · 18: tocar el patrón · 20: barrido RTPC · 21: grabar un gesto · las demás: aleatorizar el módulo (respeta locks) |
+| **SEL + OCT-** / **SEL + OCT+** | reset del módulo / siguiente tema · en la página 16, juego B: **guardar A / guardar B** |
 | **SEL + PLAY** | el slot a su sonido de fábrica |
 | **MIDI in** | notas con velocity, pitch bend ±2, CC1 = MIX del LFO1, **CC11 = MORPH**, CC74 = FREQ del filtro, **CC16 / CC17 / CC18 = pad X / Y / tocar**, **CC19 = armar la grabación de gesto**, channel y poly pressure = aftertouch, CC123 = all notes off |
 | **SysEx** | `F0 7D 4E 37 cmd … F7`: samples desde `web/index.html` (HELLO, BEGIN slot largo, DATA μ-law en 7 bits, END guardar) y de vuelta (LEN: largo y nombre del slot activo; READ pos: 128 muestras de 16 bits) |
