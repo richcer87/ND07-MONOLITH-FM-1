@@ -142,8 +142,7 @@ B o C, un chip al azar.
 
 Cada página tiene un objeto propio en líneas de un pixel que se mueve con el sonido, las perillas y las notas, y que
 en silencio sigue respirando. La salida se analiza en cada cuadro (FFT de 256 puntos en 24 bandas, el nivel, los
-ataques y el último segundo de ambos). Al girar una perilla, su valor ocupa la pantalla 1.2 s en numerales de trazo
-fino. Con HAPPY ACCIDENT todo gira más rápido un momento.
+ataques y el último segundo de ambos). Al girar una perilla, su celda se ilumina 1.2 s con el valor; la pantalla no se tapa. Con HAPPY ACCIDENT todo gira más rápido un momento.
 
 | Página | Objeto |
 | --- | --- |
@@ -218,7 +217,7 @@ señal a L y R): delay, flanger, reverb y OTT procesan un solo canal.
 | Delay / Flanger | ~80 / ~30 | MIX 0 = 0 |
 | LAYER 2 / 3 (0.7, estimado) | la FUENTE ×2 / ×3 (con SUPRSAW, lo más caro) | VOICES MONO = 0 · en SAMPLE sólo con STRETCH 1.00x |
 | SHEPARD (0.7, estimado) | ~ como SUPRSAW | — |
-| SPACE, RTPC (0.7) | muy poco | DIST, OCCLUDE, PASS-BY en 0 / INTENS 0 = 0 |
+| SPACE, RTPC (0.7) | muy poco | DIST, OCCLUDE, PASS-BY en 0 / VALUE 0 = 0 |
 
 SOUND CHIPS cuesta poco (un muestreo, un convertidor y un filtro por muestra; el eco del S-DSP, ocho multiplicaciones); en el aparato se ve en el pie de pantalla.
 

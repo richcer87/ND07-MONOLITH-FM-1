@@ -3686,80 +3686,7 @@ static void fx_frame(const theme_t *th)         /* the page's object: one frame,
     default: break;
     }
 }
-/* ======================================================================== the hero value, the solids
- * A knob just turned: its value takes the screen a moment, big, in thin drawn numerals, in the knob's colour, over the
- * page dimmed (the number is the picture). Numerals drawn as strokes on a 6 x 10 grid (corners cut), not a font. */
-static const uint8_t HN_PTS[] = {   /* per glyph: strokes of points (x,y); 0xFF ends a stroke, 0xFE the glyph */
-    /* 0 */ 1,0, 5,0, 6,1, 6,9, 5,10, 1,10, 0,9, 0,1, 1,0, 0xFF, 0xFE,
-    /* 1 */ 1,2, 3,0, 3,10, 0xFF, 0xFE,
-    /* 2 */ 0,1, 1,0, 5,0, 6,1, 6,4, 0,10, 6,10, 0xFF, 0xFE,
-    /* 3 */ 0,1, 1,0, 5,0, 6,1, 6,4, 5,5, 2,5, 0xFF, 5,5, 6,6, 6,9, 5,10, 1,10, 0,9, 0xFF, 0xFE,
-    /* 4 */ 5,10, 5,0, 0,7, 6,7, 0xFF, 0xFE,
-    /* 5 */ 6,0, 0,0, 0,5, 5,5, 6,6, 6,9, 5,10, 1,10, 0,9, 0xFF, 0xFE,
-    /* 6 */ 5,0, 1,0, 0,1, 0,9, 1,10, 5,10, 6,9, 6,6, 5,5, 0,5, 0xFF, 0xFE,
-    /* 7 */ 0,0, 6,0, 2,10, 0xFF, 0xFE,
-    /* 8 */ 1,0, 5,0, 6,1, 6,4, 5,5, 1,5, 0,4, 0,1, 1,0, 0xFF, 1,5, 0,6, 0,9, 1,10, 5,10, 6,9, 6,6, 5,5, 0xFF, 0xFE,
-    /* 9 */ 6,5, 1,5, 0,4, 0,1, 1,0, 5,0, 6,1, 6,9, 5,10, 1,10, 0xFF, 0xFE,
-    /* - */ 1,5, 5,5, 0xFF, 0xFE,
-    /* + */ 1,5, 5,5, 0xFF, 3,3, 3,7, 0xFF, 0xFE,
-    /* . */ 1,9, 1,10, 2,10, 2,9, 1,9, 0xFF, 0xFE};
-static int32_t hn_glyph(char c) { return c >= '0' && c <= '9' ? c - '0' : c == '-' ? 10 : c == '+' ? 11 : c == '.' ? 12 : -1; }
-static int32_t hn_adv(char c, int32_t u) { return c == '.' ? u * 4 : u * 9; }
-static int32_t hn_width(const char *t, int32_t u) { int32_t w = 0; while (*t) w += hn_adv(*t++, u); return w; }
-static void hn_draw(int32_t x, int32_t y, const char *t, int32_t u, uint16_t c)   /* u: pixels a grid step (x4 Q2) */
-{
-    for (; *t; t++) {
-        int32_t g = hn_glyph(*t), i = 0, px = -1, py = -1;
-        while (g > 0) { if (HN_PTS[i++] == 0xFEu) g--; }
-        if (g == 0) for (; HN_PTS[i] != 0xFEu; i++) {
-            if (HN_PTS[i] == 0xFFu) { px = -1; continue; }
-            {
-                int32_t qx = x + HN_PTS[i] * u / 4, qy = y + HN_PTS[i + 1] * u / 4;
-                if (px >= 0) { cv_line(px, py, qx, qy, c); cv_line(px + 1, py, qx + 1, qy, c); }   /* (two pixels: crisp on the FM-1) */
-                px = qx; py = qy; i++;
-            }
-        }
-        x += hn_adv(*t, u) / 4;
-    }
-}
-static void vis_dim(int32_t keep)               /* the canvas toward black: keep/256 of each colour */
-{
-    uint32_t i, n = (uint32_t)cv_w * cv_h;
-    for (i = 0; i < n; i++) {
-        uint16_t v = swap16(cv_px[i]);
-        int32_t r = (v >> 11) * keep >> 8, g = (v >> 5 & 63) * keep >> 8, b = (v & 31) * keep >> 8;
-        cv_px[i] = swap16((uint16_t)(r << 11 | g << 5 | b));
-    }
-}
-static void hero_value(const theme_t *th)       /* the knob turned last: its name, its value big (1.2 s) */
-{
-    uint32_t p;
-    char t[24], num[12], unit[12];
-    int32_t i = 0, j = 0, u = 18, w, x;
-    uint16_t c;
-    if (hot_k >= 4u || fm1_ms - hot_t >= 1200u) return;
-    p = PAGE_P[page][sub][hot_k];
-    if (p >= NP) return;
-    c = EVA ? EV_KC[hot_k] : hot_k == 0u ? th->acc : hot_k == 1u ? th->cyan : hot_k == 2u ? th->mut : C_TXT;
-    if (lock_get(p)) c = EVA ? EV_ORG : th->haz;
-    fmt_param(p, P[p], t);
-    while (t[i] && hn_glyph(t[i]) >= 0 && i < 11) { num[i] = t[i]; i++; }
-    num[i] = 0;
-    while (t[i] && j < 11) unit[j++] = t[i++];
-    unit[j] = 0;
-    vis_dim(56);                                /* (the plot a shadow under it) */
-    cv_rect(2, 0, 236, 17, EVA ? EV_BG : RGB(5, 5, 7));   /* (the name alone on the top line) */
-    cv_text_fit(8, 1, 224, PD[p].name, c, 1);
-    if (!num[0] || (hn_glyph(num[0]) > 9 && !num[1]) || unit[0] == ' ') {   /* a word (a list, a target): big letters */
-        cv_text_fit(8, 44, 224, t, c, 1);
-        return;
-    }
-    while (u > 8 && hn_width(num, u) / 4 + text_w(&FONT_S, unit) + 4 > 220) u--;
-    w = hn_width(num, u) / 4 + (unit[0] ? text_w(&FONT_S, unit) + 4 : 0);
-    x = (240 - w) / 2;
-    hn_draw(x, 30, num, u, c);
-    if (unit[0]) cv_text(x + hn_width(num, u) / 4 + 2, 30 + 10 * u / 4 - 16 + 2, &FONT_S, unit, c);
-}
+/* ======================================================================== the solids (OTT, REVERB) */
 static void solid(int32_t kind, int32_t cx, int32_t base, int32_t h, uint16_t c, uint16_t back)   /* wireframe: 0 cylinder,
                                                    1 prism, 2 pyramid; h tall, standing on base, the hidden edges dim */
 {
@@ -4468,7 +4395,6 @@ static void draw_vis(void)
         break;
     }
     }
-    hero_value(th);                             /* (a knob just turned: its value, big) */
     cv_blit(0, 40);
 }
 static uint32_t knob_ph(int32_t norm) { return ((uint32_t)norm + 225u) * 11930465u; }   /* degrees -> phase */
