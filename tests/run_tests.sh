@@ -24,7 +24,8 @@ run "FM-1 MIDI: USB, the TRS jack, a clock, the channel" sh tests/run_host.sh te
 run "SMK-37: velocity, a pad, an outer key, the pitch wheel" env BOARD=smk37 sh tests/run_host.sh tests/scripts/smk37.txt
 run "ND-07: the CHAOS PAD and the aftertouch over MIDI" sh tests/run_host.sh tests/scripts/pad.txt
 run "ND-07: a sample over SysEx, as web/index.html sends it" sh tests/run_host.sh tests/scripts/import.txt
-run "ND-07: 14 CHIP OSC, a preset of each kind" sh tests/run_host.sh tests/scripts/chip.txt
+run "ND-07: 03 CHIP ENGINE: a NEW SFX of each kind, on ND07, DMG, YM2149" sh tests/run_host.sh tests/scripts/chip.txt
+run "ND-07: 03 CHIP ENGINE: the five chips, a note each" sh tests/run_host.sh tests/scripts/engines.txt
 run "ND-07: VARIATION keys, the seeded hits" sh tests/run_host.sh tests/scripts/variation.txt
 run "ND-07: SUSTAIN loop, START > LOOP > STOP" sh tests/run_host.sh tests/scripts/sustain.txt
 run "ND-07: the secret RTPC sweep, SPACE pass-by" sh tests/run_host.sh tests/scripts/motion.txt
