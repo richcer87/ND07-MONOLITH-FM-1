@@ -4267,8 +4267,8 @@ static void vis_engine(const theme_t *th)      /* 03 CHIP ENGINE A, B: the chip 
             cv_rect(x, v > 0 ? 52 - v : 52, 2, v ? absi(v) : 1, K.s_ev ? ca : C_MUTE);
             vk_circ(x + 1, 52 - v, 2, K.s_ev ? ca : C_MUTE);
         }
-        s[0] = 0; cat(s, "FIR "); cat(s, EN_FIR[K.s_fir]);
-        if (K.s_ev) { cat(s, " "); fmt_num(t, clampi(P[P_E5], 0, 15) * 16, 0); cat(s, t); cat(s, "ms"); }
+        s[0] = 0; cat(s, K.s_ev ? "ECHO " : "FIR "); cat(s, K.s_ev ? "" : EN_FIR[K.s_fir]);
+        if (K.s_ev) { fmt_num(t, clampi(P[P_E5], 0, 15) * 16, 0); cat(s, t); cat(s, "ms"); }
         cv_text_fit(116, 92, 118, s, K.s_ev ? C_TXT : C_MUTE, 2);
         break;
     }
