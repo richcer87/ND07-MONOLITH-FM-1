@@ -27,7 +27,7 @@ run "ND-07: a sample over SysEx, as web/index.html sends it" sh tests/run_host.s
 run "ND-07: 14 CHIP OSC, a preset of each kind" sh tests/run_host.sh tests/scripts/chip.txt
 run "ND-07: VARIATION keys, the seeded hits" sh tests/run_host.sh tests/scripts/variation.txt
 run "ND-07: SUSTAIN loop, START > LOOP > STOP" sh tests/run_host.sh tests/scripts/sustain.txt
-run "ND-07: RTPC sweep, SPACE + MOTION pass-by" sh tests/run_host.sh tests/scripts/motion.txt
+run "ND-07: the secret RTPC sweep, SPACE pass-by" sh tests/run_host.sh tests/scripts/motion.txt
 run "ND-07: LAYER 3, the SHEPARD wave" sh tests/run_host.sh tests/scripts/layers.txt
 run "ND-07: REC BOUNCE, BATCH with level MATCH" sh tests/run_host.sh tests/scripts/bounce.txt
 run "ND-07: REC OVERDUB" sh tests/run_host.sh tests/scripts/overdub.txt
@@ -35,7 +35,7 @@ run "ND-07: PHYSICS TRIGGER: BOUNCE, DEBRIS, SCATTER" sh tests/run_host.sh tests
 run "ND-07: SAMPLE LAB: REVERSE, HALF SPD, REVERT" sh tests/run_host.sh tests/scripts/lab.txt
 run "ND-07: MOD ENV, the HAPPY ACCIDENT's recipes" sh tests/run_host.sh tests/scripts/modenv.txt
 run "ND-07: the pad's GESTURE recorded and replayed" sh tests/run_host.sh tests/scripts/gesture.txt
-run "ND-07: VOWEL + SHIFT: shift up and down, the feedback spiral, U O A E I" sh tests/run_host.sh tests/scripts/vox.txt
+run "ND-07: 3-BAND EQ: LOW, MID, HIGH on noise" sh tests/run_host.sh tests/scripts/eq.txt
 run "ND-07: the slot back out as a WAV (SysEx LEN / READ)" sh tests/run_host.sh tests/scripts/export.txt
 run "ND-07: the controls: SEL + a button is its second job on every page (stop all, undo, reset, randomize, theme, asset, knob set, store A/B, LAB FACTORY)" sh tests/run_host.sh tests/scripts/controls.txt
 run "ND-07: 15 ASSETS: pick, SEL loads and plays, HAPPY ACCIDENT in the family, a PHYSICS asset" sh tests/run_host.sh tests/scripts/assets.txt
