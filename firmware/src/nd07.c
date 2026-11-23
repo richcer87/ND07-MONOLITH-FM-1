@@ -3047,33 +3047,23 @@ static int32_t wave_shape(uint32_t w, uint32_t ph, int32_t m)   /* the oscillato
     default: return isin(ph) >> 1;
     }
 }
-/* ======================================================================== the motion layer (v1.3)
- * What is heard, as abstract figures that move under each page's plot. The output (stage_out keeps its last 1024
- * samples) is read 25 times a second: a 256-point FFT into 24 log bands (60 Hz .. 11 kHz), the level, the onsets.
- * Each page draws its own figure into a glow field (120 x 56, two pixels a cell) that feeds back on itself: turned,
- * zoomed, drifted and faded each frame, so a figure leaves trails, spirals, tunnels. The field goes on the screen in
- * the theme's colours, under the page's own plot. Silent, every figure keeps breathing slowly. All in the main loop,
- * in flash; the audio only writes its samples. (Its own random numbers: the patch's stay as they were.) */
-#define FXW 120
-#define FXH 56
-static uint8_t fx_g[FXW * FXH] __attribute__((section(".pool"))), fx_t[FXW * FXH] __attribute__((section(".pool")));   /* the field, the frame before */
+/* ======================================================================== the motion layer (v1.4: thin vectors)
+ * What is heard, as an object drawn in thin lines: each page has its own (a cloud of grains, a bell of modes, a crushed
+ * ball, a room as a tunnel, a ball bouncing through the hits...). It moves with the sound, the knobs and the notes, and
+ * when it is quiet it keeps breathing. The output (stage_out keeps its last 1024 samples) is read each frame: a
+ * 256-point FFT into 24 log bands (60 Hz .. 11 kHz), the level, the onsets, the last second of both. The object is
+ * drawn first, the page's words over it. All in the main loop, in flash; the audio only writes its samples. (Its own
+ * random numbers: the patch's stay as they were.) */
 static uint8_t fx_band[24], fx_lv;              /* the spectrum (0..255 a band), the level (0..255) */
 static int16_t fx_s[256];                       /* the last 256 samples (every 2nd: 22 kHz), for the figures */
-static int32_t fx_px = -1, fx_py, fx_flux;
-static uint32_t fx_ang;
-static uint32_t fx_onset, fx_rng = 0x51F15EEDu, fx_pg = 255u, fx_n, fx_was_on;
-static uint16_t fx_lut[64];
+static int32_t fx_flux;
+static uint32_t fx_ang, fx_onset, fx_rng = 0x51F15EEDu, fx_pg = 255u, fx_n, fx_was_on;
 static uint8_t fx_hist[6][24], fx_hlv[16];       /* the spectrum's last 6 snapshots (~8 a second), the level's last 16 */
-static uint32_t fx_hn;                          /* (snapshots taken) */
-typedef struct { int16_t x0, y0, x1, y1; uint8_t lv; } fx_vl_t;
-static fx_vl_t fx_vl[640];                      /* this frame's crisp lines (pixels), drawn last, only where it is empty */
-static uint32_t fx_vn;
-static uint8_t fx_head[240u * 112u / 8u];      /* this frame's figure as crisp 1-pixel lines (on top of its trails) */
-static uint8_t fx_head_on = 1;                  /* (0: the next deposits are trails only) */
-static int32_t fx_cx0, fx_cy0, fx_cx1 = 480, fx_cy1 = 224;   /* the page's stage, Q2: figures stay inside it */
-static uint32_t fx_lut_key = 0xFFFFFFFFu;
 typedef struct { int16_t x, y, vx, vy; uint8_t life, a; } fx_part_t;
-static fx_part_t fx_pt[24];
+static fx_part_t fx_pt[24];                     /* grains, wave fronts: whatever the page throws */
+static int16_t fx_tx[32], fx_ty[32];            /* a trail: the last 32 places (the finger, the LFOs' pen) */
+static uint32_t fx_tn;
+static uint16_t fx_glast[16];                   /* (the grains seen: a new one each time a slot changes) */
 static const uint8_t FX_EDGE[25] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 21, 25, 31, 38, 47, 57, 70, 85, 105, 128};
 static uint32_t fx_rand(void) { uint32_t x = fx_rng; x ^= x << 13; x ^= x >> 17; x ^= x << 5; return fx_rng = x; }
 static uint16_t mix565(uint16_t a, uint16_t b, int32_t t)   /* a .. b, t 0..256 */
@@ -3129,191 +3119,91 @@ static void fx_listen(void)                     /* the spectrum, the level, an o
         memcpy(fx_hist[0], fx_band, 24);
         for (h = 15; h > 0; h--) fx_hlv[h] = fx_hlv[h - 1];
         fx_hlv[0] = fx_lv;
-        fx_hn++;
     }
     fx_flux = flux;
     if (flux > 420 || (tm_awake && !fx_was_on)) fx_onset++;
     fx_was_on = tm_awake;
 }
-static inline void fx_dot(int32_t xq, int32_t yq, int32_t a)    /* a splat at a quarter-cell (Q2), 4 cells weighted */
+/* ---- the kit: thin lines, a level each (0 the background .. 128 the line's colour .. 255 its accent), a small 3D
+ * view (turned about the vertical, tilted toward the eye: the far edges dimmer) */
+static uint16_t vk_bg, vk_lo, vk_hi;
+static uint16_t vk_c(uint16_t c, int32_t lv) { return mix565(vk_bg, c, clampi(lv, 0, 256)); }
+static uint16_t vk_lv(int32_t lv) { lv = clampi(lv, 0, 255); return lv < 128 ? mix565(vk_bg, vk_lo, lv * 2) : mix565(vk_lo, vk_hi, (lv - 128) * 2); }
+static void fx_vline(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t lv) { if (lv > 0) cv_line(x0, y0, x1, y1, vk_lv(lv)); }
+static int32_t vk_x0, vk_y0, vk_yc = 32767, vk_ys, vk_tc = 32767, vk_ts;
+static void vk_view(int32_t cx, int32_t cy, uint32_t yaw, uint32_t tilt)
 {
-    int32_t x = xq >> 2, y = yq >> 2, fx = xq & 3, fy = yq & 3, i, w[4];
-    if ((uint32_t)x >= FXW - 1u || (uint32_t)y >= FXH - 1u || xq < fx_cx0 || xq >= fx_cx1 || yq < fx_cy0 || yq >= fx_cy1) return;
-    if (fx_head_on) { uint32_t px = (uint32_t)xq >> 1, py = (uint32_t)yq >> 1; if (px < 240u && py < 112u) fx_head[(py * 240u + px) >> 3] |= (uint8_t)(1u << (px & 7u)); }
-    a = a * 5 >> 3;                             /* (the trail: softer than the line) */
-    w[0] = (4 - fx) * (4 - fy); w[1] = fx * (4 - fy); w[2] = (4 - fx) * fy; w[3] = fx * fy;
-    for (i = 0; i < 4; i++) {
-        uint8_t *g = &fx_g[(y + (i >> 1)) * FXW + x + (i & 1)];
-        int32_t v = *g + (a * w[i] >> 4);
-        *g = (uint8_t)(v > 255 ? 255 : v);
+    vk_x0 = cx; vk_y0 = cy; vk_yc = isin(yaw + 0x40000000u); vk_ys = isin(yaw); vk_tc = isin(tilt + 0x40000000u); vk_ts = isin(tilt);
+}
+static int32_t vk_pt(int32_t x, int32_t y, int32_t z, int32_t *sx, int32_t *sy)   /* to the screen; returns the depth (+: near) */
+{
+    int32_t X = (x * vk_yc - z * vk_ys) >> 15, Z = (x * vk_ys + z * vk_yc) >> 15;
+    *sx = vk_x0 + X; *sy = vk_y0 - ((y * vk_tc - Z * vk_ts) >> 15);
+    return (Z * vk_tc + y * vk_ts) >> 15;
+}
+static void vk_l3(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz, uint16_t c, uint16_t cb)
+{
+    int32_t x0, y0, x1, y1, d = vk_pt(ax, ay, az, &x0, &y0) + vk_pt(bx, by, bz, &x1, &y1);
+    cv_line(x0, y0, x1, y1, d >= 0 ? c : cb);
+}
+static void vk_ring3(int32_t y, int32_t r, int32_t n, uint32_t rot, int32_t wob, uint16_t c, uint16_t cb)
+{   /* a ring lying flat at height y, n sides (2: a bar, 4: a square, 24: round), turned by rot; wob: its edge shaken */
+    int32_t k, px = 0, pz = 0;
+    uint32_t st = 0xFFFFFFFFu / (uint32_t)n;
+    for (k = 0; k <= n; k++) {
+        uint32_t a = rot + st * (uint32_t)(k % n);
+        int32_t rr = r + (wob ? isin(a * 3u + fx_ang * 9u) * wob >> 15 : 0), x = rr * isin(a + 0x40000000u) >> 15, z = rr * isin(a) >> 15;
+        if (k) vk_l3(px, y, pz, x, y, z, c, cb);
+        px = x; pz = z;
     }
 }
-static void fx_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t a)   /* Q2 ends */
-{
-    int32_t dx = x1 - x0, dy = y1 - y0, n = (absi(dx) > absi(dy) ? absi(dx) : absi(dy)) >> 1, i;
-    if (n > 200) n = 200;
-    if (n < 1) { fx_dot(x0, y0, a); return; }
-    for (i = 0; i <= n; i++) fx_dot(x0 + dx * i / n, y0 + dy * i / n, a);
-}
-static void fx_polar(int32_t cx, int32_t cy, int32_t r, uint32_t ang, int32_t *x, int32_t *y)   /* Q2 out */
-{
-    *x = cx + (r * 15 * isin(ang + 0x40000000u) >> 18);   /* (wider than tall, as the strip: orbits seen tilted) */
-    *y = cy + (r * isin(ang) >> 15);
-}
-static void fx_ring(int32_t cx, int32_t cy, int32_t r, int32_t a)
-{
-    int32_t k, x0, y0, x1, y1;
-    fx_polar(cx, cy, r, 0, &x0, &y0);
-    for (k = 1; k <= 32; k++) { fx_polar(cx, cy, r, (uint32_t)k << 27, &x1, &y1); fx_line(x0, y0, x1, y1, a); x0 = x1; y0 = y1; }
-}
-static void fx_feedback(uint32_t rot, int32_t zoom, int32_t dx, int32_t dy, int32_t fade, int32_t cx, int32_t cy)
-{   /* each cell from where it came: turned by rot, zoom/256 bigger, moved dx dy (Q8 cells); then faded by fade/256 */
-    int32_t a = isin(rot + 0x40000000u) * 512 / zoom, b = isin(rot) * 512 / zoom, x, y;
-    memcpy(fx_t, fx_g, sizeof fx_g);
-    for (y = 0; y < FXH; y++) {
-        int32_t uy = y - cy, sx = (cx << 16) + (-cx) * a + uy * b - (dx << 8), sy = (cy << 16) - (-cx) * b + uy * a - (dy << 8);
-        uint8_t *o = &fx_g[y * FXW];
-        for (x = 0; x < FXW; x++, sx += a, sy -= b) {
-            int32_t ix = sx >> 16, iy = sy >> 16, fx, fy, v;
-            if ((uint32_t)ix >= FXW - 1u || (uint32_t)iy >= FXH - 1u) { o[x] = 0; continue; }
-            fx = (sx >> 8) & 255; fy = (sy >> 8) & 255;
-            {
-                const uint8_t *p = &fx_t[iy * FXW + ix];
-                int32_t t0 = p[0] + ((p[1] - p[0]) * fx >> 8), t1 = p[FXW] + ((p[FXW + 1] - p[FXW]) * fx >> 8);
-                v = t0 + ((t1 - t0) * fy >> 8);
-            }
-            o[x] = (uint8_t)(v * fade >> 8);
-        }
+static void vk_ell(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint32_t a0, uint32_t span, int32_t n, uint16_t c)
+{   /* an ellipse (span 0) or an arc of one, from a0, in n pieces */
+    int32_t k, px = 0, py = 0;
+    uint32_t st = (span ? span : 0xFFFFFFFFu) / (uint32_t)n;
+    for (k = 0; k <= n; k++) {
+        uint32_t a = a0 + st * (uint32_t)(span ? k : k % n);
+        int32_t x = cx + (rx * isin(a + 0x40000000u) >> 15), y = cy + (ry * isin(a) >> 15);
+        if (k) cv_line(px, py, x, y, c);
+        px = x; py = y;
     }
 }
-static uint16_t fx_lo, fx_hi, fx_bg;            /* this frame's colours (fx_frame), for fx_composite */
-static void fx_composite(void)                  /* after the page's plot: the trails and the lines go only where the
-                                                   screen is empty and not next to the plot or its text (a dark rim
-                                                   keeps every word and curve clean) */
+static void vk_circ(int32_t x, int32_t y, int32_t r, uint16_t c) { if (r < 1) cv_pset(x, y, c); else vk_ell(x, y, r, r, 0, 0, r < 5 ? 8 : r < 16 ? 16 : 28, c); }
+static void vk_dash(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t c)   /* a dotted line: a pixel in three */
 {
-    uint16_t lo = fx_lo, hi = fx_hi, bg = fx_bg, e0 = swap16(bg), e1 = swap16(EVA ? EV_BG : RGB(10, 10, 13)), head = swap16(mix565(lo, hi, 200));
-    uint32_t key = (uint32_t)lo << 16 ^ hi ^ (uint32_t)bg << 5, i, x, y;
-    static uint8_t full[112][30];               /* the plot's pixels, grown by one */
-    if (key != fx_lut_key) {                    /* dark .. lo .. a little short of hi: trails stay quiet */
-        for (i = 0; i < 64u; i++)
-            fx_lut[i] = swap16(i < 36u ? mix565(bg, lo, (int32_t)(i * i * 170u / 1296u)) : mix565(mix565(bg, lo, 170), hi, (int32_t)((i - 36u) * 130u / 28u)));
-        fx_lut_key = key;
-    }
-    memset(full, 0, sizeof full);
-    for (y = 0; y < 112u; y++) {
-        const uint16_t *r = &cv_px[y * cv_w];
-        for (x = 0; x < 240u; x++)
-            if (r[x] != e0 && r[x] != e1) {
-                uint32_t yy;
-                for (yy = y ? y - 1u : 0u; yy <= y + 1u && yy < 112u; yy++) {
-                    full[yy][x >> 3] |= (uint8_t)(1u << (x & 7u));
-                    if (x) full[yy][(x - 1u) >> 3] |= (uint8_t)(1u << ((x - 1u) & 7u));
-                    if (x < 239u) full[yy][(x + 1u) >> 3] |= (uint8_t)(1u << ((x + 1u) & 7u));
-                }
-            }
-    }
-    for (y = 2; y < 110u; y++) {
-        const uint8_t *r0 = &fx_g[(y >> 1) * FXW], *r1 = (y & 1u) && (y >> 1) + 1u < FXH ? r0 + FXW : r0;
-        uint16_t *o = &cv_px[y * cv_w];
-        for (x = 2; x < 238u; x++) {
-            uint32_t c, n, v;
-            if (full[y][x >> 3] >> (x & 7u) & 1u) continue;
-            if (fx_head[(y * 240u + x) >> 3] >> (x & 7u) & 1u) { o[x] = head; continue; }
-            c = x >> 1; n = (x & 1u) && c + 1u < FXW ? c + 1u : c;
-            v = ((uint32_t)r0[c] + r0[n] + r1[c] + r1[n]) >> 2;
-            if (v >= 8u) o[x] = fx_lut[v >> 2];
-        }
-    }
-    for (i = 0; i < fx_vn; i++) {               /* the crisp lines: bg .. lo .. hi by their level, never on the plot */
-        const fx_vl_t *l = &fx_vl[i];
-        int32_t x0 = l->x0, y0 = l->y0, dx = absi(l->x1 - x0), dy = -absi(l->y1 - y0), sx = x0 < l->x1 ? 1 : -1, sy = y0 < l->y1 ? 1 : -1, er = dx + dy, n2 = 0;
-        uint16_t c = swap16(l->lv < 128u ? mix565(bg, lo, l->lv * 2) : mix565(lo, hi, (l->lv - 128) * 2));
-        for (;;) {
-            if ((uint32_t)(x0 - 2) < 236u && (uint32_t)(y0 - 2) < 108u && !(full[y0][x0 >> 3] >> (x0 & 7) & 1u)) cv_px[y0 * cv_w + x0] = c;
-            if ((x0 == l->x1 && y0 == l->y1) || ++n2 > 600) break;
-            { int32_t e2 = 2 * er; if (e2 >= dy) { er += dy; x0 += sx; } if (e2 <= dx) { er += dx; y0 += sy; } }
-        }
-    }
-    (void)head;
+    int32_t n = absi(x1 - x0) > absi(y1 - y0) ? absi(x1 - x0) : absi(y1 - y0), i;
+    for (i = 0; i <= n; i += 3) cv_pset(x0 + (n ? (x1 - x0) * i / n : 0), y0 + (n ? (y1 - y0) * i / n : 0), c);
 }
-static void fx_spawn(int32_t x, int32_t y, int32_t vx, int32_t vy, uint32_t life)   /* Q4 cells, Q4 per frame */
+static void vk_crop(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)   /* a frame by its corners only */
 {
-    uint32_t i, best = 0;
-    for (i = 0; i < 24u; i++) if (fx_pt[i].life < fx_pt[best].life) best = i;
-    fx_pt[best].x = (int16_t)x; fx_pt[best].y = (int16_t)y; fx_pt[best].vx = (int16_t)vx; fx_pt[best].vy = (int16_t)vy;
-    fx_pt[best].life = (uint8_t)life; fx_pt[best].a = (uint8_t)life;
+    cv_rect(x, y, 5, 1, c); cv_rect(x, y, 1, 5, c); cv_rect(x + w - 5, y, 5, 1, c); cv_rect(x + w - 1, y, 1, 5, c);
+    cv_rect(x, y + h - 1, 5, 1, c); cv_rect(x, y + h - 5, 1, 5, c); cv_rect(x + w - 5, y + h - 1, 5, 1, c); cv_rect(x + w - 1, y + h - 5, 1, 5, c);
 }
-static void fx_particles(int32_t grav, int32_t bounce, int32_t a)   /* move, (fall, bounce), draw */
+static void vk_smp(uint16_t c, int32_t x0, int32_t w, int32_t y0, int32_t h)   /* the sample as its outline (top and bottom), a
+                                                   stroke every 4th column inside */
 {
-    uint32_t i;
-    for (i = 0; i < 24u; i++) {
-        fx_part_t *p = &fx_pt[i];
-        int32_t ox = p->x, oy = p->y;
-        if (!p->life) continue;
-        p->vy = (int16_t)(p->vy + grav);
-        p->x = (int16_t)(p->x + p->vx); p->y = (int16_t)(p->y + p->vy);
-        if (bounce && p->y > (FXH - 3) * 16) { p->y = (int16_t)((FXH - 3) * 16); p->vy = (int16_t)(-p->vy * bounce >> 8); p->vx = (int16_t)(p->vx * 7 / 8); }
-        p->life--;
-        fx_line(ox >> 2, oy >> 2, p->x >> 2, p->y >> 2, a * p->life / (p->a ? p->a : 1));
+    int32_t i, mid = y0 + h / 2, pa = 0;
+    uint16_t d = mix565(vk_bg, c, 70);
+    for (i = 0; i < w; i += 2) {
+        int32_t a = smp_view[i * 228 / w] * h / 2 / 128;
+        if (!(i & 3) && a > 1) cv_rect(x0 + i, mid - a + 1, 1, 2 * a - 1, d);
+        if (i) { cv_line(x0 + i - 2, mid - pa, x0 + i, mid - a, c); cv_line(x0 + i - 2, mid + pa, x0 + i, mid + a, c); }
+        pa = a;
     }
-}
-static void fx_portrait(int32_t cx, int32_t cy, int32_t r, uint32_t ang, int32_t tau, int32_t a, int32_t fold)
-{   /* the sound against itself a moment later (a phase portrait), turned, as a cloud of points that leave trails;
-       fold: folded back at the rim (DESTROY) */
-    int32_t i, m = 2500, c = isin(ang + 0x40000000u), s = isin(ang);
-    for (i = 0; i < 256; i++) if (absi(fx_s[i]) > m) m = absi(fx_s[i]);
-    for (i = 0; i + tau < 256; i += 3) {
-        int32_t u = fx_s[i] * r / m, v = fx_s[i + tau] * r / m, x, y;
-        if (fold) { int32_t lim = r * 2 / 3; while (u > lim || u < -lim) u = u > 0 ? 2 * lim - u : -2 * lim - u; while (v > lim || v < -lim) v = v > 0 ? 2 * lim - v : -2 * lim - v; }
-        x = cx + ((u * c - v * s) * 15 >> 18); y = cy + ((u * s + v * c) >> 15);
-        fx_dot(x, y, a);
-    }
-}
-static void fx_corona(int32_t cx, int32_t cy, int32_t r0, int32_t len, uint32_t ang, int32_t a)   /* the spectrum: a ring of
-                                                   48 points pushed out by the bands (mirrored), each with a short tail */
-{
-    uint32_t k;
-    for (k = 0; k < 48u; k++) {
-        int32_t b = fx_band[k < 24u ? k : 47u - k], m = b * len / 255, x0, y0, x1, y1;
-        uint32_t t = ang + k * (0xFFFFFFFFu / 48u);
-        fx_polar(cx, cy, r0 + m, t, &x1, &y1);
-        fx_dot(x1, y1, a + b / 2);
-        if (m > 6) { fx_polar(cx, cy, r0 + m - 6, t, &x0, &y0); fx_line(x0, y0, x1, y1, a); }
-    }
-}
-static void fx_ridge(int32_t y0, int32_t h, int32_t a)   /* the spectrum as one line across the stage (a ridge of the waterfall) */
-{
-    int32_t k, w = fx_cx1 - fx_cx0 - 8, px = fx_cx0 + 4, py = y0;
-    for (k = 0; k < 24; k++) {
-        int32_t x = fx_cx0 + 4 + (k + 1) * w / 24, y = y0 - fx_band[k] * h / 255;
-        fx_line(px, py, x, y, a); px = x; py = y;
-    }
-}
-static void fx_pen(int32_t x, int32_t y, int32_t a)   /* a line from where the pen was */
-{
-    if (fx_px >= 0) fx_line(fx_px, fx_py, x, y, a);
-    fx_px = x; fx_py = y;
-}
-static void fx_vline(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t lv)   /* a crisp line, lv 0..255 (bright) */
-{
-    if (fx_vn >= 640u || lv <= 0) return;
-    fx_vl[fx_vn].x0 = (int16_t)x0; fx_vl[fx_vn].y0 = (int16_t)y0; fx_vl[fx_vn].x1 = (int16_t)x1; fx_vl[fx_vn].y1 = (int16_t)y1;
-    fx_vl[fx_vn].lv = (uint8_t)(lv > 255 ? 255 : lv); fx_vn++;
 }
 static void fx_contours(int32_t cx, int32_t cy, int32_t r0, int32_t amp, uint32_t ang, int32_t layers)
 {   /* the spectrum as closed contours, one a snapshot: the newest outside and bright, the older ones inside, dimmer
-       (a topography of the last second); pixels, the x radius 15/8 of the y */
+       (a topography of the last second); the x radius 15/8 of the y */
     int32_t h, k;
     for (h = layers - 1; h >= 0; h--) {
-        int32_t px = 0, py = 0, fx0 = 0, fy0 = 0, r = r0 - h * 4, lv = 255 - h * 200 / layers;
+        int32_t px = 0, py = 0, r = r0 - h * 4, lv = 255 - h * 200 / layers;
         for (k = 0; k <= 48; k++) {
             int32_t kk = k % 48, b = fx_hist[h][kk < 24 ? kk : 47 - kk], rr = r + b * (amp - h * amp / (layers + 2)) / 255, x, y;
             uint32_t a = ang + (uint32_t)kk * (0xFFFFFFFFu / 48u) - (uint32_t)h * (1u << 25);
             x = cx + (rr * 15 * isin(a + 0x40000000u) >> 18); y = cy + (rr * isin(a) >> 15);
-            if (k) fx_vline(px, py, x, y, lv); else { fx0 = x; fy0 = y; }
+            if (k) fx_vline(px, py, x, y, lv);
             px = x; py = y;
         }
-        (void)fx0; (void)fy0;
     }
 }
 static void fx_slabs(int32_t vx, int32_t vy, int32_t n, uint32_t turn, int32_t fall)   /* the echoes as slabs going back to a
@@ -3329,234 +3219,274 @@ static void fx_slabs(int32_t vx, int32_t vy, int32_t n, uint32_t turn, int32_t f
         for (i = 0; i < 4; i++) { int32_t u = SX[i] * hw, v = SY[i] * hh; px[i] = cx + ((u * c - v * si) >> 15); py[i] = cy + ((u * si + v * c) >> 15); }
         for (i = 0; i < 4; i++) fx_vline(px[i], py[i], px[(i + 1) & 3], py[(i + 1) & 3], lv);
     }
-    fx_vline(vx, vy, vx + 52, vy + 24, 60);     /* (the axis they sit on) */
+    vk_dash(vx, vy, vx + 52, vy + 24, vk_lv(70));   /* (the axis they sit on) */
 }
-static void fx_dial(int32_t cx, int32_t cy, int32_t r, int32_t env)   /* a dial: ticks, the output wound around it as a jagged
-                                                   ring (louder: further out), the envelope as an arc going round */
+static void fx_spawn(int32_t x, int32_t y, int32_t vx, int32_t vy, uint32_t life)
 {
-    int32_t k, m = 2500, px = 0, py = 0, a0x = 0, a0y = 0;
-    for (k = 0; k < 256; k++) if (absi(fx_s[k]) > m) m = absi(fx_s[k]);
-    for (k = 0; k < 24; k++) {
-        uint32_t a = (uint32_t)k * (0xFFFFFFFFu / 24u);
-        int32_t c = isin(a + 0x40000000u), si = isin(a), l = k % 6 ? 3 : 6;
-        fx_vline(cx + ((r - l) * 15 * c >> 18), cy + ((r - l) * si >> 15), cx + (r * 15 * c >> 18), cy + (r * si >> 15), k % 6 ? 70 : 140);
-    }
-    for (k = 0; k <= 64; k++) {                 /* the output: 64 points, each the sample's size outward */
-        uint32_t a = (uint32_t)(k & 63) * (0xFFFFFFFFu / 64u) - 0x40000000u;
-        int32_t v = absi(fx_s[(k & 63) * 4]) * 10 / m * fx_lv / 255, rr = r + 4 + v, x = cx + (rr * 15 * isin(a + 0x40000000u) >> 18), y = cy + (rr * isin(a) >> 15);
-        if (k) fx_vline(px, py, x, y, 130 + v * 12);
-        px = x; py = y;
-    }
-    for (k = 0; k <= env * 48 / 32768; k++) {   /* the envelope: an arc inside, clockwise from the top */
-        uint32_t a = (uint32_t)k * (0xFFFFFFFFu / 48u) - 0x40000000u;
-        int32_t x = cx + ((r - 9) * 15 * isin(a + 0x40000000u) >> 18), y = cy + ((r - 9) * isin(a) >> 15);
-        if (k) fx_vline(a0x, a0y, x, y, 255);
-        a0x = x; a0y = y;
+    uint32_t i, best = 0;
+    for (i = 0; i < 24u; i++) if (fx_pt[i].life < fx_pt[best].life) best = i;
+    fx_pt[best].x = (int16_t)x; fx_pt[best].y = (int16_t)y; fx_pt[best].vx = (int16_t)vx; fx_pt[best].vy = (int16_t)vy;
+    fx_pt[best].life = (uint8_t)life; fx_pt[best].a = (uint8_t)life;
+}
+static void fx_trail(int32_t x, int32_t y) { fx_tx[fx_tn & 31u] = (int16_t)x; fx_ty[fx_tn & 31u] = (int16_t)y; fx_tn++; }
+static void fx_trail_draw(uint16_t c)           /* the trail, the oldest faintest */
+{
+    uint32_t i, n = fx_tn < 32u ? fx_tn : 32u;
+    for (i = 1; i < n; i++) {
+        uint32_t a = (fx_tn - n + i - 1u) & 31u, b = (fx_tn - n + i) & 31u;
+        cv_line(fx_tx[a], fx_ty[a], fx_tx[b], fx_ty[b], vk_c(c, 40 + (int32_t)i * 216 / (int32_t)n));
     }
 }
-static void fx_frame(const theme_t *th)         /* the page's figure: one frame */
+static const int8_t VK_CUBE[8][3] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}};
+static const int8_t VK_OCTA[8][3] = {{0, -1, 0}, {1, 0, 0}, {0, 1, 0}, {-1, 0, 0}, {0, 0, -1}, {1, 0, 0}, {0, 0, 1}, {-1, 0, 0}};
+static const uint8_t VK_EDGE[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+static void vk_morph(int32_t s, int32_t m, uint16_t c, uint16_t cb)   /* a cube (m 0) .. an octahedron (m 256), size s */
+{
+    int32_t e, v[8][3], i, j;
+    for (i = 0; i < 8; i++) for (j = 0; j < 3; j++) v[i][j] = s * (VK_CUBE[i][j] * (256 - m) + VK_OCTA[i][j] * m * 3 / 2) >> 8;
+    for (e = 0; e < 12; e++) { const int32_t *a = v[VK_EDGE[e][0]], *b = v[VK_EDGE[e][1]]; vk_l3(a[0], a[1], a[2], b[0], b[1], b[2], c, cb); }
+}
+static void vk_tool(int32_t cx, int32_t cy, int32_t tool, uint16_t c)   /* SAMPLE LAB's tool, as a sign */
+{
+    int32_t k;
+    switch (tool) {
+    case 0: for (k = 0; k < 2; k++) { cv_line(cx + 2 + k * 8, cy - 7, cx - 5 + k * 8, cy, c); cv_line(cx - 5 + k * 8, cy, cx + 2 + k * 8, cy + 7, c); } break;   /* << */
+    case 1: cv_line(cx - 8, cy - 8, cx - 8, cy + 8, c); cv_line(cx - 8, cy - 8, cx - 4, cy - 8, c); cv_line(cx - 8, cy + 8, cx - 4, cy + 8, c);   /* [ ] */
+            cv_line(cx + 8, cy - 8, cx + 8, cy + 8, c); cv_line(cx + 8, cy - 8, cx + 4, cy - 8, c); cv_line(cx + 8, cy + 8, cx + 4, cy + 8, c); break;
+    case 2: cv_line(cx - 10, cy + 6, cx + 10, cy - 6, c); cv_line(cx - 10, cy + 6, cx + 10, cy + 6, c); cv_line(cx + 10, cy - 6, cx + 10, cy + 6, c); break;
+    case 3: cv_line(cx - 10, cy - 6, cx + 10, cy + 6, c); cv_line(cx - 10, cy + 6, cx + 10, cy + 6, c); cv_line(cx - 10, cy - 6, cx - 10, cy + 6, c); break;
+    case 4: case 5: {                           /* a spring: stretched (half speed) or squeezed */
+        int32_t n = tool == 4 ? 3 : 7, w = 22, px = cx - w / 2, py = cy;
+        for (k = 1; k <= n * 2; k++) { int32_t x = cx - w / 2 + k * w / (n * 2), y = cy + (k & 1 ? -6 : 6); if (k == n * 2) y = cy; cv_line(px, py, x, y, c); px = x; py = y; }
+        break;
+    }
+    case 6: cv_line(cx - 10, cy - 8, cx + 10, cy - 8, c); for (k = -6; k <= 6; k += 6) { cv_line(cx + k, cy + 8, cx + k, cy - 5, c); cv_line(cx + k - 2, cy - 3, cx + k, cy - 5, c); cv_line(cx + k + 2, cy - 3, cx + k, cy - 5, c); } break;
+    case 7: vk_ell(cx, cy, 8, 8, 0x40000000u, 0xC0000000u, 18, c); cv_line(cx + 8, cy, cx + 5, cy - 4, c); cv_line(cx + 8, cy, cx + 11, cy - 4, c); break;   /* back */
+    default: cv_line(cx - 4, cy - 10, cx + 4, cy - 10, c); cv_line(cx - 4, cy - 10, cx - 4, cy + 10, c); cv_line(cx + 4, cy - 10, cx + 4, cy + 10, c);   /* the slab */
+             cv_line(cx - 4, cy + 10, cx + 4, cy + 10, c); cv_line(cx + 4, cy - 10, cx + 7, cy - 13, c); cv_line(cx - 4, cy - 10, cx - 1, cy - 13, c); cv_line(cx - 1, cy - 13, cx + 7, cy - 13, c); cv_line(cx + 7, cy - 13, cx + 7, cy + 7, c); break;
+    }
+}
+static uint8_t fx_rip[4];                       /* ripples: their age (0: none) */
+static void fx_ripples(int32_t x, int32_t y, int32_t hit, uint16_t c)
+{
+    uint32_t i;
+    if (hit) for (i = 0; i < 4u; i++) if (!fx_rip[i]) { fx_rip[i] = 1; break; }
+    for (i = 0; i < 4u; i++) if (fx_rip[i]) {
+        int32_t a = fx_rip[i];
+        vk_circ(x, y, a, vk_c(c, 256 - a * 6));
+        fx_rip[i] = (uint8_t)(a + 2 > 40 ? 0 : a + 2);
+    }
+}
+static int32_t vk_shape(int32_t x, int32_t rc, int32_t kind)   /* DESTROY's shaper on a coordinate: rc the edge */
+{
+    switch (kind) {
+    case 0: return x * 2 * rc / (rc + absi(x) + 1);
+    case 1: return clampi(x, -rc, rc);
+    case 2: while (x > rc || x < -rc) x = x > 0 ? 2 * rc - x : -2 * rc - x; return x;
+    default: return absi(x) - rc / 2;           /* (RECTIFY: on the height only, the rest as SOFT) */
+    }
+}
+static void fx_frame(const theme_t *th)         /* the page's object: one frame, under the page's words */
 {
     uint32_t t = fm1_ms, br = (uint32_t)(isin(t * 0x00030000u) + 32768) >> 8;   /* (a slow breath, 0..255: ~2.4 s) */
-    int32_t lv = fx_lv, cx = FXW * 2, cy = FXH * 2, live = tm_peak > 16u, k;   /* (centre, Q2) */
-    uint16_t lo = th->cyan, hi = th->acc, bg = EVA ? EV_BG : RGB(5, 5, 7);
-    uint32_t on = fx_onset;
+    int32_t lv = fx_lv, live = tm_peak > 16u, k, sp = mutant ? 4 : 1;   /* (HAPPY ACCIDENT: everything spins faster) */
+    uint16_t c1 = EVA ? EV_GRN : th->cyan, c2 = th->acc, c3 = th->mut;
+    uint32_t ons = fx_onset;
     static uint32_t on_seen;
-    int32_t hit = on != on_seen;
-    on_seen = on;
-    if (page != fx_pg) { memset(fx_g, 0, sizeof fx_g); memset(fx_pt, 0, sizeof fx_pt); fx_px = -1; fx_pg = page; }
-    memset(fx_head, 0, sizeof fx_head); fx_head_on = 1; fx_vn = 0;
-    fx_cx0 = 0; fx_cy0 = 0; fx_cx1 = FXW * 4; fx_cy1 = FXH * 4;
+    int32_t hit = ons != on_seen;
+    on_seen = ons;
+    vk_bg = EVA ? EV_BG : RGB(5, 5, 7); vk_lo = c1; vk_hi = c2;
+    if (page != fx_pg) { memset(fx_pt, 0, sizeof fx_pt); memset(fx_rip, 0, sizeof fx_rip); fx_tn = 0; fx_pg = page; }
     fx_n++;
+    fx_ang += (uint32_t)sp * (0x00400000u + ((uint32_t)lv << 16));   /* (louder: faster) */
     switch (page) {
-    case PG_ASSET:                              /* a small spectrometer at the right of the status line: 24 bars of
-                                                   points; under the grid nothing moves */
-        fx_feedback(0, 256, 0, 0, 150, FXW / 2, FXH / 2);
-        fx_cx0 = 176 * 2; fx_cy0 = 0; fx_cx1 = 236 * 2; fx_cy1 = 14 * 2;
+    case PG_ASSET:                              /* a small spectrometer at the right of the status line */
         for (k = 0; k < 18; k++) {
-            int32_t h = live ? fx_band[k + 3] * 22 / 255 : (int32_t)((uint32_t)(isin(t * (1u << 18) + (uint32_t)k * 0x0A000000u) + 32768) >> 13), x = (180 + k * 3) * 2, j;
-            for (j = 0; j <= h; j += 4) fx_dot(x, 26 - j, 80);
+            int32_t h = live ? fx_band[k + 3] * 12 / 255 : (int32_t)((uint32_t)(isin(t * (1u << 18) + (uint32_t)k * 0x0A000000u) + 32768) >> 13), j;
+            for (j = 0; j <= h; j += 2) cv_rect(182 + k * 3, 13 - j, 2, 1, vk_c(c3, 110 + j * 12));
         }
-        lo = th->mut; hi = th->acc; break;
-    case PG_SRC:                                /* the sound against itself (a phase portrait); at rest the wave, breathing
-                                                   (the plots fill this page: trails only) */
-        fx_head_on = 0;
-        fx_feedback(0x00C00000u, 254, 0, 0, 196, FXW / 2, FXH / 2);
-        if (live) fx_portrait(cx, cy, 96, fx_ang += 0x00800000u, 6, 28, 0);
-        else {
-            int32_t px = 0, py = 0;
-            uint32_t ph;
-            fx_ang += 0x00400000u;
-            for (k = 0; k <= 48; k++) {
-                int32_t u, v, x, y;
-                ph = (uint32_t)k * (0xFFFFFFFFu / 48u);
-                u = isin(ph + 0x40000000u) * (70 + (int32_t)(br >> 4)) >> 15;
-                v = wave_shape((uint32_t)P[P_WAVE] == 6u || P[P_WAVE] == W_CNSE ? 0u : (uint32_t)P[P_WAVE], ph, P[P_COLOR] * 327) * 70 >> 15;
-                x = cx + ((u * isin(fx_ang + 0x40000000u) - v * isin(fx_ang)) * 15 >> 18);
-                y = cy + ((u * isin(fx_ang) + v * isin(fx_ang + 0x40000000u)) >> 15);
-                if (k) fx_line(px, py, x, y, 22);
+        break;
+    case PG_CHIP:                               /* the sound as 8-bit blocks, on the right; at rest a square wave walks */
+    {
+        int32_t m = 2600;
+        for (k = 0; k < 256; k++) if (absi(fx_s[k]) > m) m = absi(fx_s[k]);
+        for (k = 0; k < 28; k++) {
+            int32_t v = live ? fx_s[k * 8] * 12 / m : ((((int32_t)(t >> 6) + k) & 7) < 4 ? 8 : -8);
+            v = clampi(v, -12, 12) & ~3;
+            cv_rect(118 + k * 4, 76 - v, 3, 3, vk_c(c3, 150 + absi(v) * 8));
+        }
+        break;
+    }
+    case PG_GRN: {                              /* the grains: a ring each, born where it reads, rising and shrinking */
+        int32_t r = 2 + P[P_GSIZE] / 24;
+        for (k = 0; k < 16; k++) {
+            uint16_t gp = tm_gpos[k];
+            if (gp && gp != fx_glast[k] && P[P_GMODE] && P[P_MODE]) fx_spawn(6 + (int32_t)gp * 228 / 32768, 30 + (int32_t)(fx_rand() % 70u), r, tm_grev[k], 36);
+            fx_glast[k] = gp;
+        }
+        for (k = 0; k < 24; k++) {
+            fx_part_t *p = &fx_pt[k];
+            if (!p->life) continue;
+            vk_circ(p->x, p->y, 1 + p->vx * p->life / 36, vk_c(p->vy ? C_TXT : c1, 60 + p->life * 6));
+            if (!(fx_n & 1u)) p->y--;
+            p->life--;
+        }
+        if (!live || !P[P_GMODE]) {             /* at rest: three rings breathing at POS */
+            int32_t x = 6 + P[P_GPOS] * 228 / 100;
+            for (k = 0; k < 3; k++) vk_circ(x, 60 + (isin(fx_ang * (uint32_t)(k + 1) + (uint32_t)k * 0x55555555u) * 24 >> 15), 3 + k * 2 + (int32_t)(br >> 6), vk_c(c1, 90 + k * 30));
+        }
+        break;
+    }
+    case PG_LAB: {                              /* the slot wound in a ring, turning; the tool as a sign in the middle */
+        int32_t cx = 120, cy = 53, r = 28, len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1, tool = P[P_STOOL] % 9;
+        uint32_t ang = t << 19;            /* (a turn in 8 s) */
+        for (k = 0; k < 76; k++) {
+            int32_t a = smp_view[k * 3] * 10 / 128 + 1, cs = isin(ang + (uint32_t)k * (0xFFFFFFFFu / 76u) + 0x40000000u), sn = isin(ang + (uint32_t)k * (0xFFFFFFFFu / 76u));
+            int32_t in = 0;
+            if (tool == 1) in = k * len / 76 >= lp_s && k * len / 76 <= lp_e;
+            else if (tool == 2) in = k * 100 / 76 <= P[P_SAMT];
+            else if (tool == 3) in = k * 100 / 76 >= 100 - P[P_SAMT];
+            cv_line(cx + ((r - a) * cs >> 15), cy + ((r - a) * sn >> 15), cx + ((r + a) * cs >> 15), cy + ((r + a) * sn >> 15), in ? c2 : vk_c(c1, 120 + a * 12));
+        }
+        vk_circ(cx, cy, r - 14, vk_c(c3, 90));
+        vk_tool(cx, cy, tool, SL[cur_slot].dirty ? th->haz : c2);
+        if (tm_awake) {                         /* where it plays */
+            uint32_t q = ang + tm_play * 131072u;
+            vk_circ(cx + ((r + 14) * isin(q + 0x40000000u) >> 15), cy + ((r + 14) * isin(q) >> 15), 2, C_TXT);
+        }
+        break;
+    }
+    case PG_TRN: fx_ripples(12, 26, hit, c1); break;   /* (each hit a ripple from the attack) */
+    case PG_RES: {                              /* the body struck, seen from above at an angle: a ring a mode, stacked as the
+                                                   material is built (a bell, a glass, planks, strings, a drum, a tube);
+                                                   each ring shakes as its mode rings */
+        static const int8_t SIDES[7] = {6, 24, 4, 2, 24, 24, 24}, R0[7] = {44, 16, 40, 50, 44, 46, 18}, DR[7] = {-6, 5, -4, 0, -7, 0, 0}, SP[7] = {10, 11, 9, 11, 11, 3, 13};
+        int32_t mat = P[P_ZMAT] % 7, on = P[P_ZMIX] != 0, gap = SP[mat] * (128 + P[P_ZSPRD] * 2) >> 8;
+        vk_view(120, 84, fx_ang / 3u, 0x12000000u);
+        for (k = 0; k < 6; k++) {
+            int32_t z = clampi(tm_z[k] * 8 / 6000, 0, 8), a = on ? 110 + (int32_t)ZAMP[mat][k] * 100 / 32768 + z * 6 : 60;
+            vk_ring3(k * gap, R0[mat] + DR[mat] * k, SIDES[mat], (uint32_t)k * 0x0A000000u, on ? z : 0, vk_c(z > 1 ? c2 : c1, a), vk_c(c1, a / 3));
+        }
+        break;
+    }
+    case PG_DST: {                              /* a ball through the shaper: HARD squares it, FOLD folds it, BITS snap its
+                                                   points to a grid, RATE holds them; it swells with the sound */
+        int32_t drv = (int32_t)T_DB2LIN[clampi(P[P_XDRV] * 2 + 288, 0, 480)] >> 4, rc = 30, rr = clampi(rc * drv / 256 * (256 + lv / 2) / 256, 8, 46);
+        int32_t step = 1 << clampi((16 - P[P_XBITS]) / 3, 0, 4), hold = 1 + P[P_XSR] / 12, shp = P[P_XSHP], on = P[P_XMIX] != 0, la, lo2, px = 0, py = 0;
+        uint16_t cf = vk_c(on ? c2 : C_MUTE, 230), cb = vk_c(on ? c1 : C_MUTE, 90);
+        vk_view(178, 58, fx_ang, 0x10000000u);
+        for (la = -2; la <= 2; la++)            /* rings of latitude, then the meridians */
+            for (lo2 = 0; lo2 <= 16; lo2++) {
+                uint32_t a = (uint32_t)(lo2 / hold * hold % 16) * 0x10000000u, b = (uint32_t)la * 0x13000000u;
+                int32_t cr = isin(b + 0x40000000u), x = rr * cr >> 15, y = rr * isin(b) >> 15, z, sx, sy, d;
+                z = x * isin(a) >> 15; x = x * isin(a + 0x40000000u) >> 15;
+                x = vk_shape(x, rc, shp == 3 ? 0 : shp); y = vk_shape(y, rc, shp); z = vk_shape(z, rc, shp == 3 ? 0 : shp);
+                d = vk_pt(x, y, z, &sx, &sy);
+                sx = sx / step * step; sy = sy / step * step;
+                if (lo2) cv_line(px, py, sx, sy, d >= 0 ? cf : cb);
+                px = sx; py = sy;
+            }
+        for (lo2 = 0; lo2 < 8; lo2++)
+            for (la = -4; la <= 4; la++) {
+                uint32_t a = (uint32_t)lo2 * 0x20000000u, b = (uint32_t)(la / hold * hold) * 0x0F000000u;
+                int32_t x = rr * isin(b + 0x40000000u) >> 15, y = rr * isin(b) >> 15, z, sx, sy, d;
+                z = x * isin(a) >> 15; x = x * isin(a + 0x40000000u) >> 15;
+                x = vk_shape(x, rc, shp == 3 ? 0 : shp); y = vk_shape(y, rc, shp); z = vk_shape(z, rc, shp == 3 ? 0 : shp);
+                d = vk_pt(x, y, z, &sx, &sy);
+                sx = sx / step * step; sy = sy / step * step;
+                if (la > -4) cv_line(px, py, sx, sy, d >= 0 ? cf : cb);
+                px = sx; py = sy;
+            }
+        break;
+    }
+    case PG_VOX:                                /* the vowel as a topography of the last second (SHIFT turns it) */
+        if (!sub) fx_contours(120, 56, 12 + P[P_VOWEL] / 8 + (int32_t)(br >> 6), 26, fx_ang + (uint32_t)(P[P_SMIX] ? P[P_SHIFT] : 0) * (t << 14), 5);
+        break;
+    case PG_FLT: {                              /* the spectrum's last second as a family of curves going back, under the
+                                                   filter's response (what it cuts, as it cuts it) */
+        int32_t h;
+        for (h = 5; h >= 0; h--) {
+            int32_t px = 0, py = 0, lvh = 255 - h * 36;
+            for (k = 0; k < 24; k++) {
+                int32_t x = 6 + h * 6 + k * (216 - h * 6) / 23, y = 100 - h * 9 - fx_hist[h][k] * (40 - h * 3) / 255;
+                if (k) fx_vline(px, py, x, y, lvh);
                 px = x; py = y;
             }
         }
         break;
-    case PG_CHIP:                               /* the portrait on a grid of 8-bit steps */
-        fx_feedback(0, 256, 0, -64, 215, FXW / 2, FXH / 2);
-        if (live) for (k = 0; k + 8 < 256; k += 4) {
-            int32_t m = 3000, x, y, j;
-            for (j = 0; j < 256; j++) if (absi(fx_s[j]) > m) m = absi(fx_s[j]);
-            x = cx + (fx_s[k] * 80 / m & ~15); y = cy + (fx_s[k + 8] * 80 / m & ~15);
-            fx_dot(x, y, 90);
-        } else fx_dot(cx + (int32_t)(((t >> 7) % 24u) * 16u) - 192, cy + ((int32_t)(br >> 4) & ~3) - 32, 120);
-        lo = th->mut; break;
-    case PG_GRN:                                /* the grains, a vortex: each one where it reads, drawn inward */
-        fx_feedback((1u << 25), 250, 0, 0, 222, FXW / 2, FXH / 2);
-        for (k = 0; k < 16; k++) if (tm_gpos[k] && P[P_GMODE]) {
-            int32_t x, y;
-            fx_polar(cx, cy, 30 + (int32_t)tm_gpos[k] * 70 / 32768, (uint32_t)k * 0x10000000u + fx_ang, &x, &y);
-            fx_dot(x, y, tm_grev[k] ? 200 : 140);
-        }
-        fx_ang += 0x00800000u;
-        if (!live || !P[P_GMODE]) { int32_t x, y; fx_polar(cx, cy, 70 + (int32_t)(br >> 3), fx_ang * 3u, &x, &y); for (k = 0; k < 3; k++) { fx_polar(cx, cy, 40 + k * 30 + (int32_t)(br >> 4), fx_ang * (uint32_t)(3 + k) + (uint32_t)k * 0x55555555u, &x, &y); fx_dot(x, y, 255); fx_dot(x + 2, y, 200); } }
-        break;
-    case PG_LAB: {                              /* the slot wound in a ring, turning slowly; where it plays */
-        uint32_t ang = (fx_ang += 0x00300000u);
-        fx_head_on = 0;                         /* (under its plot: trails only) */
-        fx_feedback(0, 256, 0, 0, 120, FXW / 2, FXH / 2);
-        for (k = 0; k < 114; k++) {
-            int32_t a = smp_view[k * 2] * 24 / 128, x0, y0, x1, y1;
-            uint32_t q = ang + (uint32_t)k * (0xFFFFFFFFu / 114u);
-            fx_polar(cx, cy, 80 - a, q, &x0, &y0); fx_polar(cx, cy, 80 + a, q, &x1, &y1);
-            fx_line(x0, y0, x1, y1, 26);
-        }
-        lo = th->mut; hi = th->cyan; break;
     }
-    case PG_ENV:                                /* a dial: the output wound around it, the envelope as the arc inside */
-        fx_feedback(0, 256, 0, 0, 120, FXW / 2, FXH / 2);
-        fx_dial(120, 58, 34 + (int32_t)(br >> 6), tm_awake ? tm_env : 0);
-        break;
-    case PG_TRN:                                /* each hit a ripple, going out */
-        fx_feedback(0, 268, 0, 0, 228, FXW / 2, FXH / 2);
-        if (hit) fx_ring(cx, cy, 10 + lv / 16, 200);
-        if (live) fx_ring(cx, cy, 4 + lv / 24, lv / 3);
-        else fx_ring(cx, cy, 4 + (int32_t)(br >> 5), 14);
-        break;
-    case PG_RES:                                /* the modes as bodies in orbit: wider each, faster each, lit as they ring */
-        fx_feedback(0, 256, 0, 0, 232, FXW / 2, FXH / 2);
-        for (k = 0; k < 6; k++) {
-            int32_t x, y, z = clampi(tm_z[k] * 255 / 6000, 0, 255);
-            fx_polar(cx, cy, 24 + k * 15, (uint32_t)(t * (uint32_t)(k + 2) * 0x00080000u) + (uint32_t)k * 0x2A000000u, &x, &y);
-            fx_dot(x, y, 200); fx_dot(x + 2, y, 120); fx_dot(x - 2, y, 120);
-            if (z > 30) fx_ring(x, y, 3 + z / 40, z / 5);
+    case PG_DLY: fx_slabs(118, 14, 3 + P[P_DFB] / 12, 0x01800000u + (uint32_t)P[P_DTIME] * 0x00060000u, 150 + P[P_DFB]); break;
+    case PG_REV: {                              /* the room as a tunnel: SIZE spaces its frames, DECAY how far they stay lit;
+                                                   the top edges HIGH's decay, the floor LOW's; the sound goes in frame by frame */
+        int32_t n = 9, s = 170 + P[P_RSIZE] * 60 / 100, w = 92 + (int32_t)(br >> 5), dk = 150 + P[P_RDEC] * 100 / 63, a = 255, pw = 0, ph = 0;
+        for (k = 0; k < n; k++) {
+            int32_t h = w * 38 / 100, l = (a * (90 + fx_hlv[k]) >> 8) + 20, lt = l * clampi(P[P_RHIGH], 20, 200) / 100, lb = l * clampi(P[P_RLOW], 20, 200) / 100;
+            uint16_t cs = vk_c(c1, l), ct = vk_c(c2, lt), cb = vk_c(c1, lb);
+            cv_line(120 - w, 54 - h, 120 + w, 54 - h, ct); cv_line(120 - w, 54 + h, 120 + w, 54 + h, cb);
+            cv_line(120 - w, 54 - h, 120 - w, 54 + h, cs); cv_line(120 + w, 54 - h, 120 + w, 54 + h, cs);
+            if (k) { uint16_t cd = vk_c(c1, l / 3); cv_line(120 - pw, 54 - ph, 120 - w, 54 - h, cd); cv_line(120 + pw, 54 - ph, 120 + w, 54 - h, cd);
+                     cv_line(120 - pw, 54 + ph, 120 - w, 54 + h, cd); cv_line(120 + pw, 54 + ph, 120 + w, 54 + h, cd); }
+            pw = w; ph = h;
+            w = w * s >> 8; a = a * dk >> 8;
         }
-        lo = th->mut; break;
-    case PG_DST:                                /* the portrait folded back at its rim, shaken */
-        fx_feedback(0, 256, (int32_t)(fx_rand() & 255u) - 128, 0, 190, FXW / 2, FXH / 2);
-        if (live) fx_portrait(cx, cy, 96 + P[P_XDRV] / 2, fx_ang += 0x01400000u, 5, 30, P[P_XDRV] > 0);
-        else fx_ring(cx, cy, 30 + (int32_t)(fx_rand() & 7u), 18);
-        lo = th->haz; break;
-    case PG_VOX: {                              /* a spiral: SHIFT turns it (up: out, down: in), the vowel its shape */
-        int32_t sh = P[P_SMIX] ? P[P_SHIFT] : 0, z = 256 + (sh > 0 ? 6 : sh < 0 ? -6 : 0);
-        fx_feedback((uint32_t)(int32_t)(sh * 0x00080000), z, 0, 0, 200, FXW / 2, FXH / 2);
-        fx_head_on = 0;                         /* (the response is the plot: the field as trails only) */
-        (void)z;
-        fx_contours(120, 56, 12 + P[P_VOWEL] / 8 + (int32_t)(br >> 6), 26, fx_ang += (uint32_t)(int32_t)(0x00600000 + sh * 0x00020000), 5);
         break;
     }
-    case PG_FLT: {                              /* the corona, ringed where the filter cuts */
-        int32_t li = P[P_RFMODE] ? (int32_t)tm_rf_li : T_RF_LI[P[P_RFFREQ]], r = 20 + (li - LI_55) * 80 / (LI_MAX - LI_55);
-        fx_feedback(0x00400000u, 258, 0, 0, 200, FXW / 2, FXH / 2 - 8);
-        fx_head_on = 0;
-        fx_contours(120, 34, 8 + (int32_t)(br >> 6), 22, fx_ang += 0x00800000u, 5);   /* (above the response's fill) */
-        fx_ring(cx, cy - 32, r, 10 + P[P_RFRES] / 5);
-        break;
-    }
-    case PG_OTT:                                /* three rings, each band breathing (between the bars: trails only) */
-        fx_feedback(0, 258, 0, 0, 218, FXW / 2, FXH / 2);
-        fx_head_on = 0;
-        for (k = 0; k < 3; k++) {
-            int32_t lvk = live ? clampi((tm_benv[k] + 60 * 256) * 255 / (60 * 256), 0, 255) : (int32_t)br / 4;
-            fx_ring(cx, cy, 16 + k * 26 + lvk / 24, 4 + lvk / 12);   /* (faint: the bars are the plot) */
+    case PG_SPC: {                              /* wave fronts from the source: ahead of it they bunch (the Doppler) */
+        int32_t lx = 60, ly = 100, r = 22 + E[P_SDIST] * 62 / 100, sx = P[P_SPASS] ? lx + clampi(tm_px, -1024, 1024) * 54 / 1024 : lx;
+        if ((live || P[P_SPASS]) && !(fx_n % 6u)) fx_spawn(sx, ly - r, 0, 0, 30);
+        for (k = 0; k < 24; k++) {
+            fx_part_t *p = &fx_pt[k];
+            int32_t rr = 31 - p->life;   /* (30 px at most: the words on the right stay clear) */
+            if (!p->life) continue;
+            vk_ell(p->x, p->y, rr, rr, 0, 0, 20, vk_c(c1, p->life * 7));
+            p->life--;
         }
         break;
-    case PG_DLY:                                /* a tunnel: the sound drawn, the echoes going in, turned by the time */
-        fx_feedback((uint32_t)P[P_DTIME] * 0x00100000u, 236 - P[P_DFB] / 6, 0, 0, 190, FXW / 2, FXH / 2);
-        fx_head_on = 0;
-        if (live) fx_portrait(cx, cy, 96, fx_ang += 0x00400000u, 4, 14, 0);
-        fx_slabs(118, 14, 3 + P[P_DFB] / 12, 0x01800000u + (uint32_t)P[P_DTIME] * 0x00060000u, 150 + P[P_DFB]);   /* (the repeats: slabs, each turned a little more: TIME) */
-        break;
-    case PG_REV:                                /* a nebula: dust where the bands are, slowly spreading */
-        fx_feedback(0x00100000u, 259, 0, 0, 236 + clampi(P[P_RDEC] / 6, 0, 16), FXW / 2, FXH / 2);
-        for (k = 0; k < 24; k++) if (fx_band[k] > 90 || (!live && !(fx_rand() & 63u))) {
-            int32_t x, y;
-            fx_polar(cx, cy, 8 + (int32_t)(fx_rand() % 100u), fx_rand(), &x, &y);
-            fx_dot(x, y, live ? fx_band[k] / 2 + 40 : 60);
-        }
-        lo = th->mut; hi = th->cyan; break;
-    case PG_SPC: {                              /* the source, a ripple from where it is */
-        int32_t x = cx + clampi(tm_px, -1024, 1024) * 100 / 1024, y = cy;
-        fx_feedback(0, 264, 0, 0, 220, x >> 2, y >> 2);
-        fx_cx0 = 4 * 2; fx_cx1 = 120 * 2; fx_cy0 = 4 * 2; fx_cy1 = 108 * 2;
-        if (hit || (live && !(fx_n & 3u))) fx_ring(x, y, 12, 60 + lv / 3);
-        if (!live) fx_ring(cx, cy, 10 + (int32_t)(br >> 3), 10);
-        fx_dot(x, y, 120);
-        break;
     }
-    case PG_LFO: {                              /* a harmonograph: LFO 1 left-right, LFO 2 up-down */
+    case PG_LFO: {                              /* a harmonograph: LFO 1 left-right, LFO 2 up-down, the pen's last places */
         int32_t a1 = P[P_L1MIX] ? tm_lfo[0] : isin(t * 0x00110000u), a2 = P[P_L2MIX] ? tm_lfo[1] : isin(t * 0x000B0000u);
-        fx_feedback(0x00100000u, 256, 0, 0, 240, 29, FXH / 2);
-        fx_cx0 = 4 * 2; fx_cx1 = 112 * 2;       /* (in the LFOs' plot; the targets on the right stay clear) */
-        {   /* (the pen has weight: a square wave draws a rounded path) */
-            static int32_t hx = 116 * 16, hy = 112 * 16;
-            hx += ((116 + a1 * 100 / 32768) * 16 - hx) / 4; hy += ((cy + a2 * 92 / 32768) * 16 - hy) / 4;
-            fx_pen(hx >> 4, hy >> 4, P[P_L1MIX] || P[P_L2MIX] ? 150 : 50);
-        }
+        fx_trail(56 + a1 * 44 / 32768, 56 - a2 * 44 / 32768);
+        cv_rect(56, 10, 1, 92, vk_c(c3, 60)); cv_rect(10, 56, 92, 1, vk_c(c3, 60));
+        vk_crop(8, 8, 97, 97, vk_c(c3, 120));
+        fx_trail_draw(P[P_L1MIX] || P[P_L2MIX] ? c2 : C_MUTE);
+        vk_circ(fx_tx[(fx_tn - 1u) & 31u], fx_ty[(fx_tn - 1u) & 31u], 3, C_TXT);
         break;
     }
-    case PG_RTPC:                               /* rising: the faster, the higher the value */
-        fx_feedback(0, 256, 0, -(64 + (int32_t)tm_rtpc / 40), 236, FXW / 2, FXH / 2);
-        fx_cx0 = 10 * 2; fx_cx1 = 108 * 2; fx_cy0 = 6 * 2; fx_cy1 = 102 * 2;
-        fx_ridge(fx_cy1 - 4, 60 + (int32_t)tm_rtpc / 100, live ? 90 : 14);
-        lo = th->mut; break;
-    case PG_PAD:                                /* the finger, swirling */
-        fx_feedback(0x01000000u, 252, 0, 0, 232, FXW / 2, FXH / 2);
-        if (pad_on || pad_held) fx_pen(8 + (int32_t)pad_x * 460 / 127, 8 + (127 - (int32_t)pad_y) * 205 / 127, 200);
-        else { fx_px = -1; fx_dot(cx + (isin(t * 0x00090000u) * 150 >> 15), cy + (isin(t * 0x000D0000u) * 70 >> 15), 70); }
+    case PG_PAD:                                /* the finger's last places */
+        if (pad_on || pad_held) fx_trail(10 + pad_x * 100 / 127, 104 - pad_y * 100 / 127);
+        else if (fx_tn) fx_trail(fx_tx[(fx_tn - 1u) & 31u], fx_ty[(fx_tn - 1u) & 31u]);
+        fx_trail_draw(c2);
         break;
-    case PG_VAR: {                              /* a constellation of the seed: 12 stars joined in order, the one
-                                                   played flares (on B, the morph's page: nothing) */
-        uint32_t sd = (uint32_t)P[P_VSEED] * 2654435761u + 1u;
-        int32_t px = 0, py = 0;
-        fx_feedback(0, 256, 0, 0, 200, FXW / 2, FXH / 2);
-        if (sub) { fx_head_on = 0; break; }
-        fx_cx0 = 56 * 2; fx_cx1 = 164 * 2; fx_cy0 = 16 * 2; fx_cy1 = 50 * 2;   /* (between the seed and VARY, above the keys) */
-        for (k = 0; k < 12; k++) {
-            int32_t x, y;
-            sd ^= sd << 13; sd ^= sd >> 17; sd ^= sd << 5;
-            x = fx_cx0 + 8 + (int32_t)(sd % (uint32_t)(fx_cx1 - fx_cx0 - 16)); y = fx_cy0 + 6 + (int32_t)((sd >> 9) % (uint32_t)(fx_cy1 - fx_cy0 - 12));
-            fx_dot(x, y, 70 + (int32_t)((br * (uint32_t)(k + 3)) & 63u));
-            fx_head_on = 0; if (k) fx_line(px, py, x, y, 10); fx_head_on = 1;
-            px = x; py = y;
-            if (hit && (fx_rand() & 3u) == 0u) fx_spawn(x * 4, y * 4, (int32_t)(fx_rand() & 31u) - 16, -(int32_t)(fx_rand() & 15u), 24);
+    case PG_VAR:                                /* A: the seed as a constellation; B: A (a cube) turning into B */
+        if (sub) {
+            int32_t m = clampi(E[P_MORPH], 0, 100);
+            vk_view(28, 37, fx_ang, 0x12000000u); vk_morph(11, 0, has_ab & 1u ? c2 : C_DK, vk_c(c2, 60));
+            vk_view(212, 37, fx_ang, 0x12000000u); vk_morph(11, 256, has_ab & 2u ? c1 : C_DK, vk_c(c1, 60));
+            vk_view(54 + m * 132 / 100, 37, fx_ang * 2u, 0x12000000u);
+            vk_morph(9 + lv / 40, m * 256 / 100, morph_on ? c3 : C_MUTE, vk_c(c3, 60));
+        } else {
+            uint32_t sd = (uint32_t)P[P_VSEED] * 2654435761u + 1u;
+            int32_t px = 0, py = 0;
+            for (k = 0; k < 12; k++) {
+                int32_t x, y;
+                sd ^= sd << 13; sd ^= sd >> 17; sd ^= sd << 5;
+                x = 62 + (int32_t)(sd % 96u) + (isin(fx_ang + (uint32_t)k * 0x15000000u) * 2 >> 15); y = 20 + (int32_t)((sd >> 9) % 26u);
+                if (k) vk_dash(px, py, x, y, vk_c(c3, 140));
+                vk_circ(x, y, hit && (k & 3) == (int32_t)(ons & 3u) ? 3 : 1, vk_c(c2, 120 + (int32_t)((br * (uint32_t)(k + 3)) & 127u)));
+                px = x; py = y;
+            }
         }
-        fx_particles(0, 0, 120);
+        break;
+    case PG_BAT: {                              /* each new hit a ripple from its bar */
+        static uint32_t seen;
+        uint32_t nh = lvl_n < 16u ? lvl_n : 16u;
+        fx_ripples(14 + (int32_t)(nh ? nh - 1u : 0u) * 14, 40, lvl_n != seen, ft_on ? c1 : c2);
+        seen = lvl_n;
         break;
     }
-    case PG_PHY:                                /* the hits: a ball each, falling, bouncing */
-        fx_feedback(0, 256, 0, 0, 210, FXW / 2, FXH / 2);
-        fx_cy0 = 16 * 2;                        /* (under the trigger's name) */
-        if (hit) fx_spawn((int32_t)(20 + fx_rand() % 80u) * 16, 9 * 16, (int32_t)(fx_rand() & 31u) - 16, 0, 90);
-        fx_particles(5, 180, 255);
-        if (!live && !(fx_n % 40u)) fx_spawn((int32_t)(30 + fx_rand() % 60u) * 16, 9 * 16, (int32_t)(fx_rand() & 15u) - 8, 0, 60);
-        break;
-    case PG_BAT:                                /* a waterfall: the spectrum as ridges, going back */
-        fx_feedback(0, 252, 0, -96, 232, FXW / 2, 6);
-        fx_cy0 = 16 * 2; fx_cy1 = 78 * 2;
-        fx_head_on = 0;                         /* (around the bars: trails only) */
-        if (!(fx_n & 1u)) fx_ridge(fx_cy1 - 4, 80, live ? 100 : 10);
-        lo = th->mut; break;
+    case PG_PHY: break;                         /* (its ball is drawn with the hits, page code) */
     default: break;
     }
-    if (EVA) { if (lo == th->cyan) lo = EV_GRN; }
-    fx_lo = lo; fx_hi = hi; fx_bg = bg;
 }
 /* ======================================================================== the hero value, the solids (v1.3)
  * A knob just turned: its value takes the screen a moment, big, in thin drawn numerals, in the knob's colour, over the
@@ -3668,7 +3598,7 @@ static void draw_vis(void)
     char s[40], t[16];
     int32_t i, k;
     vis_crt(th);
-    fx_listen(); fx_frame(th);                  /* the motion layer, under the plot */
+    fx_listen(); fx_frame(th);                  /* the page's object, under its words */
     switch (page) {
     case PG_SRC: {                              /* the oscillator | the sample, the blend underneath */
         int32_t md = P[P_MODE], px = 0, py = 0, on_o = md != 1, on_s = md != 0;
@@ -3676,10 +3606,10 @@ static void draw_vis(void)
         if (sub == 2u) {                        /* C: the loop on the whole sample (START > LOOP > STOP) */
             int32_t len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1, xs = 6 + lp_s * 228 / len, xe = 6 + lp_e * 228 / len;
             int32_t xx = 6 + (lp_s - lp_xf) * 228 / len, lm = P[P_SLOOP];
-            vis_smp(lm ? th->cyan : C_MUTE, 6, 228, 22, 60);
+            vk_smp(lm ? th->cyan : C_MUTE, 6, 228, 22, 60);
             if (lm) {
                 cv_rect(xs, 18, 1, 68, th->acc); cv_rect(xe, 18, 1, 68, th->acc);
-                cv_rect(xs, 18, xe - xs, 3, th->acc); cv_rect(xs, 83, xe - xs, 3, th->acc);
+                cv_rect(xs, 18, xe - xs, 1, th->acc); cv_rect(xs, 85, xe - xs, 1, th->acc);
                 if (lp_xf) cv_line(xx, 83, xs, 18, th->mut);
                 if (lm == 2) {
                     cv_text_fit(6, 88, xs - 6 > 30 ? xs - 6 : 30, "START", C_MUTE, 1);
@@ -3704,28 +3634,36 @@ static void draw_vis(void)
                 else if (k == 1) { fmt_num(t, P[P_LPIT], 1); cat(s, t); cat(s, "st"); if (dt) { cat(s, " +"); fmt_num(t, dt, 0); cat(s, t); cat(s, "c"); } }
                 else { cat(s, "-"); fmt_num(t, dt, 0); cat(s, t); cat(s, "c"); }
                 cv_text_fit(8, y, 94, s, on ? C_TXT : C_DK, 0);
-                cv_rect(106, y + 2, 124, 12, RGB(16, 16, 20));
-                if (on) cv_rect(106, y + 2, w, 12, k ? th->cyan : th->acc);
+                {                               /* a ring a voice, in dashes turning (the layers: faster as they detune) */
+                    int32_t rr = 12 + k * 15;
+                    uint32_t q;
+                    uint16_t rc = on ? vk_c(k ? th->cyan : th->acc, 80 + w) : C_DK;
+                    for (q = 0; q < 12u; q++) vk_ell(170, 56, rr, rr * 3 / 4, fx_ang * (uint32_t)(1 + k * (dt / 8 + 1)) / 2u + q * 0x15555555u, 0x0E000000u, 3, rc);
+                }
             }
             if (nv && on_s && (P[P_GMODE] || P[P_GFRZ] || P[P_STR] < 98 || P[P_STR] > 102))
                 cv_text_fit(8, 96, 226, "SAMPLE: LAYERS AT 1.00x ONLY", th->haz, 1);
             break;
         }
-        for (i = 0; i <= 108; i++) {
-            int32_t y = 58 - wave_shape((uint32_t)P[P_WAVE], (uint32_t)i * 39768216u, P[P_COLOR] * 327) * 34 / 32768;
-            if (i) cv_line(6 + px, py, 6 + i, y, co);
-            px = i; py = y;
+        for (i = 0; i <= 108; i++) {            /* the cycle wound around a ring, turning (the same 109 points as
+                                                   ever: the noise wave takes its dice from the patch's) */
+            uint32_t q = (uint32_t)i * 39768216u + (fm1_ms << 19);
+            int32_t rr = 30 + wave_shape((uint32_t)P[P_WAVE], (uint32_t)i * 39768216u, P[P_COLOR] * 327) * 15 / 32768;
+            int32_t x = 60 + (rr * isin(q + 0x40000000u) >> 15), y = 58 + (rr * isin(q) >> 15);
+            if (i) cv_line(px, py, x, y, co);
+            px = x; py = y;
         }
-        cv_rect(119, 16, 1, 84, C_DK);
-        vis_smp(cs, 124, 110, 24, 68);
+        vk_circ(60, 58, 30, vk_c(co, 60));
+        vk_dash(119, 18, 119, 98, C_DK);
+        vk_smp(cs, 124, 110, 24, 68);
         if (on_s && tm_awake && !P[P_GMODE]) cv_rect(124 + (int32_t)tm_play * 110 / 32768, 18, 1, 80, C_TXT);
         cv_text_fit(8, 0, 108, E_WAVE[P[P_WAVE]], co, 0);
         slot_name(t, (uint32_t)P[P_SLOT]);
         s[0] = (char)('1' + P[P_SLOT]); s[1] = ' '; s[2] = 0; cat(s, t);
         cv_text_fit(124, 0, 110, s, cs, 0);
-        cv_rect(6, 102, 228, 6, C_DK);
-        if (md == 2) { k = P[P_BLEND] * 228 / 100; cv_rect(6, 102, 228 - k, 6, th->acc); cv_rect(234 - k, 102, k, 6, th->cyan); }
-        else cv_rect(md ? 120 : 6, 102, 114, 6, md ? th->cyan : th->acc);
+        cv_rect(6, 105, 228, 1, C_DK);          /* the blend: a line, where it splits */
+        if (md == 2) { k = 234 - P[P_BLEND] * 228 / 100; cv_rect(6, 104, k - 6, 2, th->acc); cv_rect(k, 104, 234 - k, 2, th->cyan); vk_circ(k, 105, 3, C_TXT); }
+        else cv_rect(md ? 120 : 6, 104, 114, 2, md ? th->cyan : th->acc);
         if (rec_state) {
             s[0] = 0; cat(s, rec_state == REC_ARMED ? "ARMED" : rec_state == REC_USB ? "USB " : "REC ");
             if (rec_state != REC_ARMED) { fmt_dec(t, (int32_t)(rec_n * 100u / 22050u), 100u, 1u, 0); cat(s, t); cat(s, "s"); }
@@ -3751,13 +3689,20 @@ static void draw_vis(void)
     } else {                                    /* ADSR and where the voice is on it */
         int32_t a = 6 + P[P_ATT] * 50 / 63, d = a + 6 + P[P_DEC] * 50 / 63, r0 = 170, r1 = r0 + 6 + P[P_REL] * 56 / 63;
         int32_t top = 22, bot = 104, sy = bot - P[P_SUS] * (bot - top) / 100, ey;
-        cv_line(6, bot, a, top, th->acc); cv_line(a, top, d, sy, th->acc); cv_line(d, sy, r0, sy, th->acc); cv_line(r0, sy, r1, bot, th->acc);
+        {                                       /* the stage the voice is in: bright; the corners: small rings */
+            int32_t st = !tm_awake ? -1 : tm_stage == ST_A ? 0 : tm_stage == ST_R ? 3 : tm_env <= P[P_SUS] * 328 + 400 ? 2 : 1;
+            uint16_t cd = vk_c(th->acc, 150);
+            cv_line(6, bot, a, top, st == 0 ? C_TXT : cd); cv_line(a, top, d, sy, st == 1 ? C_TXT : cd);
+            cv_line(d, sy, r0, sy, st == 2 ? C_TXT : cd); cv_line(r0, sy, r1, bot, st == 3 ? C_TXT : cd);
+            vk_circ(a, top, 2, th->acc); vk_circ(d, sy, 2, th->acc); vk_circ(r0, sy, 2, th->acc);
+            vk_dash(6, bot + 2, 232, bot + 2, C_DK);
+        }
         cv_text(8, 0, &FONT_S, "ADSR", th->acc);
         fmt_param(P_GLIDE, P[P_GLIDE], t); s[0] = 0; cat(s, "GLIDE "); cat(s, t); cv_text_fit(110, 0, 124, s, C_MUTE, 2);
         if (tm_awake) {
             ey = bot - tm_env * (bot - top) / 32768;
             k = tm_stage == ST_A ? a : tm_stage == ST_D ? d + (r0 - d) / 2 : r0 + (r1 - r0) / 2;
-            cv_rect(k - 3, ey - 3, 7, 7, th->cyan);
+            vk_circ(k, ey, 3 + tm_env * 6 / 32768, th->cyan); cv_pset(k, ey, C_TXT);
         }
         break;
     }
@@ -3771,7 +3716,7 @@ static void draw_vis(void)
                  : mode == 4 ? -(dd < 400 ? (400 - dd) * 60 / 400 : 0) : 0;
             if (mode && mode != 4) resp += bump;
             y = clampi(mid - resp, 18, 106);
-            cv_rect(6 + x, y, 4, 106 - y, mode ? RGB(14, 40, 30) : RGB(26, 26, 30));
+            if (!(i & 1)) vk_dash(6 + x, y + 3, 6 + x, 106, mode ? vk_c(th->cyan, 80) : C_DK);
             if (i) cv_line(6 + px, py, 6 + x, y, mode ? th->cyan : C_MUTE);
             px = x; py = y;
         }
@@ -3780,15 +3725,12 @@ static void draw_vis(void)
         fmt_hz(s, T_HZ[clampi(li, 0, 1023)]); cv_text_fit(150, 0, 84, s, th->cyan, 2);
         break;
     }
-    case PG_GRN:                                /* the cloud on the sample */
-        vis_smp(RGB(60, 40, 90), 6, 228, 18, 88);
+    case PG_GRN:                                /* the grains (rings: the motion layer) over the sample's outline, POS,
+                                                   the spray's edges */
+        vk_smp(vk_c(th->mut, 120), 6, 228, 18, 88);
         k = 6 + P[P_GPOS] * 228 / 100; i = P[P_GSPRAY] * 228 / 100;
-        cv_rect(k - i / 2 < 6 ? 6 : k - i / 2, 18, i ? i : 1, 88, RGB(40, 28, 64));
+        if (i) { int32_t a = k - i / 2 < 6 ? 6 : k - i / 2, b = k + i / 2 > 234 ? 234 : k + i / 2; vk_dash(a, 18, a, 106, th->mut); vk_dash(b, 18, b, 106, th->mut); }
         cv_rect(k, 16, 1, 92, th->acc);
-        for (i = 0; i < 16; i++) {
-            uint32_t gp = tm_gpos[i];
-            if (gp) cv_rect(6 + (int32_t)gp * 228 / 32768 - 2, 22 + (i * 19) % 80, 4, 4, tm_grev[i] ? C_TXT : th->cyan);
-        }
         cv_text(8, 0, &FONT_S, P[P_GFRZ] ? "FREEZE" : P[P_GMODE] ? "GRAIN ON" : "GRAIN OFF", P[P_GFRZ] ? th->cyan : th->acc);
         if (P[P_MODE] == 0) cv_text_fit(110, 0, 124, "(SOURCE: OSC)", C_MUTE, 2);
         break;
@@ -3807,6 +3749,11 @@ static void draw_vis(void)
             int32_t muted = P[P_OSOLO] && P[P_OSOLO] != k + 1;
             uint16_t c = muted ? C_DK : k == 0 ? th->cyan : k == 1 ? th->acc : C_TXT;
             solid(k, cx, 78, lv + 4, c, mix565(RGB(0, 0, 0), c, 90));
+            if (absi(gd) >= 256) {              /* an arrow: up the gain it gives, down the gain it takes */
+                int32_t al = clampi(absi(gd) / 256, 2, 22), ay = 74 - lv / 2, d = gd > 0 ? -1 : 1;
+                cv_line(cx + 24, ay, cx + 24, ay + d * al, c);
+                cv_line(cx + 21, ay + d * (al - 3), cx + 24, ay + d * al, c); cv_line(cx + 27, ay + d * (al - 3), cx + 24, ay + d * al, c);
+            }
             cv_text_fit(cx - 34, 82, 68, BN[k], c, 1);
             if (absi(gd) >= 10 * 256) fmt_num(s, gd / 256, 1); else fmt_dec(s, gd * 10 / 256, 10u, 1u, 1);
             cat(s, "dB");
@@ -3821,7 +3768,7 @@ static void draw_vis(void)
         fmt_ms(t, (uint32_t)tms); cv_text_fit(150, 0, 84, t, th->cyan, 2);
         for (x = tms, k = 0; x <= 2000 && k < 40 && h > 1; x += tms, k++) {
             int32_t px = 8 + x * 224 / 2000;
-            cv_rect(px - 1, 70 - h, 3, h, th->cyan);
+            cv_rect(px, 70 - h, 1, h, th->cyan); vk_circ(px, 70 - h, 2, th->cyan);
             h = h * P[P_DFB] / 100;
         }
         cv_rect(8, 70, 224, 1, C_DK);
@@ -3840,12 +3787,9 @@ static void draw_vis(void)
         uint32_t mid = T_RDEC_MS[P[P_RDEC]], tt[3];
         tt[0] = mid * (uint32_t)P[P_RLOW] / 100u; tt[1] = mid; tt[2] = mid * (uint32_t)P[P_RHIGH] / 100u;
         cv_text(8, 0, &FONT_S, "FDN x4 // 3-BAND", th->acc);
-        for (k = 0; k < 3; k++) {               /* a solid a band, as tall as its decay lasts (log, 0.1 .. 40 s) */
-            int32_t cx = 46 + k * 74, h = clampi((ilog2_q8(tt[k]) - ilog2_q8(100u)) * 58 / (ilog2_q8(40000u) - ilog2_q8(100u)), 3, 58);
-            uint16_t c = k == 1 ? th->acc : th->cyan;
-            solid(k, cx, 76, h + 4, c, mix565(RGB(0, 0, 0), c, 90));
-            cv_text_fit(cx - 34, 80, 68, B[k], c, 1);
-            fmt_ms(s, tt[k]); cv_text_fit(cx - 34, 94, 68, s, C_MUTE, 1);
+        for (k = 0; k < 3; k++) {               /* (the room: the motion layer) each band's decay */
+            s[0] = 0; cat(s, B[k]); cat(s, " "); fmt_ms(t, tt[k]); cat(s, t);
+            cv_text_fit(4 + k * 78, 92, 76, s, k == 1 ? C_TXT : k ? th->acc : th->cyan, 1);
         }
         k = meter_px(tm_rv, 220);
         cv_rect(8, 110, 224, 1, C_DK); cv_rect(8, 110, k, 1, th->cyan);
@@ -3857,21 +3801,21 @@ static void draw_vis(void)
             int32_t y0 = 6 + (int32_t)l * 52, shp = P[l ? P_L2SHP : P_L1SHP], mix = P[l ? P_L2MIX : P_L1MIX], px = 0, py = 0;
             uint32_t tg = TGT[P[l ? P_L2TGT : P_L1TGT]];
             uint16_t c = mix ? (l ? th->cyan : th->acc) : C_DK;
-            for (i = 0; i <= 96; i++) {
-                uint32_t ph = (uint32_t)i * 44739243u;
+            for (i = 0; i <= 24; i++) {         /* its shape, small, beside its target (the pen: the motion layer) */
+                uint32_t ph = (uint32_t)i * 178956970u;
                 int32_t t2 = (int32_t)(ph >> 16), v;
                 v = shp == 0 ? isin(ph) : shp == 1 ? (t2 < 32768 ? t2 * 2 : (65535 - t2) * 2) - 32768 : shp == 2 ? t2 - 32768
-                  : shp == 3 ? 32767 - t2 : shp == 4 ? (t2 < 32768 ? 30000 : -30000) : ((i / 12) * 7919 % 60000) - 30000;
-                v = y0 + 26 - v * 18 / 32768;
-                if (i) cv_line(8 + px, py, 8 + i, v, c);
+                  : shp == 3 ? 32767 - t2 : shp == 4 ? (t2 < 32768 ? 30000 : -30000) : ((i / 3) * 7919 % 60000) - 30000;
+                v = y0 + 16 - v * 6 / 32768;
+                if (i) cv_line(112 + px, py, 112 + i, v, c);
                 px = i; py = v;
             }
-            cv_rect(8 + 96 * (int32_t)(tm_lfo[l] + 32768) / 65536, y0 + 4, 2, 44, mix ? C_TXT : C_DK);
+            cv_rect(112 + 24 * (int32_t)(tm_lfo[l] + 32768) / 65536, y0 + 8, 1, 17, mix ? C_TXT : C_DK);
             s[0] = 'L'; s[1] = (char)('1' + l); s[2] = ' '; s[3] = 0; cat(s, PD[tg].name);
-            cv_text_fit(112, y0 + 4, 122, s, c, 0);
+            cv_text_fit(140, y0 + 4, 94, s, c, 0);
             fmt_param(tg, E[tg], t);
             s[0] = 0; cat(s, "= "); cat(s, t);
-            cv_text_fit(112, y0 + 24, 122, s, mix ? C_TXT : C_DK, 0);
+            cv_text_fit(140, y0 + 24, 94, s, mix ? C_TXT : C_DK, 0);
         }
         break;
     }
@@ -3885,13 +3829,12 @@ static void draw_vis(void)
             int32_t rq = 1024 + (((int32_t)ZRAT[mat][i] - 1024) * (int32_t)spr >> 8), f = f0 * rq / 1024, x, h, z;
             if (f > 16000) break;
             x = 10 + (ilog2_q8((uint32_t)(f < 30 ? 30 : f)) - ilog2_q8(30u)) * 216 / (ilog2_q8(16000u) - ilog2_q8(30u));
-            h = (int32_t)ZAMP[mat][i] * 70 / 32768;
-            z = clampi(tm_z[i] * 70 / 6000, 0, 80);
-            cv_rect(x - 4, 102 - h, 9, h, on ? RGB(30, 30, 44) : RGB(22, 22, 26));
-            if (on && z) cv_rect(x - 3, 102 - z, 7, z, th->cyan);
-            cv_rect(x, 102 - h, 1, h, on ? th->acc : C_DK);
+            h = (int32_t)ZAMP[mat][i] * 6 / 32768 + 1;   /* (the body: the motion layer) each mode a tick on a log axis */
+            z = clampi(tm_z[i] * 8 / 6000, 0, 8);
+            cv_rect(x, 110 - h, 1, h, on ? th->acc : C_DK);
+            if (on && z) cv_rect(x - 1, 108 - h - z, 3, 2, th->cyan);
         }
-        cv_rect(6, 103, 228, 1, C_DK);
+        cv_rect(6, 110, 228, 1, C_DK);
         break;
     }
     case PG_TRN: {                              /* a hit's envelope, and the same shaped; the gain now */
@@ -3907,15 +3850,14 @@ static void draw_vis(void)
             px = i; py = y0; qy = y1;
         }
         gl = clampi(tm_tg * 40 / (24 * 256), -40, 40);
-        cv_rect(196, 20, 24, 84, RGB(16, 16, 20)); cv_rect(194, 62, 28, 1, C_TXT);
-        if (gl >= 0) cv_rect(198, 62 - gl, 20, gl, th->acc); else cv_rect(198, 62, 20, -gl, th->cyan);
+        vk_ell(208, 70, 22, 22, 0x80000000u, 0x80000000u, 16, C_DK);   /* a gauge: the gain now, its needle */
+        { uint32_t q = 0xC0000000u + (uint32_t)(gl * 0x01000000); cv_line(208, 70, 208 + (20 * isin(q + 0x40000000u) >> 15), 70 + (20 * isin(q) >> 15), gl >= 0 ? th->acc : th->cyan); }
+        vk_circ(208, 70, 2, C_TXT);
         fmt_dec(s, tm_tg * 10 / 256, 10u, 1u, 1); cv_text_fit(166, 0, 70, s, C_MUTE, 2);
         break;
     }
     case PG_DST: {                              /* the shaper's curve | a cycle through bits and rate */
-        int32_t px = 0, py = 0, drv = (int32_t)T_DB2LIN[clampi(P[P_XDRV] * 2 + 288, 0, 480)] >> 4, sh = 16 - P[P_XBITS];
-        uint32_t sri = exp2_q16(-(P[P_XSR] * 31)), acc = 0;
-        int32_t hold = 0, on = P[P_XMIX] != 0;
+        int32_t px = 0, py = 0, drv = (int32_t)T_DB2LIN[clampi(P[P_XDRV] * 2 + 288, 0, 480)] >> 4, on = P[P_XMIX] != 0;
         cv_text_fit(8, 0, 110, E_XSHP[P[P_XSHP]], on ? th->acc : C_MUTE, 0);
         for (i = 0; i <= 100; i++) {
             int32_t x = (i - 50) * 655, y = (x * drv) >> 8, u;
@@ -3930,15 +3872,7 @@ static void draw_vis(void)
             px = i; py = y;
         }
         cv_rect(8, 60, 101, 1, C_DK); cv_rect(58, 20, 1, 80, C_DK);
-        px = 0; py = 0;
-        for (i = 0; i <= 110; i++) {           /* a 1 kHz sine (44 samples a cycle), through BITS and RATE */
-            int32_t y = isin((uint32_t)i * 39045157u) * 30000 >> 15;
-            if (sh > 0) y = ((y + (1 << (sh - 1))) >> sh) << sh;
-            if (sri < 65535u) { acc += sri * 2u / 5u; if (acc >= 65536u || i == 0) { acc &= 65535u; hold = y; } y = hold; }
-            y = 60 - y * 36 / 32768;
-            if (i) cv_line(122 + px, py, 122 + i, y, on ? th->cyan : C_DK);
-            px = i; py = y;
-        }
+        vk_crop(6, 18, 105, 85, C_MUTE);        /* (the ball through it: the motion layer) */
         s[0] = 0; fmt_param(P_XBITS, P[P_XBITS], t); cat(s, t); cat(s, " "); fmt_param(P_XSR, P[P_XSR], t); cat(s, t);
         cv_text_fit(122, 0, 112, s, th->cyan, 2);
         if (P[P_XRMIX]) { fmt_param(P_XRING, P[P_XRING], t); s[0] = 0; cat(s, "RING "); cat(s, t); cv_text_fit(122, 96, 112, s, th->mut, 2); }
@@ -4010,12 +3944,7 @@ static void draw_vis(void)
         static const char *const D[9] = {"PLAYS BACKWARDS", "KEEPS THE LOOP REGION", "FADES IN OVER AMOUNT", "FADES OUT OVER AMOUNT",
                                          "TWICE AS LONG, -12st", "HALF AS LONG, +12st", "PEAK TO FULL LEVEL", "BACK TO THE SAVED SLOT",
                                          "THE FACTORY SOUND BACK"};
-        int32_t tool = P[P_STOOL] % 9, len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1, w = P[P_SAMT] * 228 / 100;
-        vis_smp(th->cyan, 6, 228, 20, 68);
-        if (tool == 1) { int32_t xs = 6 + lp_s * 228 / len, xe = 6 + lp_e * 228 / len; cv_frame(xs, 20, xe - xs > 2 ? xe - xs : 2, 68, th->acc); }
-        if (tool == 2) { cv_line(6, 88, 6 + w, 20, th->mut); cv_rect(6 + w, 20, 1, 68, th->mut); }
-        if (tool == 3) { cv_line(234 - w, 20, 234, 88, th->mut); cv_rect(234 - w, 20, 1, 68, th->mut); }
-        if (tool == 0) for (k = 0; k < 3; k++) { cv_line(30 + k * 12, 54, 38 + k * 12, 46, th->mut); cv_line(30 + k * 12, 54, 38 + k * 12, 62, th->mut); }
+        int32_t tool = P[P_STOOL] % 9, len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1;   /* (the ring, the sign: the motion layer) */
         slot_name(t, (uint32_t)P[P_SLOT]); s[0] = (char)('1' + P[P_SLOT]); s[1] = ' '; s[2] = 0; cat(s, t);
         cv_text_fit(8, 0, 120, s, SL[cur_slot].dirty ? th->haz : th->acc, 0);
         fmt_dec(t, len * 100 / 22050, 100u, 2u, 0); cat(t, "s"); cv_text_fit(150, 0, 84, t, C_MUTE, 2);
@@ -4031,13 +3960,24 @@ static void draw_vis(void)
         fmt_num(t, P[P_PHITS], 0); s[0] = 0; cat(s, t); cat(s, P[P_PMODE] == 5 ? " EVERY " : " IN "); fmt_param(P_PTIME, P[P_PTIME], t); cat(s, t);
         cv_text_fit(120, 0, 114, s, on ? th->cyan : C_MUTE, 2);
         cv_rect(8, 97, 224, 1, C_DK);
-        for (q = 0; q < ph_n; q++) {
-            int32_t x = 8 + (int32_t)ph_t[q] * 220 / (int32_t)(ph_len ? ph_len : 1u), h = 6 + ph_l[q] * 66 / 255;
-            cv_rect(x, 97 - h, 4, h, !on ? C_DK : ph_on && q < ph_i ? th->cyan : th->acc);
-            if (on && ph_p[q]) cv_rect(x, clampi(97 - h - 3 - ph_p[q], 17, 95), 4, 2, th->mut);   /* (its pitch, up or down) */
+        for (q = 0; q < ph_n; q++) {            /* each hit a stem and a head, as loud as it is; played: the other colour */
+            int32_t x = 10 + (int32_t)ph_t[q] * 220 / (int32_t)(ph_len ? ph_len : 1u), h = 6 + ph_l[q] * 54 / 255;
+            uint16_t c = !on ? C_DK : ph_on && q < ph_i ? th->cyan : th->acc;
+            vk_dash(x, 96, x, 97 - h, c); vk_circ(x, 97 - h, 2 + ph_l[q] / 100, c);
+            if (on && ph_p[q]) cv_rect(x - 2, clampi(97 - h - 7 - ph_p[q], 17, 95), 5, 1, th->mut);   /* (its pitch, up or down) */
         }
-        if (ph_on) { uint32_t e = fm1_ms - ph_t0; if (e < ph_len) cv_rect(8 + (int32_t)(e * 220u / ph_len), 18, 1, 80, C_TXT); }
-        if (!on) cv_text_fit(8, 44, 226, "A KEY PLAYS ONE HIT", C_MUTE, 1);
+        if (ph_on) {                            /* the ball, hopping from hit to hit; where the pattern is */
+            uint32_t e = fm1_ms - ph_t0, L = ph_len ? ph_len : 1u;
+            if (e < ph_len) {
+                cv_rect(10 + (int32_t)(e * 220u / L), 18, 1, 78, C_DK);
+                if (ph_i > 0u && ph_i < ph_n) {
+                    int32_t ta = ph_t[ph_i - 1u], tb = ph_t[ph_i], f = clampi(((int32_t)e - ta) * 256 / (tb - ta > 0 ? tb - ta : 1), 0, 256);
+                    int32_t xa = 10 + ta * 220 / (int32_t)L, xb = 10 + tb * 220 / (int32_t)L, hg = 12 + ph_l[ph_i] * 50 / 255;
+                    vk_circ(xa + (xb - xa) * f / 256, 91 - hg * 4 * f / 256 * (256 - f) / 256, 4, C_TXT);
+                }
+            }
+        }
+        if (!on) cv_text_fit(8, 18, 226, "A KEY PLAYS ONE HIT", C_MUTE, 1);
         break;
     }
     case PG_ASSET: {                            /* the 18 assets, three to a row; the one chosen, the one loaded */
@@ -4066,11 +4006,11 @@ static void draw_vis(void)
             if (has_ab == 3u) { fmt_num(t, (int32_t)nd, 0); s[0] = 0; cat(s, t); cat(s, " PARAMS DIFFER"); }
             else { s[0] = 0; cat(s, has_ab ? "ONE MORE TO STORE" : "STORE A AND B TO MORPH"); }
             cv_text_fit(8, 0, 226, s, has_ab == 3u ? C_TXT : C_MUTE, 1);
-            cv_rect(8, 22, 40, 30, has_ab & 1u ? th->acc : C_DK); cv_text(24, 29, &FONT_S, "A", has_ab & 1u ? RGB(10, 10, 12) : C_MUTE);
-            cv_rect(192, 22, 40, 30, has_ab & 2u ? th->cyan : C_DK); cv_text(208, 29, &FONT_S, "B", has_ab & 2u ? RGB(10, 10, 12) : C_MUTE);
-            cv_rect(54, 36, 132, 2, C_DK);
-            cv_rect(54, 36, x - 54, 2, morph_on ? th->mut : C_MUTE);
-            cv_rect(x - 2, 29, 5, 16, morph_on ? C_TXT : C_MUTE);
+            cv_text(2, 46, &FONT_S, "A", has_ab & 1u ? th->acc : C_MUTE);   /* (A a cube, B an octahedron, the mix
+                                                   between: the motion layer) */
+            cv_text(230, 46, &FONT_S, "B", has_ab & 2u ? th->cyan : C_MUTE);
+            vk_dash(54, 37, 186, 37, C_DK);
+            cv_rect(54, 37, x - 54, 1, morph_on ? th->mut : C_MUTE);
             cv_text_fit(8, 60, 226, has_ab == 3u ? "SEL: STORE THE NEARER ONE" : has_ab ? "SEL: STORE B" : "SEL: STORE A, THEN B",
                         has_ab == 3u ? C_MUTE : has_ab ? th->cyan : th->acc, 1);
             cv_text_fit(8, 76, 226, "TURN MORPH: A TO B", has_ab == 3u ? th->mut : C_MUTE, 1);
@@ -4084,7 +4024,8 @@ static void draw_vis(void)
         cv_text_fit(110, 22, 124, s, P[P_VARY] ? C_TXT : C_MUTE, 2);
         for (q = 0; q < 27u; q++) {             /* the keys: their variations (the one last played lit) */
             int32_t x = 8 + (int32_t)(q % 14u) * 16, y = 54 + (int32_t)(q / 14u) * 18;
-            cv_rect(x, y, 14, 14, (q + 1u) == last && P[P_VKEYS] ? th->mut : P[P_VKEYS] ? th->box : C_DK);
+            if ((q + 1u) == last && P[P_VKEYS]) cv_rect(x, y, 14, 14, th->mut);
+            else cv_frame(x, y, 14, 14, P[P_VKEYS] ? vk_c(th->mut, 110) : C_DK);
         }
         cv_text_fit(8, 94, 226, P[P_VKEYS] ? "EACH KEY: A VARIATION" : "KEYS PLAY NOTES", P[P_VKEYS] ? th->mut : C_MUTE, 1);
         break;
@@ -4100,7 +4041,8 @@ static void draw_vis(void)
         for (q = 0; q < nh; q++) {              /* the oldest left; each bar its peak, the variation under it */
             uint32_t ix = (lvl_n - nh + q) & 15u, h = lvl_h[ix];
             int32_t bh = clampi(((int32_t)sn_lg2(h > 1u ? h : 1u) - fs + 1531) * 38 / 1531, 1, 38);   /* -36 .. 0 dBFS */
-            cv_rect(8 + (int32_t)q * 14, 58 - bh, 12, bh > 1 ? bh : 1, ft_on ? th->cyan : th->acc);
+            cv_rect(14 + (int32_t)q * 14, 58 - bh, 1, bh, ft_on ? th->cyan : th->acc);   /* (a stem, a cap) */
+            cv_rect(10 + (int32_t)q * 14, 58 - bh, 9, 1, ft_on ? th->cyan : th->acc);
             if (lvl_v[ix]) {                    /* (10 and up: the small font, two digits in the bar's 13 px) */
                 fmt_num(t, lvl_v[ix], 0);
                 if (lvl_v[ix] < 10u) cv_text_fit(8 + (int32_t)q * 14, 60, 13, t, C_MUTE, 0);
@@ -4185,8 +4127,9 @@ static void draw_vis(void)
             sx = lx + clampi(tm_px, -1024, 1024) * 54 / 1024;
         }
         if (o) cv_rect(lx - 34, ly - r / 2 - 1, 69, 2 + o / 25, th->haz);   /* (the wall between) */
-        cv_rect(lx - 4, ly - 4, 9, 9, C_TXT);  /* (the listener) */
-        cv_rect(sx - 4, sy - 4, 9, 9, K.sp_on ? th->cyan : C_MUTE);
+        vk_circ(lx, ly, 4, C_TXT); cv_line(lx, ly - 4, lx, ly - 7, C_TXT);   /* (the listener, looking up; the source and its
+                                                   wave fronts: the motion layer) */
+        vk_circ(sx, sy, 4, K.sp_on ? th->cyan : C_MUTE); cv_pset(sx, sy, K.sp_on ? th->cyan : C_MUTE);
         db10 = tm_sg > 0 ? -(int32_t)((sn_lg2(32768u) - sn_lg2((uint32_t)tm_sg)) * 60206u / 256u / 1000u) : -999;
         fmt_dec(t, db10, 10u, 1u, 1); s[0] = 0; cat(s, t); cat(s, "dB");
         cv_text_fit(124, 2, 110, "LEVEL", C_MUTE, 0); cv_text_fit(124, 2, 110, s, K.sp_on ? C_TXT : C_MUTE, 2);
@@ -4197,8 +4140,8 @@ static void draw_vis(void)
         if (P[P_SPASS]) {
             fmt_param(P_SDOPP, P[P_SDOPP], t);
             cv_text_fit(124, 62, 110, "DOPPLER", th->acc, 0); cv_text_fit(124, 62, 110, t, th->acc, 2);
-            cv_rect(124, 88, 110, 4, C_DK);     /* (the pass, where it is) */
-            cv_rect(124, 88, (clampi(tm_px, -1024, 1024) + 1024) * 110 / 2048, 4, th->cyan);
+            cv_rect(124, 90, 110, 1, C_DK);     /* (the pass, where it is) */
+            vk_circ(124 + (clampi(tm_px, -1024, 1024) + 1024) * 110 / 2048, 90, 3, th->cyan);
         }
         break;
     }
@@ -4223,17 +4166,18 @@ static void draw_vis(void)
     }
     case PG_PAD: {                              /* the XY field, where the finger is; the routings; the keys */
         int32_t on = pad_on || pad_held, px = 10 + pad_x * 100 / 127, py = 104 - pad_y * 100 / 127;
-        cv_rect(8, 2, 104, 104, C_DK);
-        cv_rect(10, 4, 100, 100, RGB(10, 10, 12));
-        for (i = 1; i < 4; i++) { cv_rect(10 + i * 25, 4, 1, 100, C_DK); cv_rect(10, 4 + i * 25, 100, 1, C_DK); }
-        cv_rect(px - 1, 4, 2, 100, on ? th->acc : C_DK);
-        cv_rect(10, py - 1, 100, 2, on ? th->cyan : C_DK);
+        vk_crop(8, 2, 104, 104, C_MUTE);        /* the field by its corners, a dot each quarter; the finger's last
+                                                   places (the motion layer), its cross; SPRING: the pull back */
+        for (i = 1; i < 4; i++) for (k = 1; k < 4; k++) cv_rect(9 + i * 25, 3 + k * 25, 2, 2, C_DK);
+        cv_line(px, 4, px, 104, on ? vk_c(th->acc, 110) : C_DK);
+        cv_line(10, py, 110, py, on ? vk_c(th->cyan, 110) : C_DK);
+        if (on && P[P_PADM] == 0) vk_dash(60, 54, px, py, th->mut);
         {                                       /* the GESTURE's path, where its replay is */
             uint32_t q, gn = g_n;
-            for (q = 0; q < gn; q++) cv_rect(10 + g_x[q] * 100 / 127, 103 - g_y[q] * 99 / 127, 2, 2, P[P_GEST] ? th->mut : C_MUTE);
-            if (g_act && g_pos < gn) cv_rect(8 + g_x[g_pos] * 100 / 127, 101 - g_y[g_pos] * 99 / 127, 6, 6, th->mut);
+            for (q = 0; q < gn; q++) cv_pset(10 + g_x[q] * 100 / 127, 103 - g_y[q] * 99 / 127, P[P_GEST] ? th->mut : C_MUTE);
+            if (g_act && g_pos < gn) vk_circ(10 + g_x[g_pos] * 100 / 127, 103 - g_y[g_pos] * 99 / 127, 4, th->mut);
         }
-        cv_rect(px - 4, py - 4, 9, 9, on ? C_TXT : C_MUTE);
+        vk_circ(px, py, on ? 5 : 3, on ? C_TXT : C_MUTE);
         for (k = 0; k < 2; k++) {
             uint32_t a = k ? P_YAMT : P_XAMT;
             s[0] = 0; cat(s, k ? "Y " : "X "); fmt_param(a - 1u, P[a - 1u], t); cat(s, t);
@@ -4255,7 +4199,6 @@ static void draw_vis(void)
         break;
     }
     }
-    fx_composite();                             /* the motion, in what the plot leaves empty */
     hero_value(th);                             /* (a knob just turned: its value, big) */
     cv_blit(0, 40);
 }

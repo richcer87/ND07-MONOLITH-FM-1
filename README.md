@@ -74,59 +74,41 @@ aparato.
 - La cadena de audio no cambió de orden y el sonido es idéntico (todas las pruebas de audio dan el mismo resultado bit a
   bit que la 1.2). El HAPPY ACCIDENT da los mismos resultados que antes. Las sesiones de la 1.1 y la 1.2 se cargan.
 
-**Pantallas en movimiento.** Cada página tiene una figura abstracta que se mueve con lo que suena, minimalista: líneas
-y puntos de un pixel con estelas que se desvanecen, en los colores del tema. La salida se analiza 25 veces por segundo
-(FFT de 256 puntos, 24 bandas de 60 Hz a 11 kHz, el nivel y los ataques); la figura se dibuja en un campo que se
-realimenta (gira, se acerca o se aleja, se desvanece) y por eso deja espirales, túneles y rastros. En silencio sigue
-respirando despacio.
+**Pantallas como juguetes de vectores.** Cada página tiene un objeto propio dibujado en líneas finas de un pixel, en
+los colores del tema, que se mueve con lo que suena, con las perillas y con las notas; en silencio sigue respirando
+despacio. La salida se analiza en cada cuadro (FFT de 256 puntos, 24 bandas de 60 Hz a 11 kHz, el nivel, los ataques y
+el último segundo de ambos). El objeto se dibuja primero y las palabras de la página encima. Con HAPPY ACCIDENT todo
+gira más rápido un momento. Las referencias se tomaron como inspiración (pantallas del OP-1, plugins de Kentaro,
+HUDs, geometría de alambre, láminas científicas), no como copia.
 
-- **Nada se encima:** la figura solo ocupa lo que la gráfica de la página deja vacío y nunca toca su texto ni sus
-  curvas (un borde oscuro de un pixel alrededor de todo lo que la página dibuja). Cada página le da un escenario:
-  en SPACE el plano de la izquierda, en RTPC la caja de la curva, en BATCH el espacio entre el título y las lecturas.
-- La línea de cada cuadro va nítida; sus estelas, más tenues. Donde la gráfica llena la página (OSC & SAMPLE,
-  SAMPLE LAB) solo quedan las estelas.
-
-| Página | Figura |
+| Página | Objeto |
 | --- | --- |
-| ASSETS | un espectrómetro pequeño a la derecha de la línea de estado; la cuadrícula queda quieta |
-| OSC & SAMPLE | el sonido contra sí mismo un instante después (un retrato de fase), solo estelas |
-| CHIP OSC | el retrato en una retícula de pasos de 8 bits |
-| GRAIN ENGINE | los granos como un vórtice |
-| SAMPLE LAB | el slot enrollado en un anillo, solo estelas |
-| ENVELOPES | un radar: la envolvente barrida en círculo, pétalos |
-| TRANSIENT | cada golpe, una onda que se expande |
-| RESONATOR | los modos como cuerpos en órbita: cada uno más lejos y más rápido, encendidos mientras suenan |
-| DESTROY | el retrato como nube de puntos, doblada en su borde (DRIVE) y sacudida |
-| VOWEL + SHIFT | un anillo de 48 puntos que el espectro empuja; SHIFT lo gira (arriba hacia afuera, abajo hacia adentro) |
-| RES MOD FILTER | el anillo de puntos, dentro de un aro que marca dónde corta el filtro |
-| OTT | tres anillos, cada banda respirando |
-| DELAY + FLANGER | un túnel: los ecos van hacia adentro, girados por TIME, más largos con FDBK |
-| REVERB | una nebulosa de polvo donde están las bandas; DECAY la hace durar |
-| SPACE | ondas desde donde está la fuente |
-| LFO 1 + 2 | un armonógrafo: LFO 1 de lado a lado, LFO 2 de arriba abajo (la pluma tiene peso) |
-| RTPC | crestas del espectro que suben más rápido cuanto más alto el valor |
-| CHAOS PAD | el dedo, en remolino |
-| VARIATION | una constelación de la semilla: 12 estrellas unidas, que destellan con cada nota |
-| PHYSICS | una pelota por golpe que cae y rebota |
-| BATCH | una cascada (waterfall) del espectro que se aleja |
+| ASSETS | un espectrómetro pequeño a la derecha de la línea de estado |
+| OSC & SAMPLE | A/B: el ciclo del oscilador enrollado en un anillo que gira; el sample como su contorno. D: un anillo de trazos por voz, girando más rápido cuanto más desafinan |
+| CHIP OSC | el sonido en bloques de 8 bits; en reposo camina una onda cuadrada |
+| GRAIN ENGINE | cada grano un aro que nace donde lee, sube y se encoge (SIZE su tamaño; reversa en blanco); las orillas del SPRAY punteadas |
+| SAMPLE LAB | el slot enrollado en un anillo que gira, la herramienta como signo al centro (<<, [ ], cuñas, resorte, flechas, flecha de regreso, el monolito); lo que la herramienta toca, resaltado en el anillo; dónde suena |
+| ENVELOPES | el ADSR con nodos; la etapa donde está la voz, brillante; la voz como un aro que crece con la envolvente |
+| TRANSIENT | cada golpe una onda desde el ataque; la ganancia como una aguja |
+| RESONATOR | el cuerpo golpeado, visto desde arriba en ángulo: un aro por modo, apilados como el material (METAL placas hexagonales, GLASS una copa, WOOD tablas, STRING cuerdas, BELL una campana, DRUM un tambor, TUBE un tubo); cada aro tiembla mientras su modo suena |
+| DESTROY | una esfera de alambre pasando por el shaper: HARD la cuadra, FOLD la dobla, RECTIFY la vuelve domo; BITS ajusta sus puntos a una retícula, RATE los sostiene; se hincha con el sonido |
+| VOWEL + SHIFT | una topografía del espectro (5 contornos, el más nuevo afuera); SHIFT la gira |
+| RES MOD FILTER | el último segundo del espectro como familia de curvas que se aleja, bajo la respuesta del filtro |
+| OTT | sólidos de alambre por banda (cilindro, prisma, pirámide); una flecha: sube la ganancia que da, baja la que quita |
+| DELAY + FLANGER | los ecos como losas hacia un punto de fuga (FDBK cuántas, TIME cuánto giran) |
+| REVERB | la sala como túnel: SIZE separa sus marcos, DECAY cuánto siguen encendidos; el techo es el decay de HIGH y el piso el de LOW; el sonido entra marco por marco |
+| SPACE | frentes de onda desde la fuente; al pasar se juntan delante (Doppler) |
+| LFO 1 + 2 | un armonógrafo con las últimas 32 posiciones de la pluma; la forma de cada LFO, chica, junto a su destino |
+| CHAOS PAD | el campo por sus esquinas, el rastro del dedo; en SPRING, la línea que lo regresa al centro |
+| VARIATION | A: la semilla como constelación. B: A es un cubo, B un octaedro, y entre los dos viaja la mezcla, transformándose según MORPH |
+| PHYSICS | cada golpe un tallo con cabeza; al tocar, una pelota salta de golpe en golpe |
+| BATCH | cada golpe nuevo, una onda desde su barra |
 
-- **Capas de historia, nítidas** (la idea de los plugins de Kentaro, que dibujan el pasado del sonido como copias
-  más tenues en vez de difuminarlo; las formas son nuestras):
-  - VOWEL + SHIFT y RES MOD FILTER: una **topografía** del espectro: 5 contornos cerrados, uno por instantánea (unas 8
-    por segundo); el más nuevo afuera y brillante, los viejos adentro y tenues; SHIFT la hace girar.
-  - DELAY: los ecos como **losas** que se alejan hacia un punto de fuga sobre su eje: tantas como deja FDBK, cada una
-    más chica, un poco más girada (TIME) y tan fuerte como sonaba hace ese tiempo.
-  - ENVELOPES: un **dial** con marcas: la salida enrollada alrededor como un anillo dentado, la envolvente como el
-    arco de adentro.
-- **El valor protagonista** (idea tomada del lenguaje de las pantallas del OP-1, con formas propias): al girar una
-  perilla, su valor ocupa la pantalla 1.2 s, grande, con numerales de trazo fino dibujados (no una fuente), en el color
-  de esa perilla (naranja si tiene lock); la gráfica queda como sombra debajo y el nombre arriba.
-- **OTT y REVERB como sólidos de alambre:** LOW un cilindro, MID un prisma, HIGH una pirámide. En OTT miden lo fuerte
-  que suena cada banda, con la ganancia del compresor debajo; en REVERB, cuánto dura cada banda.
-- Costo: la pantalla se redibuja a 25 cuadros por segundo mientras algo suena y a 15 en reposo. El audio solo copia
-  sus muestras; todo lo demás corre en el loop principal, fuera del audio. En el host cuesta ~0.1 ms por cuadro; en el
-  FM-1 hay que verlo en el CPU del pie de pantalla.
-- Memoria: el campo usa 13 KB del pool; la copia de la salida, la línea nítida y el borde, 9 KB.
+- **El valor protagonista** (idea del lenguaje del OP-1, con formas propias): al girar una perilla, su valor ocupa la
+  pantalla 1.2 s, grande, con numerales de trazo fino dibujados, en el color de esa perilla (naranja si tiene lock).
+- Costo: la pantalla se redibuja a 25 cuadros por segundo mientras algo suena y a 15 en reposo, fuera del audio. Las
+  líneas nítidas cuestan menos que el campo con estelas de antes: el firmware quedó ~4 KB más chico y usa 26 KB menos
+  de RAM.
 
 ## Nuevo en v1.2: 15 ASSETS, puntos de partida para sound design
 
