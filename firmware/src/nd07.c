@@ -338,7 +338,7 @@ static const eparam_t EPD[NENG][7] = {
      {"NOISE", 15, 0, EF_NUM, 0}, {"ENV", 14, 7, EF_ENV7, 0}, {"ZOMBIE", 100, 0, EF_ZHZ, 0}},
 };
 static const uint8_t OPN_CAR[9] = {8, 8, 8, 8, 10, 14, 14, 15, 0};   /* YM2612: each algorithm's carriers (bit k: operator k + 1) */
-static const char *const ENG_HOST[NENG] = {"02's OSC + SAMPLE", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY"};
+static const char *const ENG_HOST[NENG] = {"02 OSC + SAMPLE", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY"};
 #define ENG_G (P[P_ENG] < 0 ? 0 : P[P_ENG] >= NENG ? NENG - 1 : P[P_ENG])   /* (the engine, in range) */
 static int32_t p_hi(uint32_t p)                 /* a knob's top: ENGINE's seven, as its engine says */
 {
@@ -4315,10 +4315,14 @@ static void vis_engine(const theme_t *th)      /* 03 CHIP ENGINE A, B: the chip 
         cv_text_fit(108, 92, 126, K.d_wave ? EN_DWAV[K.d_wave] : E_CDUTY[clampi(P[P_CDUTY], 0, 3)], C_TXT, 2);
         break;
     }
-    default:                                    /* ND07: 02 makes the sound */
-        vk_dash(40, 30, 200, 30, C_DK); vk_dash(40, 80, 200, 80, C_DK); vk_dash(40, 30, 40, 80, C_DK); vk_dash(200, 30, 200, 80, C_DK);
-        cv_text_fit(40, 44, 160, "02 OSC + SAMPLE", C_TXT, 1);
-        cv_text_fit(40, 62, 160, "K1: A CONSOLE'S CHIP", C_MUTE, 1);
+    default:                                    /* ND07: 02 makes the sound; the six to turn K1 through, as cartridges */
+        for (k = 0; k < NENG; k++) {
+            int32_t x = 8 + (k % 3) * 76, y = 22 + (k / 3) * 34, w = text_w(&FONT_A, E_ENG[k]);
+            if (!k) cv_rect(x, y, 72, 28, ca); else cv_frame(x, y, 72, 28, C_DK);
+            if (k) { cv_rect(x + 6, y + 22, 60, 1, C_DK); cv_rect(x + 30, y, 12, 2, C_DK); }   /* (a cartridge: its label, its notch) */
+            cv_text(x + 36 - w / 2, y + 12 - FONT_A_CAP / 2, &FONT_A, E_ENG[k], k ? C_TXT : RGB(0, 0, 0));
+        }
+        cv_text_fit(8, 92, 224, "K1: PICK A CHIP", C_MUTE, 1);
     }
 }
 static void draw_vis(void)
@@ -4656,7 +4660,7 @@ static void draw_vis(void)
             vk_circ(x, y, 4, act ? th->acc : C_MUTE);
             cv_text(x - 2, y > 40 ? y - 18 : y + 6, &FONT_S, BN[k], act ? C_TXT : C_MUTE);
         }
-        if (!on) cv_text_fit(8, 92, 226, "FLAT", C_MUTE, 2);
+        if (!on) cv_text_fit(120, 0, 112, "FLAT", C_MUTE, 2);
         break;
     }
     case PG_LAB: {                              /* the slot, what the TOOL will do to it */
@@ -5041,6 +5045,7 @@ static void eva_knobs(void)
     for (k = 0; k < 4u; k++) {
         uint32_t p = PAGE_P[page][sub][k], a;
         int32_t x = (int32_t)k * 60, cx = x + 12, cy = 14, lo, rng, norm, en, nopt, xx, yy;
+        if (p != NO && !p_hi(p) && p >= P_E1 && p <= P_E7) p = NO;   /* (ND07's engine: no knob there) */
         int src, locked, list, act, off = 0;
         uint16_t kc, fg, sb, cell;
         char kn[3];
@@ -5103,6 +5108,7 @@ static void draw_knobs(void)
     for (k = 0; k < 4u; k++) {
         uint32_t p = PAGE_P[page][sub][k], a;
         int32_t x = 2 + (int32_t)k * 60, cx = x + 28, cy = 16, lo, rng, norm, en, nopt;
+        if (p != NO && !p_hi(p) && p >= P_E1 && p <= P_E7) p = NO;   /* (ND07's engine: no knob there) */
         int src, locked, list;
         uint16_t c;
         if (p == NO) { for (a = 0; a < 56u; a += 4u) cv_rect(x + (int32_t)a, 31, 2, 1, C_DK); continue; }
