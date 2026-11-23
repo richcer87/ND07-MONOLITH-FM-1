@@ -57,7 +57,7 @@
     <button id="m-latch" title="Suelta: se queda">LATCH</button>
     <button id="gest" title="Graba el próximo movimiento del pad en el FM-1: cada nota lo repite">● GESTO</button>
     <button id="full" title="Pantalla completa">⛶</button></div>
-  <div class="lbl" id="padhint">El FM-1 decide qué mueve cada eje en su página 20 (X TGT, Y TGT). ● GESTO graba tu próximo movimiento: cada nota lo repite.</div>
+  <div class="lbl" id="padhint">El FM-1 decide qué mueve cada eje en su página 18 CHAOS PAD (X TGT, Y TGT). ● GESTO graba tu próximo movimiento: cada nota lo repite.</div>
   <div id="pad"><div class="hx"></div><div class="hy"></div><div class="dot"></div><div class="read" id="padread">X 64  Y 64</div></div>
   <div class="lbl">PRESIÓN (aftertouch → AT TGT)</div>
   <div id="press"><div></div></div>
@@ -139,7 +139,7 @@ for (const [b, s] of [["t-pad", "s-pad"], ["t-smp", "s-smp"]])
 $("connect").onclick = connect;
 $("port").onchange = e => usePort(e.target.value);
 
-/* ---- CHAOS PAD: CC16 X, CC17 Y, CC18 touch (the FM-1's page 20 routes them) */
+/* ---- CHAOS PAD: CC16 X, CC17 Y, CC18 touch (the FM-1's page 18 routes them) */
 const pad = $("pad"); let latch = false, px = 64, py = 64, sent = [-1, -1], raf = 0, ptr = null;
 $("m-spring").onclick = () => { latch = false; $("m-spring").classList.add("on"); $("m-latch").classList.remove("on"); };
 $("m-latch").onclick = () => { latch = true; $("m-latch").classList.add("on"); $("m-spring").classList.remove("on"); };
@@ -165,7 +165,7 @@ pad.onpointermove = e => { if (e.pointerId === ptr) padAt(e); };
 pad.onpointerup = pad.onpointercancel = e => {
   if (e.pointerId !== ptr) return; ptr = null;
   if (!latch || gest) { pad.classList.remove("touch"); send([0xB0, 18, 0]); }   /* (a gesture ends when the finger lifts) */
-  if (gest) { gest = false; $("gest").classList.remove("on"); $("padhint").textContent = "Gesto grabado: toca una nota en el FM-1. GESTURE (página 20, perillas B): OFF / 1-SHOT / LOOP."; }
+  if (gest) { gest = false; $("gest").classList.remove("on"); $("padhint").textContent = "Gesto grabado: toca una nota en el FM-1. GESTURE (página 18, perillas B): OFF / 1-SHOT / LOOP."; }
 };
 /* GESTURE REC: CC19 arms it on the FM-1; the next touch of the pad is recorded there until the finger lifts (4 s at most) */
 let gest = false;

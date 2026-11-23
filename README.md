@@ -1,4 +1,4 @@
-# ND-07 // MONOLITH · FM-1 edition · v1.2
+# ND-07 // MONOLITH · FM-1 edition · v1.3
 
 Firmware personalizado para el **M-VAVE FM-1**: la estación de SFX ND-07 // MONOLITH (REAPER, Lua ReaImGui + JSFX),
 **sampler y sintetizador para diseño de SFX de videojuegos**. 21 páginas (**18 ASSETS** de partida, resonador modal, transient shaper, DESTROY, **VOWEL + SHIFT**,
@@ -9,7 +9,7 @@ UNDO de 16 pasos y 5 temas (EVA-01 por defecto), en C entero para el chip JieLi 
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.2.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo nuevo de la 1.0 a la 1.2 está probado en el simulador de host (audio WAV + capturas). El `.fwsc` se
+> **Estado: 1.3.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo nuevo de la 1.0 a la 1.3 está probado en el simulador de host (audio WAV + capturas). El `.fwsc` se
 > compila en GitHub Actions con la toolchain de JieLi. Pruébalo primero en el emulador. Instalar firmware es bajo tu
 > propio riesgo; el [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-**
 > al encender entra al rescate USB. La sesión guardada de versiones anteriores no se carga (cambió el formato): arranca
@@ -26,7 +26,63 @@ pantalla y flash. Licencia GPL-3.0-only.
 3. Abre [joakimeriksson.github.io/fm1-emu](https://joakimeriksson.github.io/fm1-emu/), abre tu `nd07.fwsc` en la página
    y presiona Start.
 
-Para una versión publicada: `git tag v1.2 && git push --tags`.
+Para una versión publicada: `git tag v1.3 && git push --tags`.
+
+## Nuevo en v1.3: el orden del trabajo y pantallas en movimiento
+
+**Las páginas siguen el flujo de un SFX de juego**, un botón por paso:
+
+| Paso | Botón | Páginas |
+| --- | --- | --- |
+| Empezar y crear la fuente | **HOME** | 01 ASSETS · 02 OSC & SAMPLE · 03 CHIP OSC |
+| Material | **ARP** | 04 GRAIN ENGINE · 05 SAMPLE LAB |
+| Dar forma | **ENV** | 06 ENVELOPES · 07 TRANSIENT |
+| Color | **EDIT** | 08 RESONATOR · 09 DESTROY · 10 VOWEL + SHIFT · 11 RES MOD FILTER |
+| Pegar | **GLO** | 12 OTT MULTIBAND |
+| Colocar | **FX** | 13 DELAY + FLANGER · 14 MULTIBAND REVERB · 15 SPACE + MOTION |
+| Mover (lo que el juego controla) | **LFO** | 16 LFO 1 + 2 · 17 RTPC · 18 CHAOS PAD + KEYS |
+| Variar y entregar | **SEQ** | 19 VARIATION + MORPH · 20 PHYSICS TRIGGER · 21 BATCH + FIRE TEST |
+
+- Al encender estás en **01 ASSETS**: escoges un punto de partida y de ahí avanzas botón por botón.
+- El RESONATOR pasó de HOME a EDIT (colorea, no genera). LFO y SEQ cambiaron de lugar: primero se mueve el sonido y al
+  final se varía y se entrega. BATCH es la última página: la entrega.
+- La cadena de audio no cambió de orden y el sonido es idéntico (todas las pruebas de audio dan el mismo resultado bit a
+  bit que la 1.2). El HAPPY ACCIDENT da los mismos resultados que antes. Las sesiones de la 1.1 y la 1.2 se cargan.
+
+**Pantallas en movimiento.** Debajo de la gráfica de cada página hay una capa que se mueve con lo que suena: la salida
+se analiza 25 veces por segundo (FFT de 256 puntos, 24 bandas logarítmicas de 60 Hz a 11 kHz, el nivel y los ataques)
+y cada página la dibuja como una figura abstracta en un campo que se realimenta: cada cuadro se gira, se acerca o se
+aleja, se desplaza y se desvanece, así que las figuras dejan estelas, espirales y túneles. En silencio siguen
+respirando despacio. Usa los colores del tema.
+
+| Página | Figura |
+| --- | --- |
+| ASSETS | una corona del espectro que gira |
+| OSC & SAMPLE | el sonido contra sí mismo un instante después (un retrato de fase); en silencio, la onda elegida girando |
+| CHIP OSC | el retrato en una retícula de pasos de 8 bits |
+| GRAIN ENGINE | los granos como un vórtice |
+| SAMPLE LAB | el slot enrollado en un anillo |
+| ENVELOPES | un radar: la envolvente barrida en círculo, pétalos |
+| TRANSIENT | cada golpe, una onda que se expande |
+| RESONATOR | los modos como cuerpos en órbita: cada uno más lejos y más rápido, encendidos mientras suenan |
+| DESTROY | el retrato doblado en su borde (DRIVE) y sacudido |
+| VOWEL + SHIFT | una espiral: SHIFT la gira (arriba hacia afuera, abajo hacia adentro) |
+| RES MOD FILTER | la corona con un anillo donde corta el filtro |
+| OTT | tres anillos, cada banda respirando |
+| DELAY + FLANGER | un túnel: los ecos van hacia adentro, girados por TIME, más largos con FDBK |
+| REVERB | una nebulosa de polvo donde están las bandas; DECAY la hace durar |
+| SPACE | ondas desde donde está la fuente |
+| LFO 1 + 2 | un armonógrafo: LFO 1 de lado a lado, LFO 2 de arriba abajo |
+| RTPC | crestas del espectro que suben más rápido cuanto más alto el valor |
+| CHAOS PAD | el dedo, en remolino |
+| VARIATION | una constelación de la semilla que destella con cada nota |
+| PHYSICS | una pelota por golpe que cae y rebota |
+| BATCH | una cascada (waterfall) del espectro que se aleja |
+
+- Costo: la pantalla se redibuja a 25 cuadros por segundo mientras algo suena y a 15 en reposo. El audio solo copia
+  sus muestras; todo lo demás corre en el loop principal, fuera del audio. En el host cuesta ~0.1 ms por cuadro; en el
+  FM-1 hay que verlo en el CPU del pie de pantalla.
+- Memoria: el campo usa 13 KB del pool y la copia de la salida, 2 KB.
 
 ## Nuevo en v1.2: 15 ASSETS, puntos de partida para sound design
 
@@ -41,7 +97,7 @@ módulos que ya tiene el ND-07 (no son samples: son patches, y todo se puede edi
 | UI | **UI OK** (positivo: sube una quinta), **UI ERR** (negativo: grave, con zumbido, baja un poco), **UI TICK** (seno agudo y corto), **PICKUP** (la moneda: pulso de 25 % que salta una cuarta) |
 | Juego | **POWERUP** (arpegio mayor de 8 bits que sube), **MAGIC** (FM metálico a tres voces, resonador de vidrio, ecos largos), **MONSTER** (voz grave con VOWEL que se mueve y GROWL), **ALARM** (sirena de dos tonos mientras sostienes la tecla), **ENGINE** (motor: con RTPC, INTENS lo acelera) |
 
-- **Cómo:** **SEQ** → 15 ASSETS. **K1** escoge (la cuadrícula marca cuál), **SEL** lo carga y lo toca. Arriba dice
+- **Cómo:** (en la 1.3: **HOME** → 01 ASSETS.) **K1** escoge (la cuadrícula marca cuál), **SEL** lo carga y lo toca. Arriba dice
   LOADED, o **EDITED** en naranja cuando ya le moviste algo. Las teclas lo tocan en cualquier nota.
 - **Cargar un asset** pone todo en su valor de fábrica y luego los ajustes del asset; no toca tus samples, la
   SAMPLE LAB, el BATCH, el CHAOS PAD ni el tema. Se puede deshacer con **UNDO**.
@@ -239,31 +295,31 @@ Settings → Pages → "Deploy from a branch", `main`, carpeta `/ (root)`, y áb
 ## Los módulos
 
 Cada botón de página lleva a uno o dos módulos: presiónalo otra vez para el siguiente juego de perillas (A/B…) y,
-después del último, para el siguiente módulo del mismo botón. **SELECT** recorre las 21 páginas.
+después del último, para el siguiente módulo del mismo botón. **SELECT** recorre las 21 páginas. *(Tabla en el orden de la 1.3.)*
 
 | # | Botón | Módulo | Perillas A | Perillas B (C) |
 | --- | --- | --- | --- | --- |
-| 01 | HOME | OSC & SAMPLE (A B C D) | SOURCE, WAVE (15 ondas), SAMPLE, BLEND | B: TUNE, COLOR, STRETCH, REC · C: LOOP, L POS, L LEN, XFADE · D: VOICES, L PITCH, DETUNE, L LEVEL |
-| 02 | HOME ×2 | **CHIP OSC** | DUTY, SWEEP, ARP, ARP SPD | STEPS, NOISE, PRESET |
-| 03 | HOME ×3 | **RESONATOR** | MATERL, PITCH, DECAY, RES MIX | DAMP, SPREAD, HIT POS, KEYTRK |
+| 01 | HOME | **ASSETS** | ASSET, VARY, HA KIND, OUT | — |
+| 02 | HOME ×2 | OSC & SAMPLE (A B C D) | SOURCE, WAVE (15 ondas), SAMPLE, BLEND | B: TUNE, COLOR, STRETCH, REC · C: LOOP, L POS, L LEN, XFADE · D: VOICES, L PITCH, DETUNE, L LEVEL |
+| 03 | HOME ×3 | **CHIP OSC** | DUTY, SWEEP, ARP, ARP SPD | STEPS, NOISE, PRESET |
 | 04 | ARP | GRAIN ENGINE (sobre el sample) | POS, SIZE, DENS, SPRAY | REV %, GRAIN, FREEZE, RND PIT |
 | 05 | ARP ×2 | **SAMPLE LAB** | TOOL, AMOUNT | — |
 | 06 | ENV | ENVELOPES (A B C) | ATTACK, DECAY, SUSTAIN, RELEASE | B: GLIDE, VELO, PITCH, OUT · C: M ATK, M DEC, M AMT, M TGT |
 | 07 | ENV ×2 | **TRANSIENT** | ATTACK, SUSTAIN, TIME, OUT | — |
-| 08 | EDIT | **DESTROY** | DRIVE, SHAPE, BITS, RATE | RING HZ, RNG MIX, TONE, MIX |
-| 09 | EDIT ×2 | **VOWEL + SHIFT** (A B C) | VOWEL, SIZE, RES, V MIX | B: SHIFT, FDBK, S TIME, S MIX · C: GROWL, G RATE |
-| 10 | EDIT ×3 | RES MOD FILTER | FREQ, RES, MODE, SLOPE | DEPTH, RATE, MOD SRC, ANALOG |
-| 11 | GLO | OTT MULTIBAND (A B C D) | A: DEPTH, TIME, UPWD, DOWNWD · B: IN, OUT, STYLE, PLACE | C: LOW, MID, HIGH, THRESH · D: X-LO, X-HI, SOLO |
-| 12 | FX | DELAY + FLANGER | TIME, FDBK, DLY MIX, ROUTE | RATE, DEPTH, REGEN, FLG MIX |
-| 13 | FX ×2 | MULTIBAND REVERB | SIZE, DECAY, PRE-DLY, REV MIX | LOW x, HIGH x, X-LO, X-HI |
-| 14 | FX ×3 | **SPACE + MOTION** | DIST, OCCLUDE, PASS-BY, DOPPLER | — |
-| 15 | SEQ | **ASSETS** (v1.2) | ASSET, VARY, HA KIND, OUT | — |
-| 16 | SEQ ×2 | **VARIATION + MORPH** | VARY, SEED, KEYS, RESEED | MORPH, HA AMT, EVOLVE, HA KIND |
-| 17 | SEQ ×3 | **BATCH + FIRE TEST** (A B C) | BATCH (modo), COUNT, SPACE, GATE | B: RATE, POOL, ORDER · C: MATCH, TARGET |
-| 18 | SEQ ×4 | **PHYSICS TRIGGER** | TRIGGER, HITS, TIME, FALL | PITCH, JITTER |
-| 19 | LFO | LFO 1 + 2 | SHAPE, RATE, MIX, TARGET (LFO 1) | SHAPE, RATE, MIX, TARGET (LFO 2) |
-| 20 | LFO ×2 | **RTPC** (A B C) | INTENS, SWEEP, CURVE | B: DEST 1, AMT 1, DEST 2, AMT 2 · C: DEST 3, AMT 3 |
-| 21 | LFO ×3 | **CHAOS PAD + KEYS** (A B C) | A: X TGT, X AMT, Y TGT, Y AMT | B: PAD, GESTURE, KEY VEL, SENS · C: AT TGT, AT AMT |
+| 08 | EDIT | **RESONATOR** | MATERL, PITCH, DECAY, RES MIX | DAMP, SPREAD, HIT POS, KEYTRK |
+| 09 | EDIT ×2 | **DESTROY** | DRIVE, SHAPE, BITS, RATE | RING HZ, RNG MIX, TONE, MIX |
+| 10 | EDIT ×3 | **VOWEL + SHIFT** (A B C) | VOWEL, SIZE, RES, V MIX | B: SHIFT, FDBK, S TIME, S MIX · C: GROWL, G RATE |
+| 11 | EDIT ×4 | RES MOD FILTER | FREQ, RES, MODE, SLOPE | DEPTH, RATE, MOD SRC, ANALOG |
+| 12 | GLO | OTT MULTIBAND (A B C D) | A: DEPTH, TIME, UPWD, DOWNWD · B: IN, OUT, STYLE, PLACE | C: LOW, MID, HIGH, THRESH · D: X-LO, X-HI, SOLO |
+| 13 | FX | DELAY + FLANGER | TIME, FDBK, DLY MIX, ROUTE | RATE, DEPTH, REGEN, FLG MIX |
+| 14 | FX ×2 | MULTIBAND REVERB | SIZE, DECAY, PRE-DLY, REV MIX | LOW x, HIGH x, X-LO, X-HI |
+| 15 | FX ×3 | **SPACE + MOTION** | DIST, OCCLUDE, PASS-BY, DOPPLER | — |
+| 16 | LFO | LFO 1 + 2 | SHAPE, RATE, MIX, TARGET (LFO 1) | SHAPE, RATE, MIX, TARGET (LFO 2) |
+| 17 | LFO ×2 | **RTPC** (A B C) | INTENS, SWEEP, CURVE | B: DEST 1, AMT 1, DEST 2, AMT 2 · C: DEST 3, AMT 3 |
+| 18 | LFO ×3 | **CHAOS PAD + KEYS** (A B C) | A: X TGT, X AMT, Y TGT, Y AMT | B: PAD, GESTURE, KEY VEL, SENS · C: AT TGT, AT AMT |
+| 19 | SEQ | **VARIATION + MORPH** | VARY, SEED, KEYS, RESEED | MORPH, HA AMT, EVOLVE, HA KIND |
+| 20 | SEQ ×2 | **PHYSICS TRIGGER** | TRIGGER, HITS, TIME, FALL | PITCH, JITTER |
+| 21 | SEQ ×3 | **BATCH + FIRE TEST** (A B C) | BATCH (modo), COUNT, SPACE, GATE | B: RATE, POOL, ORDER · C: MATCH, TARGET |
 
 <details><summary>Tabla de la v0.6 (para comparar)</summary>
 
@@ -348,8 +404,8 @@ DELAY + FLANGER → REVERB → OTT (POST) → SPACE (aire / pared / distancia) �
 | **PLAY** | un C4 sostenido |
 | **REC** | ☢ HAPPY ACCIDENT (a veces enciende el resonador, DESTROY o el transient) · **SEL + REC** = UNDO |
 | **SAVE** | guardar sesión (con A y B, y el sample grabado) · **SEL + SAVE** = borrar todos los locks |
-| **SEL (toque)** | El pie de la pantalla dice qué hace en cada página. 01: REC ARM / STOP · 02: un sonido nuevo del PRESET · 05: aplicar la herramienta · 14: tocar una pasada · **15: cargar y tocar el asset** · 16: semilla nueva · 17: BATCH (A, C) o FIRE TEST (B) / detener · 18: tocar el patrón · 20: barrido RTPC · 21: grabar un gesto · las demás: aleatorizar el módulo (respeta locks) |
-| **SEL + OCT-** / **SEL + OCT+** | reset del módulo / siguiente tema · en la página 16, juego B: **guardar A / guardar B** |
+| **SEL (toque)** | El pie de la pantalla dice qué hace en cada página. **01: cargar y tocar el asset** · 02: REC ARM / STOP · 03: un sonido nuevo del PRESET · 05: aplicar la herramienta · 15: tocar una pasada · 17: barrido RTPC · 18: grabar un gesto · 19: semilla nueva · 20: tocar el patrón · 21: BATCH (A, C) o FIRE TEST (B) / detener · las demás: aleatorizar el módulo (respeta locks) |
+| **SEL + OCT-** / **SEL + OCT+** | reset del módulo / siguiente tema · en la página 19, juego B: **guardar A / guardar B** |
 | **SEL + PLAY** | el slot a su sonido de fábrica |
 | **MIDI in** | notas con velocity, pitch bend ±2, CC1 = MIX del LFO1, **CC11 = MORPH**, CC74 = FREQ del filtro, **CC16 / CC17 / CC18 = pad X / Y / tocar**, **CC19 = armar la grabación de gesto**, channel y poly pressure = aftertouch, CC123 = all notes off |
 | **SysEx** | `F0 7D 4E 37 cmd … F7`: samples desde `web/index.html` (HELLO, BEGIN slot largo, DATA μ-law en 7 bits, END guardar) y de vuelta (LEN: largo y nombre del slot activo; READ pos: 128 muestras de 16 bits) |

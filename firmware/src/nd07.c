@@ -280,19 +280,22 @@ static uint8_t CONT[NP];                        /* a continuous parameter: smoot
 static uint32_t locks[NLOCKW];                  /* (NP <= 256) bit p: locked (mutations and MORPH leave it alone) */
 static int lock_get(uint32_t p) { return (int)(locks[p >> 5] >> (p & 31u) & 1u); }
 
-/* the pages in the order of the sound: sources, envelope, shaping, dynamics, effects and space, variation, modulation;
+/* the pages in the order of the work (v1.3), a button a step: start from an ASSET and make the source (HOME, ARP),
+ * shape it (ENV), colour it (EDIT), glue it (GLO), place it (FX), move it (LFO: what the game drives), then vary it and
+ * deliver it (SEQ: VARIATION, PHYSICS, BATCH). The audio chain keeps its own order (see the audio).
  * each button holds its pages one after the other (PAGE_GRP), so its presses walk them in that order too */
-enum { PG_SRC, PG_CHIP, PG_RES, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY, PG_REV, PG_SPC,
-       PG_ASSET, PG_VAR, PG_BAT, PG_PHY, PG_LFO, PG_RTPC, PG_PAD, NPAGE };
+enum { PG_ASSET, PG_SRC, PG_CHIP, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_RES, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY, PG_REV,
+       PG_SPC, PG_LFO, PG_RTPC, PG_PAD, PG_VAR, PG_PHY, PG_BAT, NPAGE };
 #define NO 255u                                 /* (an empty knob) */
 static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
+    {{P_ASSET, P_VARY, P_RECIPE, P_VOL}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},   /* (VARY, HA KIND, OUT: here too) */
     {{P_MODE, P_WAVE, P_SLOT, P_BLEND}, {P_TUNE, P_COLOR, P_STR, P_RECM}, {P_SLOOP, P_LPOS, P_LLEN, P_LXF}, {P_VOICES, P_LPIT, P_LDET, P_LLVL}},
     {{P_CDUTY, P_CSWEEP, P_CARP, P_CARPS}, {P_CSTEP, P_CNOISE, P_CPRE, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
-    {{P_ZMAT, P_ZPITCH, P_ZDEC, P_ZMIX}, {P_ZDAMP, P_ZSPRD, P_ZHIT, P_ZTRK}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_GPOS, P_GSIZE, P_GDENS, P_GSPRAY}, {P_GREV, P_GMODE, P_GFRZ, P_RNDP}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_STOOL, P_SAMT, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_ATT, P_DEC, P_SUS, P_REL}, {P_GLIDE, P_VELO, P_PITCH, P_VOL}, {P_MATK, P_MDEC, P_MAMT, P_MTGT}, {NO, NO, NO, NO}},
     {{P_TATK, P_TSUS, P_TTIME, P_TOUT}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
+    {{P_ZMAT, P_ZPITCH, P_ZDEC, P_ZMIX}, {P_ZDAMP, P_ZSPRD, P_ZHIT, P_ZTRK}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_XDRV, P_XSHP, P_XBITS, P_XSR}, {P_XRING, P_XRMIX, P_XTONE, P_XMIX}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_VOWEL, P_VSIZE, P_VRES, P_VMIX}, {P_SHIFT, P_SFB, P_STIME, P_SMIX}, {P_GROWL, P_GRATE, NO, NO}, {NO, NO, NO, NO}},
     {{P_RFFREQ, P_RFRES, P_RFMODE, P_RFPOLE}, {P_RFDEP, P_RFRATE, P_RFSRC, P_RFDRV}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
@@ -300,22 +303,21 @@ static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
     {{P_DTIME, P_DFB, P_DMIX, P_DROUTE}, {P_FRATE, P_FDEPTH, P_FREGEN, P_FMIX}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_RSIZE, P_RDEC, P_RPRE, P_RMIX}, {P_RLOW, P_RHIGH, P_RXLO, P_RXHI}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_SDIST, P_SOCCL, P_SPASS, P_SDOPP}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
-    {{P_ASSET, P_VARY, P_RECIPE, P_VOL}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},   /* (VARY, HA KIND, OUT: here too) */
-    {{P_VARY, P_VSEED, P_VKEYS, P_VLOCK}, {P_MORPH, P_HAAMT, P_EVOLVE, P_RECIPE}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
-    {{P_BMODE, P_BCNT, P_BSPC, P_BGATE}, {P_TRATE, P_TPOOL, P_TORDER, NO}, {P_LMATCH, P_LTGT, NO, NO}, {NO, NO, NO, NO}},
-    {{P_PMODE, P_PHITS, P_PTIME, P_PFALL}, {P_PPIT, P_PJIT, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_L1SHP, P_L1RATE, P_L1MIX, P_L1TGT}, {P_L2SHP, P_L2RATE, P_L2MIX, P_L2TGT}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_QINT, P_QSWP, P_QCRV, NO}, {P_Q1T, P_Q1A, P_Q2T, P_Q2A}, {P_Q3T, P_Q3A, NO, NO}, {NO, NO, NO, NO}},
     {{P_XTGT, P_XAMT, P_YTGT, P_YAMT}, {P_PADM, P_GEST, P_KVEL, P_KSENS}, {P_ATTGT, P_ATAMT, NO, NO}, {NO, NO, NO, NO}},
+    {{P_VARY, P_VSEED, P_VKEYS, P_VLOCK}, {P_MORPH, P_HAAMT, P_EVOLVE, P_RECIPE}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
+    {{P_PMODE, P_PHITS, P_PTIME, P_PFALL}, {P_PPIT, P_PJIT, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
+    {{P_BMODE, P_BCNT, P_BSPC, P_BGATE}, {P_TRATE, P_TPOOL, P_TORDER, NO}, {P_LMATCH, P_LTGT, NO, NO}, {NO, NO, NO, NO}},
 };
 static uint8_t NSUB[NPAGE];                     /* how many of A B C D a page has */
-static const char *const PAGE_NAME[NPAGE] = {"OSC & SAMPLE", "CHIP OSC", "RESONATOR", "GRAIN ENGINE", "SAMPLE LAB", "ENVELOPES",
-                                             "TRANSIENT", "DESTROY", "VOWEL + SHIFT", "RES MOD FILTER", "OTT MULTIBAND", "DELAY + FLANGER",
-                                             "MULTIBAND REVERB", "SPACE + MOTION", "ASSETS", "VARIATION + MORPH", "BATCH + FIRE TEST",
-                                             "PHYSICS TRIGGER", "LFO 1 + 2", "RTPC", "CHAOS PAD + KEYS"};
+static const char *const PAGE_NAME[NPAGE] = {"ASSETS", "OSC & SAMPLE", "CHIP OSC", "GRAIN ENGINE", "SAMPLE LAB", "ENVELOPES",
+                                             "TRANSIENT", "RESONATOR", "DESTROY", "VOWEL + SHIFT", "RES MOD FILTER", "OTT MULTIBAND",
+                                             "DELAY + FLANGER", "MULTIBAND REVERB", "SPACE + MOTION", "LFO 1 + 2", "RTPC", "CHAOS PAD + KEYS",
+                                             "VARIATION + MORPH", "PHYSICS TRIGGER", "BATCH + FIRE TEST"};
 #define NGRP 8
-static const uint8_t GRP_BTN[NGRP] = {BTN_HOME, BTN_ARP, BTN_ENV, BTN_EDIT, BTN_GLO, BTN_FX, BTN_SEQ, BTN_LFO};
-static const uint8_t PAGE_GRP[NPAGE] = {0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7};   /* the button each module is under */
+static const uint8_t GRP_BTN[NGRP] = {BTN_HOME, BTN_ARP, BTN_ENV, BTN_EDIT, BTN_GLO, BTN_FX, BTN_LFO, BTN_SEQ};
+static const uint8_t PAGE_GRP[NPAGE] = {0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 3, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7};   /* the button each module is under */
 static uint8_t PMOD[NP];                        /* the page of each parameter */
 static uint8_t TGT[NP], NTGT;                   /* the mod targets (LFOs, pad, aftertouch): see NTGT_N */
 /* 13 the CHAOS PAD (MIDI CC16 / 17 / 18) and the aftertouch (the keys, MIDI pressure): mod sources, 0..127 */
@@ -1009,6 +1011,8 @@ static struct {
 } V;
 enum { ST_A, ST_D, ST_R, ST_OFF };
 static volatile uint32_t tm_play, tm_awake, tm_rf_li, tm_gi, tm_peak, tm_lvl, tm_cpu, tm_rv;
+static int16_t tm_scope[1024];                  /* the output's last 1024 samples (stage_out), for the screen's motion layer */
+static volatile uint32_t tm_sc_w;
 static volatile int32_t tm_mod, tm_gd[3], tm_benv[3], tm_gr, tm_env, tm_stage = ST_OFF, tm_fd, tm_tg, tm_z[6];
 static volatile uint8_t tm_sleep;
 static volatile uint16_t tm_gpos[16];
@@ -1676,7 +1680,8 @@ DSP_RAM void stage_out(int32_t *out, uint32_t n)   /* no DC (before the limiter:
                                                    the ceiling), gain, soft knee, a peak limiter; mono to L and R */
 {
     int32_t lim = V.lim, lg = V.lg, gain = K.gain, v, pk;
-    uint32_t i, lcnt = V.lcnt, quiet = V.quiet, peak = tm_peak, still = V.stage == ST_OFF && !K.gfrz;
+    uint32_t i, lcnt = V.lcnt, quiet = V.quiet, peak = tm_peak, still = V.stage == ST_OFF && !K.gfrz, sw = tm_sc_w;
+    int16_t *sc = tm_scope;
     if (K.sp_on) {                              /* 12 SPACE: air / wall low-pass, the distance's level */
         int32_t y = V.sp_y, a = K.sp_a, g = K.sp_g;
         for (i = 0; i < n; i++) { y += (int32_t)(((int64_t)(blk_b[i] - y) * a) >> 15); blk_b[i] = (int32_t)(((int64_t)y * g) >> 15); }
@@ -1696,9 +1701,11 @@ DSP_RAM void stage_out(int32_t *out, uint32_t n)   /* no DC (before the limiter:
         peak = (uint32_t)pk > peak ? (uint32_t)pk : (peak * 4031u) >> 12;
         quiet = still && pk <= 2 ? quiet + 1u : 0u;
         blk_b[i] = v;
+        sc[(sw + i) & 1023u] = (int16_t)v;
         out[2u * i] += v;
         out[2u * i + 1u] += v;
     }
+    tm_sc_w = sw + n;
     tm_gr = lim > LIM_CEIL ? lg : 32768;
     V.lim = lim; V.lg = lg; V.lcnt = lcnt; V.quiet = quiet; tm_peak = peak;
 }
@@ -2155,6 +2162,8 @@ static void asset_load(uint32_t k)
     }
     RS(P_VOL, ASSET_VOL[k]);
 }
+static const uint8_t HA_ORDER[NPAGE] = {PG_SRC, PG_CHIP, PG_RES, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY,
+                                         PG_REV, PG_SPC, PG_ASSET, PG_VAR, PG_BAT, PG_PHY, PG_LFO, PG_RTPC, PG_PAD};
 static void happy_accident(void)
 {
     uint32_t m, i;
@@ -2163,7 +2172,8 @@ static void happy_accident(void)
     for (i = 0; i < NP; i++) was[i] = P[i];
     morph_on = 0;
     if (P[P_RECIPE]) recipe((uint32_t)P[P_RECIPE]);
-    else for (m = 0; m < NPAGE; m++) {
+    else for (i = 0; i < NPAGE; i++) {
+        m = HA_ORDER[i];                        /* (the order of v1.2: the same accident from the same state) */
         if (m == PG_PAD || m == PG_LAB || m == PG_PHY || m == PG_CHIP || m == PG_VAR || m == PG_BAT || m == PG_RTPC || m == PG_SPC || m == PG_ASSET ||
             (m == PG_LFO && rnd_range(0, 99) < 50)) continue;
         if (m == PG_RES && rnd_range(0, 99) < 65) { set_unlocked(P_ZMIX, 0); continue; }   /* the extra modules: sometimes */
@@ -3006,12 +3016,392 @@ static int32_t wave_shape(uint32_t w, uint32_t ph, int32_t m)   /* the oscillato
     default: return isin(ph) >> 1;
     }
 }
+/* ======================================================================== the motion layer (v1.3)
+ * What is heard, as abstract figures that move under each page's plot. The output (stage_out keeps its last 1024
+ * samples) is read 25 times a second: a 256-point FFT into 24 log bands (60 Hz .. 11 kHz), the level, the onsets.
+ * Each page draws its own figure into a glow field (120 x 56, two pixels a cell) that feeds back on itself: turned,
+ * zoomed, drifted and faded each frame, so a figure leaves trails, spirals, tunnels. The field goes on the screen in
+ * the theme's colours, under the page's own plot. Silent, every figure keeps breathing slowly. All in the main loop,
+ * in flash; the audio only writes its samples. (Its own random numbers: the patch's stay as they were.) */
+#define FXW 120
+#define FXH 56
+static uint8_t fx_g[FXW * FXH] __attribute__((section(".pool"))), fx_t[FXW * FXH] __attribute__((section(".pool")));   /* the field, the frame before */
+static uint8_t fx_band[24], fx_lv;              /* the spectrum (0..255 a band), the level (0..255) */
+static int16_t fx_s[256];                       /* the last 256 samples (every 2nd: 22 kHz), for the figures */
+static int32_t fx_px = -1, fx_py, fx_flux;
+static uint32_t fx_ang;
+static uint32_t fx_onset, fx_rng = 0x51F15EEDu, fx_pg = 255u, fx_n, fx_was_on;
+static uint16_t fx_lut[64];
+static uint32_t fx_lut_key = 0xFFFFFFFFu;
+typedef struct { int16_t x, y, vx, vy; uint8_t life, a; } fx_part_t;
+static fx_part_t fx_pt[24];
+static const uint8_t FX_EDGE[25] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 21, 25, 31, 38, 47, 57, 70, 85, 105, 128};
+static uint32_t fx_rand(void) { uint32_t x = fx_rng; x ^= x << 13; x ^= x >> 17; x ^= x << 5; return fx_rng = x; }
+static uint16_t mix565(uint16_t a, uint16_t b, int32_t t)   /* a .. b, t 0..256 */
+{
+    int32_t ra = a >> 11, ga = a >> 5 & 63, ba = a & 31, rb = b >> 11, gb = b >> 5 & 63, bb = b & 31;
+    return (uint16_t)((ra + ((rb - ra) * t >> 8)) << 11 | (ga + ((gb - ga) * t >> 8)) << 5 | (ba + ((bb - ba) * t >> 8)));
+}
+static void fx_fft(int32_t *re, int32_t *im)    /* 256 points, in place, halved each stage (no overflow) */
+{
+    uint32_t i, j, len, k;
+    for (i = 0; i < 256u; i++) {                /* bit reversed order */
+        j = (i >> 7 & 1u) | (i >> 5 & 2u) | (i >> 3 & 4u) | (i >> 1 & 8u) | (i << 1 & 16u) | (i << 3 & 32u) | (i << 5 & 64u) | (i << 7 & 128u);
+        if (j > i) { int32_t t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+    }
+    for (len = 2; len <= 256u; len <<= 1) {
+        uint32_t half = len >> 1, step = 256u / len;
+        for (i = 0; i < 256u; i += len)
+            for (k = 0; k < half; k++) {
+                uint32_t ph = k * step << 24;
+                int32_t wr = isin(ph + 0x40000000u), wi = -isin(ph);
+                int32_t *ar = &re[i + k], *ai = &im[i + k], *br = &re[i + k + half], *bi = &im[i + k + half];
+                int32_t tr = (*br * wr - *bi * wi) >> 15, ti = (*br * wi + *bi * wr) >> 15;
+                *br = (*ar - tr) >> 1; *bi = (*ai - ti) >> 1;
+                *ar = (*ar + tr) >> 1; *ai = (*ai + ti) >> 1;
+            }
+    }
+}
+static void fx_listen(void)                     /* the spectrum, the level, an onset */
+{
+    static int32_t re[256], im[256];
+    uint32_t w = tm_sc_w, i, k, live = tm_peak > 16u;
+    int32_t flux = 0;
+    for (i = 0; i < 256u; i++) {
+        int32_t v = live ? tm_scope[(w - 512u + 2u * i) & 1023u] : 0;
+        fx_s[i] = (int16_t)v;
+        re[i] = v * (int32_t)T_HANN[i] >> 16; im[i] = 0;
+    }
+    fx_fft(re, im);
+    for (k = 0; k < 24u; k++) {
+        int32_t m = 0, v, o = fx_band[k];
+        for (i = FX_EDGE[k]; i < FX_EDGE[k + 1u]; i++) {
+            int32_t a = absi(re[i]), b = absi(im[i]), mm = a > b ? a + (b >> 1) : b + (a >> 1);
+            if (mm > m) m = mm;
+        }
+        v = m ? clampi((ilog2_q8((uint32_t)m * 64u) - 5 * 256) * 255 / (11 * 256), 0, 255) : 0;
+        if (v > o) flux += v - o;
+        fx_band[k] = (uint8_t)(v > o ? o + ((v - o) * 3 >> 2) : o - ((o - v + 5) / 6));
+    }
+    fx_lv = (uint8_t)clampi(meter_px(tm_peak, 255), 0, 255);
+    fx_flux = flux;
+    if (flux > 420 || (tm_awake && !fx_was_on)) fx_onset++;
+    fx_was_on = tm_awake;
+}
+static inline void fx_dot(int32_t xq, int32_t yq, int32_t a)    /* a splat at a quarter-cell (Q2), 4 cells weighted */
+{
+    int32_t x = xq >> 2, y = yq >> 2, fx = xq & 3, fy = yq & 3, i, w[4];
+    if ((uint32_t)x >= FXW - 1u || (uint32_t)y >= FXH - 1u) return;
+    w[0] = (4 - fx) * (4 - fy); w[1] = fx * (4 - fy); w[2] = (4 - fx) * fy; w[3] = fx * fy;
+    for (i = 0; i < 4; i++) {
+        uint8_t *g = &fx_g[(y + (i >> 1)) * FXW + x + (i & 1)];
+        int32_t v = *g + (a * w[i] >> 4);
+        *g = (uint8_t)(v > 255 ? 255 : v);
+    }
+}
+static void fx_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t a)   /* Q2 ends */
+{
+    int32_t dx = x1 - x0, dy = y1 - y0, n = (absi(dx) > absi(dy) ? absi(dx) : absi(dy)) >> 1, i;
+    if (n > 200) n = 200;
+    if (n < 1) { fx_dot(x0, y0, a); return; }
+    for (i = 0; i <= n; i++) fx_dot(x0 + dx * i / n, y0 + dy * i / n, a);
+}
+static void fx_polar(int32_t cx, int32_t cy, int32_t r, uint32_t ang, int32_t *x, int32_t *y)   /* Q2 out */
+{
+    *x = cx + (r * 15 * isin(ang + 0x40000000u) >> 18);   /* (wider than tall, as the strip: orbits seen tilted) */
+    *y = cy + (r * isin(ang) >> 15);
+}
+static void fx_ring(int32_t cx, int32_t cy, int32_t r, int32_t a)
+{
+    int32_t k, x0, y0, x1, y1;
+    fx_polar(cx, cy, r, 0, &x0, &y0);
+    for (k = 1; k <= 32; k++) { fx_polar(cx, cy, r, (uint32_t)k << 27, &x1, &y1); fx_line(x0, y0, x1, y1, a); x0 = x1; y0 = y1; }
+}
+static void fx_feedback(uint32_t rot, int32_t zoom, int32_t dx, int32_t dy, int32_t fade, int32_t cx, int32_t cy)
+{   /* each cell from where it came: turned by rot, zoom/256 bigger, moved dx dy (Q8 cells); then faded by fade/256 */
+    int32_t a = isin(rot + 0x40000000u) * 512 / zoom, b = isin(rot) * 512 / zoom, x, y;
+    memcpy(fx_t, fx_g, sizeof fx_g);
+    for (y = 0; y < FXH; y++) {
+        int32_t uy = y - cy, sx = (cx << 16) + (-cx) * a + uy * b - (dx << 8), sy = (cy << 16) - (-cx) * b + uy * a - (dy << 8);
+        uint8_t *o = &fx_g[y * FXW];
+        for (x = 0; x < FXW; x++, sx += a, sy -= b) {
+            int32_t ix = sx >> 16, iy = sy >> 16, fx, fy, v;
+            if ((uint32_t)ix >= FXW - 1u || (uint32_t)iy >= FXH - 1u) { o[x] = 0; continue; }
+            fx = (sx >> 8) & 255; fy = (sy >> 8) & 255;
+            {
+                const uint8_t *p = &fx_t[iy * FXW + ix];
+                int32_t t0 = p[0] + ((p[1] - p[0]) * fx >> 8), t1 = p[FXW] + ((p[FXW + 1] - p[FXW]) * fx >> 8);
+                v = t0 + ((t1 - t0) * fy >> 8);
+            }
+            o[x] = (uint8_t)(v * fade >> 8);
+        }
+    }
+}
+static void fx_show(uint16_t lo, uint16_t hi, uint16_t bg)   /* the field on the canvas, 2x, smoothed */
+{
+    uint32_t key = (uint32_t)lo << 16 ^ hi ^ (uint32_t)bg << 5, i, x, y;
+    if (key != fx_lut_key) {                    /* dark .. lo .. hi, the brightest a little short of hi */
+        for (i = 0; i < 64u; i++)
+            fx_lut[i] = swap16(i < 32u ? mix565(bg, lo, (int32_t)(i * i * 256u / 1024u)) : mix565(lo, hi, (int32_t)((i - 32u) * 200u / 32u)));
+        fx_lut_key = key;
+    }
+    for (y = 2; y < 110u; y++) {                /* (inside the frame and the crop marks) */
+        const uint8_t *r0 = &fx_g[(y >> 1) * FXW], *r1 = (y & 1u) && (y >> 1) + 1u < FXH ? r0 + FXW : r0;
+        uint16_t *o = &cv_px[y * cv_w];
+        for (x = 2; x < 238u; x++) {
+            uint32_t c = x >> 1, n = (x & 1u) && c + 1u < FXW ? c + 1u : c;
+            uint32_t v = ((uint32_t)r0[c] + r0[n] + r1[c] + r1[n]) >> 2;
+            if (v >= 8u) o[x] = fx_lut[v >> 2];
+        }
+    }
+}
+static void fx_spawn(int32_t x, int32_t y, int32_t vx, int32_t vy, uint32_t life)   /* Q4 cells, Q4 per frame */
+{
+    uint32_t i, best = 0;
+    for (i = 0; i < 24u; i++) if (fx_pt[i].life < fx_pt[best].life) best = i;
+    fx_pt[best].x = (int16_t)x; fx_pt[best].y = (int16_t)y; fx_pt[best].vx = (int16_t)vx; fx_pt[best].vy = (int16_t)vy;
+    fx_pt[best].life = (uint8_t)life; fx_pt[best].a = (uint8_t)life;
+}
+static void fx_particles(int32_t grav, int32_t bounce, int32_t a)   /* move, (fall, bounce), draw */
+{
+    uint32_t i;
+    for (i = 0; i < 24u; i++) {
+        fx_part_t *p = &fx_pt[i];
+        int32_t ox = p->x, oy = p->y;
+        if (!p->life) continue;
+        p->vy = (int16_t)(p->vy + grav);
+        p->x = (int16_t)(p->x + p->vx); p->y = (int16_t)(p->y + p->vy);
+        if (bounce && p->y > (FXH - 3) * 16) { p->y = (int16_t)((FXH - 3) * 16); p->vy = (int16_t)(-p->vy * bounce >> 8); p->vx = (int16_t)(p->vx * 7 / 8); }
+        p->life--;
+        fx_line(ox >> 2, oy >> 2, p->x >> 2, p->y >> 2, a * p->life / (p->a ? p->a : 1));
+    }
+}
+static void fx_portrait(int32_t cx, int32_t cy, int32_t r, uint32_t ang, int32_t tau, int32_t a, int32_t fold)
+{   /* the sound against itself a moment later (a phase portrait), turned; fold: folded back at the rim (DESTROY) */
+    int32_t i, m = 2500, px = 0, py = 0, c = isin(ang + 0x40000000u), s = isin(ang);
+    for (i = 0; i < 256; i++) if (absi(fx_s[i]) > m) m = absi(fx_s[i]);
+    for (i = 0; i + tau < 256; i += 2) {
+        int32_t u = fx_s[i] * r / m, v = fx_s[i + tau] * r / m, x, y;
+        if (fold) { int32_t lim = r * 2 / 3; while (u > lim || u < -lim) u = u > 0 ? 2 * lim - u : -2 * lim - u; while (v > lim || v < -lim) v = v > 0 ? 2 * lim - v : -2 * lim - v; }
+        x = cx + ((u * c - v * s) * 15 >> 18); y = cy + ((u * s + v * c) >> 15);
+        if (i) fx_line(px, py, x, y, a);
+        px = x; py = y;
+    }
+}
+static void fx_corona(int32_t cx, int32_t cy, int32_t r0, int32_t len, uint32_t ang, int32_t a)   /* the spectrum, in a ring */
+{
+    uint32_t k;
+    for (k = 0; k < 24u; k++) {
+        int32_t m = fx_band[k] * len / 255, x0, y0, x1, y1;
+        uint32_t t = ang + (k << 26) + (1u << 25);
+        if (m < 2) continue;
+        fx_polar(cx, cy, r0, t, &x0, &y0); fx_polar(cx, cy, r0 + m, t, &x1, &y1); fx_line(x0, y0, x1, y1, a);
+        t = ang - (k << 26) - (1u << 25);
+        fx_polar(cx, cy, r0, t, &x0, &y0); fx_polar(cx, cy, r0 + m, t, &x1, &y1); fx_line(x0, y0, x1, y1, a);
+    }
+}
+static void fx_ridge(int32_t y0, int32_t h, int32_t a)   /* the spectrum as one line across (a ridge of the waterfall) */
+{
+    int32_t k, px = 4 * 4, py = y0;
+    for (k = 0; k < 24; k++) {
+        int32_t x = (4 + (k + 1) * 112 / 24) * 4, y = y0 - fx_band[k] * h / 255;
+        fx_line(px, py, x, y, a); px = x; py = y;
+    }
+}
+static void fx_pen(int32_t x, int32_t y, int32_t a)   /* a line from where the pen was */
+{
+    if (fx_px >= 0) fx_line(fx_px, fx_py, x, y, a);
+    fx_px = x; fx_py = y;
+}
+static void fx_frame(const theme_t *th)         /* the page's figure: one frame */
+{
+    uint32_t t = fm1_ms, br = (uint32_t)(isin(t * 0x00030000u) + 32768) >> 8;   /* (a slow breath, 0..255: ~2.4 s) */
+    int32_t lv = fx_lv, cx = FXW * 2, cy = FXH * 2, live = tm_peak > 16u, k;   /* (centre, Q2) */
+    uint16_t lo = th->cyan, hi = th->acc, bg = EVA ? EV_BG : RGB(5, 5, 7);
+    uint32_t on = fx_onset;
+    static uint32_t on_seen;
+    int32_t hit = on != on_seen;
+    on_seen = on;
+    if (page != fx_pg) { memset(fx_g, 0, sizeof fx_g); memset(fx_pt, 0, sizeof fx_pt); fx_px = -1; fx_pg = page; }
+    fx_n++;
+    switch (page) {
+    case PG_ASSET:                              /* a corona of the spectrum, turning; at rest, a slow ring */
+        fx_feedback(0x00800000u, 262, 0, 0, 226, FXW / 2, FXH / 2);
+        fx_corona(cx, cy, 44 + (int32_t)(br >> 4), 70, fx_ang += 0x01000000u + (uint32_t)lv * 0x40000u, 22);
+        if (!live) fx_ring(cx, cy, 60 + (int32_t)(br >> 3), 8);
+        lo = th->mut; hi = th->acc; break;
+    case PG_SRC:                                /* the sound against itself (a phase portrait); at rest the wave, breathing */
+        fx_feedback(0x00C00000u, 254, 0, 0, 196, FXW / 2, FXH / 2);
+        if (live) fx_portrait(cx, cy, 96, fx_ang += 0x00800000u, 6, 28, 0);
+        else {
+            int32_t px = 0, py = 0;
+            uint32_t ph;
+            fx_ang += 0x00400000u;
+            for (k = 0; k <= 48; k++) {
+                int32_t u, v, x, y;
+                ph = (uint32_t)k * (0xFFFFFFFFu / 48u);
+                u = isin(ph + 0x40000000u) * (70 + (int32_t)(br >> 4)) >> 15;
+                v = wave_shape((uint32_t)P[P_WAVE] == 6u || P[P_WAVE] == W_CNSE ? 0u : (uint32_t)P[P_WAVE], ph, P[P_COLOR] * 327) * 70 >> 15;
+                x = cx + ((u * isin(fx_ang + 0x40000000u) - v * isin(fx_ang)) * 15 >> 18);
+                y = cy + ((u * isin(fx_ang) + v * isin(fx_ang + 0x40000000u)) >> 15);
+                if (k) fx_line(px, py, x, y, 22);
+                px = x; py = y;
+            }
+        }
+        break;
+    case PG_CHIP:                               /* the portrait on a grid of 8-bit steps */
+        fx_feedback(0, 256, 0, -64, 215, FXW / 2, FXH / 2);
+        if (live) for (k = 0; k + 8 < 256; k += 4) {
+            int32_t m = 3000, x, y, j;
+            for (j = 0; j < 256; j++) if (absi(fx_s[j]) > m) m = absi(fx_s[j]);
+            x = cx + (fx_s[k] * 80 / m & ~15); y = cy + (fx_s[k + 8] * 80 / m & ~15);
+            fx_dot(x, y, 90);
+        } else fx_dot(cx + (int32_t)(((t >> 7) % 24u) * 16u) - 192, cy + ((int32_t)(br >> 4) & ~3) - 32, 120);
+        lo = th->mut; break;
+    case PG_GRN:                                /* the grains, a vortex: each one where it reads, drawn inward */
+        fx_feedback(0x02000000u, 250, 0, 0, 222, FXW / 2, FXH / 2);
+        for (k = 0; k < 16; k++) if (tm_gpos[k] && P[P_GMODE]) {
+            int32_t x, y;
+            fx_polar(cx, cy, 30 + (int32_t)tm_gpos[k] * 70 / 32768, (uint32_t)k * 0x10000000u + fx_ang, &x, &y);
+            fx_dot(x, y, tm_grev[k] ? 200 : 140);
+        }
+        fx_ang += 0x00800000u;
+        if (!live || !P[P_GMODE]) { int32_t x, y; fx_polar(cx, cy, 70 + (int32_t)(br >> 3), fx_ang * 3u, &x, &y); for (k = 0; k < 3; k++) { fx_polar(cx, cy, 40 + k * 30 + (int32_t)(br >> 4), fx_ang * (uint32_t)(3 + k) + (uint32_t)k * 0x55555555u, &x, &y); fx_dot(x, y, 255); fx_dot(x + 2, y, 200); } }
+        break;
+    case PG_LAB: {                              /* the slot wound in a ring, turning slowly; where it plays */
+        uint32_t ang = (fx_ang += 0x00300000u);
+        fx_feedback(0, 256, 0, 0, 120, FXW / 2, FXH / 2);
+        for (k = 0; k < 114; k++) {
+            int32_t a = smp_view[k * 2] * 24 / 128, x0, y0, x1, y1;
+            uint32_t q = ang + (uint32_t)k * (0xFFFFFFFFu / 114u);
+            fx_polar(cx, cy, 80 - a, q, &x0, &y0); fx_polar(cx, cy, 80 + a, q, &x1, &y1);
+            fx_line(x0, y0, x1, y1, 26);
+        }
+        lo = th->mut; hi = th->cyan; break;
+    }
+    case PG_ENV: {                              /* a radar: the envelope swept around, petals */
+        int32_t x, y, r = 20 + (tm_awake ? tm_env * 84 / 32768 : (int32_t)(br >> 4));
+        fx_feedback(0, 256, 0, 0, 236, FXW / 2, FXH / 2);
+        fx_polar(cx, cy, r, fx_ang += 0x05000000u, &x, &y);
+        fx_pen(x, y, tm_awake ? 160 : 50);
+        break;
+    }
+    case PG_TRN:                                /* each hit a ripple, going out */
+        fx_feedback(0, 268, 0, 0, 228, FXW / 2, FXH / 2);
+        if (hit) fx_ring(cx, cy, 10 + lv / 16, 200);
+        if (live) fx_ring(cx, cy, 4 + lv / 24, lv / 3);
+        else fx_ring(cx, cy, 4 + (int32_t)(br >> 5), 14);
+        break;
+    case PG_RES:                                /* the modes as bodies in orbit: wider each, faster each, lit as they ring */
+        fx_feedback(0, 256, 0, 0, 232, FXW / 2, FXH / 2);
+        for (k = 0; k < 6; k++) {
+            int32_t x, y, z = clampi(tm_z[k] * 255 / 6000, 0, 255);
+            fx_polar(cx, cy, 24 + k * 15, (uint32_t)(t * (uint32_t)(k + 2) * 0x00080000u) + (uint32_t)k * 0x2A000000u, &x, &y);
+            fx_dot(x, y, 200); fx_dot(x + 2, y, 120); fx_dot(x - 2, y, 120);
+            if (z > 30) fx_ring(x, y, 3 + z / 40, z / 5);
+        }
+        lo = th->mut; break;
+    case PG_DST:                                /* the portrait folded back at its rim, shaken */
+        fx_feedback(0, 256, (int32_t)(fx_rand() & 255u) - 128, 0, 190, FXW / 2, FXH / 2);
+        if (live) fx_portrait(cx, cy, 96 + P[P_XDRV] / 2, fx_ang += 0x01400000u, 5, 30, P[P_XDRV] > 0);
+        else fx_ring(cx, cy, 30 + (int32_t)(fx_rand() & 7u), 18);
+        lo = th->haz; break;
+    case PG_VOX: {                              /* a spiral: SHIFT turns it (up: out, down: in), the vowel its shape */
+        int32_t sh = P[P_SMIX] ? P[P_SHIFT] : 0, z = 256 + (sh > 0 ? 6 : sh < 0 ? -6 : 0);
+        fx_feedback((uint32_t)(int32_t)(sh * 0x00080000), z, 0, 0, 200, FXW / 2, FXH / 2);
+        fx_corona(cx, cy, 28 + P[P_VOWEL] / 4, 60, fx_ang += 0x00600000u, live ? 22 : 0);
+        if (!live) fx_ring(cx, cy, 30 + (int32_t)(br >> 4), 12);
+        break;
+    }
+    case PG_FLT: {                              /* the corona, ringed where the filter cuts */
+        int32_t li = P[P_RFMODE] ? (int32_t)tm_rf_li : T_RF_LI[P[P_RFFREQ]], r = 20 + (li - LI_55) * 80 / (LI_MAX - LI_55);
+        fx_feedback(0x00400000u, 258, 0, 0, 200, FXW / 2, FXH / 2 - 8);
+        fx_corona(cx, cy - 32, 22, 80, fx_ang += 0x00800000u, live ? 24 : 0);   /* (above the response's fill) */
+        fx_ring(cx, cy - 32, r, 10 + P[P_RFRES] / 5);
+        break;
+    }
+    case PG_OTT:                                /* three rings, each band breathing */
+        fx_feedback(0, 258, 0, 0, 218, FXW / 2, FXH / 2);
+        for (k = 0; k < 3; k++) {
+            int32_t lvk = live ? clampi((tm_benv[k] + 60 * 256) * 255 / (60 * 256), 0, 255) : (int32_t)br / 4;
+            fx_ring(cx, cy, 16 + k * 26 + lvk / 24, 10 + lvk / 5);
+        }
+        break;
+    case PG_DLY:                                /* a tunnel: the sound drawn, the echoes going in, turned by the time */
+        fx_feedback((uint32_t)P[P_DTIME] * 0x00100000u, 236 - P[P_DFB] / 6, 0, 0, 200 + P[P_DFB] / 3, FXW / 2, FXH / 2);
+        if (live) fx_portrait(cx, cy, 96, fx_ang += 0x00400000u, 4, 26, 0);
+        else fx_ring(cx, cy, 80, 10 + (int32_t)(br >> 4));
+        break;
+    case PG_REV:                                /* a nebula: dust where the bands are, slowly spreading */
+        fx_feedback(0x00100000u, 259, 0, 0, 236 + clampi(P[P_RDEC] / 6, 0, 16), FXW / 2, FXH / 2);
+        for (k = 0; k < 24; k++) if (fx_band[k] > 90 || (!live && !(fx_rand() & 63u))) {
+            int32_t x, y;
+            fx_polar(cx, cy, 8 + (int32_t)(fx_rand() % 100u), fx_rand(), &x, &y);
+            fx_dot(x, y, live ? fx_band[k] / 2 + 40 : 60);
+        }
+        lo = th->mut; hi = th->cyan; break;
+    case PG_SPC: {                              /* the source, a ripple from where it is */
+        int32_t x = cx + clampi(tm_px, -1024, 1024) * 100 / 1024, y = cy;
+        fx_feedback(0, 264, 0, 0, 220, x >> 2, y >> 2);
+        if (hit || (live && !(fx_n & 3u))) fx_ring(x, y, 12, 60 + lv / 3);
+        if (!live) fx_ring(cx, cy, 10 + (int32_t)(br >> 3), 10);
+        fx_dot(x, y, 120);
+        break;
+    }
+    case PG_LFO: {                              /* a harmonograph: LFO 1 left-right, LFO 2 up-down */
+        int32_t a1 = P[P_L1MIX] ? tm_lfo[0] : isin(t * 0x00110000u), a2 = P[P_L2MIX] ? tm_lfo[1] : isin(t * 0x000B0000u);
+        fx_feedback(0x00100000u, 256, 0, 0, 240, FXW / 2, FXH / 2);
+        {   /* (the pen has weight: a square wave draws a rounded path) */
+            static int32_t hx = 240 * 16, hy = 112 * 16;
+            hx += ((cx + a1 * 210 / 32768) * 16 - hx) / 4; hy += ((cy + a2 * 92 / 32768) * 16 - hy) / 4;
+            fx_pen(hx >> 4, hy >> 4, P[P_L1MIX] || P[P_L2MIX] ? 150 : 50);
+        }
+        break;
+    }
+    case PG_RTPC:                               /* rising: the faster, the higher the value */
+        fx_feedback(0, 256, 0, -(64 + (int32_t)tm_rtpc / 40), 236, FXW / 2, FXH / 2);
+        fx_ridge(FXH * 4 - 8, 60 + (int32_t)tm_rtpc / 100, live ? 90 : 14);
+        lo = th->mut; break;
+    case PG_PAD:                                /* the finger, swirling */
+        fx_feedback(0x01000000u, 252, 0, 0, 232, FXW / 2, FXH / 2);
+        if (pad_on || pad_held) fx_pen(8 + (int32_t)pad_x * 460 / 127, 8 + (127 - (int32_t)pad_y) * 205 / 127, 200);
+        else { fx_px = -1; fx_dot(cx + (isin(t * 0x00090000u) * 150 >> 15), cy + (isin(t * 0x000D0000u) * 70 >> 15), 70); }
+        break;
+    case PG_VAR: {                              /* a constellation of the seed: a star a key, the one played flares */
+        uint32_t s = (uint32_t)P[P_VSEED] * 2654435761u + 1u;
+        fx_feedback(0, 256, 0, 0, 200, FXW / 2, FXH / 2);
+        for (k = 0; k < 27; k++) {
+            int32_t x, y;
+            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+            x = 16 + (int32_t)(s % 448u); y = 12 + (int32_t)((s >> 9) % 200u);
+            fx_dot(x, y, 70 + (int32_t)((br * (uint32_t)(k + 3)) & 63u)); fx_dot(x + 1, y + 1, 50);
+            if (hit && (fx_rand() & 7u) == 0u) { fx_spawn(x * 4, y * 4, (int32_t)(fx_rand() & 31u) - 16, -(int32_t)(fx_rand() & 15u), 30); }
+        }
+        fx_particles(0, 0, 120);
+        break;
+    }
+    case PG_PHY:                                /* the hits: a ball each, falling, bouncing */
+        fx_feedback(0, 256, 0, 0, 210, FXW / 2, FXH / 2);
+        if (hit) fx_spawn((int32_t)(20 + fx_rand() % 80u) * 16, 6 * 16, (int32_t)(fx_rand() & 31u) - 16, 0, 90);
+        fx_particles(5, 180, 255);
+        if (!live && !(fx_n % 40u)) fx_spawn((int32_t)(30 + fx_rand() % 60u) * 16, 6 * 16, (int32_t)(fx_rand() & 15u) - 8, 0, 60);
+        break;
+    case PG_BAT:                                /* a waterfall: the spectrum as ridges, going back */
+        fx_feedback(0, 252, 0, -96, 238, FXW / 2, 6);
+        if (!(fx_n & 1u)) fx_ridge(FXH * 4 - 6, 120, live ? 100 : 10);
+        lo = th->mut; break;
+    default: break;
+    }
+    if (EVA) { if (lo == th->cyan) lo = EV_GRN; }
+    fx_show(mix565(bg, lo, 150), hi, bg);
+}
 static void draw_vis(void)
 {
     const theme_t *th = &TH;
     char s[40], t[16];
     int32_t i, k;
     vis_crt(th);
+    fx_listen(); fx_frame(th);                  /* the motion layer, under the plot */
     switch (page) {
     case PG_SRC: {                              /* the oscillator | the sample, the blend underneath */
         int32_t md = P[P_MODE], px = 0, py = 0, on_o = md != 1, on_s = md != 0;
@@ -4157,7 +4547,7 @@ static void app_init(void)                      /* the session, the tables, the 
     sense_setup();
     for (i = 0; i < NP; i++) {                  /* the page of each parameter, the LFO targets */
         uint32_t m, s, k;
-        for (m = NPAGE; m-- > 0;) for (s = 0; s < 4u; s++) for (k = 0; k < 4u; k++) if (PAGE_P[m][s][k] == i) PMOD[i] = (uint8_t)m;   /* (its first page) */
+        for (m = NPAGE; m-- > 0;) if (m != PG_ASSET) for (s = 0; s < 4u; s++) for (k = 0; k < 4u; k++) if (PAGE_P[m][s][k] == i) PMOD[i] = (uint8_t)m;   /* (its module: ASSETS only repeats some) */
         {                                       /* not a mod target: what no modulation could move (lists of actions, the
                                                    seed, the batch, the meters) */
             static const uint8_t NT[] = {P_SLOT, P_THEME, P_RECM, P_VSEED, P_VKEYS, P_VLOCK, P_HAAMT, P_EVOLVE, P_BMODE, P_BCNT, P_BSPC,
@@ -4271,9 +4661,10 @@ static void app_main(void)
         /* the screen */
         if (map_bits() != map_drawn) ui_dirty |= 1;
         if (ui_dirty & 1) { draw_header(); ui_dirty &= (uint8_t)~1u; }
-        if ((ui_dirty & 2) || ((tm_awake || tm_peak || rec_state || (page == PG_LFO && (P[P_L1MIX] || P[P_L2MIX])) ||
-                                (page == PG_PAD && (pad_on || pad_held || at_keys || at_midi)))   /* (something moves) */
-                               && fm1_ms - t_vis > 50u)) { draw_vis(); ui_dirty &= (uint8_t)~2u; t_vis = fm1_ms; }
+        if ((ui_dirty & 2) || fm1_ms - t_vis > ((tm_awake || tm_peak || rec_state || (page == PG_LFO && (P[P_L1MIX] || P[P_L2MIX])) ||
+                                                  (page == PG_PAD && (pad_on || pad_held || at_keys || at_midi))) ? 40u : 66u)) {
+            draw_vis(); ui_dirty &= (uint8_t)~2u; t_vis = fm1_ms;   /* (25 frames a second while something sounds or moves, 15 at rest) */
+        }
         if ((ui_dirty & 4) || (mod_any() && fm1_ms - t_knob > 80u)) { draw_knobs(); ui_dirty &= (uint8_t)~4u; t_knob = fm1_ms; }
         {                                       /* the meter: the peak since the last frame, a hold of 1 s */
             uint32_t pk = tm_peak;

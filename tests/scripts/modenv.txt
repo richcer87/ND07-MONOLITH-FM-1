@@ -1,15 +1,15 @@
+1 btn 8
 # 06 ENVELOPES set C (ENV x3): the MOD ENV on 5 PITCH... a laser: M DEC short, M AMT +80 %; then HA KIND = WEAPON, IMPACT, WHOOSH
 # btn: 4 ENV, 11 SEQ, 13 REC; enc: 2..5 = K1..K4
 100 btn 4
-130 btn 4
-160 btn 4
+101 btn 4
+102 btn 4
 200 enc 4 40
 300 keys 0x80
 500 shot
 900 keys 0
 1500 btn 11
-1505 btn 11
-1530 btn 11
+1501 btn 11
 1560 enc 5 1
 1575 enc 5 1
 1590 enc 5 1
