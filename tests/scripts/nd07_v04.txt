@@ -44,17 +44,13 @@
 5300 keys 0x80
 5400 shot
 5700 keys 0
-# 14 VARIATION + MORPH (SEQ): VARY 60 %; set B: STORE A (SEL + OCT-), HAPPY ACCIDENT, STORE B (SEL + OCT+), MORPH 50 %
+# 14 VARIATION + MORPH (SEQ): VARY 60 %; set B: STORE A (SEL), HAPPY ACCIDENT, STORE B (SEL), MORPH 50 %
 5900 btn 11
 5950 enc 2 20
 6000 btn 11
-6100 btndown 3
-6150 btn 0
-6200 btnup 3
+6150 btn 3
 6300 btn 13
-6600 btndown 3
-6650 btn 1
-6700 btnup 3
+6650 btn 3
 6800 enc 2 17
 6900 keys 0x80
 7000 keys 0

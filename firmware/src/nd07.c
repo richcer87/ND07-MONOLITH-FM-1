@@ -28,18 +28,19 @@
  *   REVERB > OTT POST > out. Modules at rest cost nothing; after ~1 s of silence the whole chain sleeps.
  *   It runs in 64-sample blocks, module by module; the heavy stages run from RAM (.ram_text) and call nothing.
  *
- * Panel:
- *   HOME ENV EDIT ARP SEQ FX GLO LFO   the modules; press again: the next set of knobs (A/B/C/D), then the button's
- *                                     next module (HOME: 01 02 14, ENV: 03 04, EDIT: 05 06, LFO: 11 12 13)
- *   SELECT                            previous / next page
- *   K1..K4                            the page's parameters (hold SEL + turn: lock / unlock)
- *   ALGORITHM / PRESETS               oscillator wave / sample slot
- *   keys F3..G5                       play (held = gate); OCT- / OCT+ the octave. PLAY: a held C4
- *   REC                               HAPPY ACCIDENT            SEL + REC   UNDO
- *   SAVE                              the session (and a recorded sample) into flash      SEL + SAVE   clear all locks
- *   SEL tap                           the page's action: 01 REC ARM / STOP, 12 BATCH start / stop, the rest randomize
- *   SEL + OCT- / SEL + OCT+           reset the module / next theme (on 12: STORE A / STORE B)
- *   SEL + PLAY                        the slot back to its factory sound
+ * Panel (one rule: a control alone does its job; with SEL held, its second job, the same on every page):
+ *   HOME ARP ENV EDIT GLO FX LFO SEQ   the steps of the work; press again: the next set of knobs (A/B/C/D), then the
+ *                                     button's next module (see PAGE_GRP)
+ *   SELECT                            previous / next page              SEL + SELECT      the knob set (A B C D)
+ *   K1..K4                            the page's parameters             SEL + K           lock / unlock
+ *   ALGORITHM                         oscillator wave                   SEL + ALGORITHM   the theme
+ *   PRESETS                           sample slot                       SEL + PRESETS     an asset, loaded and played
+ *   keys F3..G5                       play (held = gate); OCT- / OCT+ the octave
+ *   PLAY                              a held C4                         SEL + PLAY        stop all (batch, fire test, ...)
+ *   REC                               HAPPY ACCIDENT                    SEL + REC         UNDO
+ *   SAVE                              the session into flash            SEL + SAVE        clear all locks
+ *   OCT- / OCT+                       the octave                        SEL + OCT- / +    reset / randomize the module
+ *   SEL tap                           the page's action (the footer says which); SEL held: the second jobs on the footer
  *   MIDI in                           notes (velocity), pitch bend +-2, CC1 LFO1 mix, CC11 MORPH, CC74 filter freq,
  *                                     CC16 / 17 / 18 the pad's X / Y / touch, channel and key pressure (aftertouch)
  *  * The engine reads every parameter in Q8, glided over ~6 ms (S8): knob turns and LFOs move without steps.
@@ -165,7 +166,7 @@ static const char *const E_XSHP[] = {"SOFT", "HARD", "FOLD", "RECTIFY"};
 static const char *const E_BMODE[] = {"RANDOM", "A>B", "A>B+RND"};
 static const char *const E_PADM[] = {"SPRING", "LATCH", "PLAY"};
 static const char *const E_PMODE[] = {"OFF", "BOUNCE", "DEBRIS", "ROLL", "STUTTER", "SCATTER"};
-static const char *const E_STOOL[] = {"REVERSE", "CROP", "FADE IN", "FADEOUT", "1/2 SPD", "2x SPD", "MAX LVL", "REVERT"};
+static const char *const E_STOOL[] = {"REVERSE", "CROP", "FADE IN", "FADEOUT", "1/2 SPD", "2x SPD", "MAX LVL", "REVERT", "FACTORY"};
 static const char *const E_RECIPE[] = {"FREE", "IMPACT", "WHOOSH", "UI", "MAGIC", "MONSTER", "WEAPON", "AMBIENT"};
 static const char *const E_GEST[] = {"OFF", "1-SHOT", "LOOP"};
 static const char *const E_KVEL[] = {"OFF", "VEL", "VEL+AT"};
@@ -262,7 +263,7 @@ static const pdesc_t PD[NP] = {
     [P_PMODE] = {"TRIGGER", 0, 5, 0, 1, F_ENUM, E_PMODE},   [P_PHITS] = {"HITS", 2, 32, 8, 1, F_INT, 0},
     [P_PTIME] = {"TIME", 2, 80, 15, 1, F_SEC10, 0},         [P_PFALL] = {"FALL", 0, 100, 70, 1, F_PCT, 0},
     [P_PPIT] = {"PITCH", -12, 12, 0, 1, F_SEMI, 0},         [P_PJIT] = {"JITTER", 0, 100, 20, 1, F_PCT, 0},
-    [P_STOOL] = {"TOOL", 0, 7, 0, 1, F_ENUM, E_STOOL},      [P_SAMT] = {"AMOUNT", 1, 100, 25, 1, F_PCT, 0},
+    [P_STOOL] = {"TOOL", 0, 8, 0, 1, F_ENUM, E_STOOL},      [P_SAMT] = {"AMOUNT", 1, 100, 25, 1, F_PCT, 0},
     [P_RECIPE] = {"HA KIND", 0, 7, 0, 1, F_ENUM, E_RECIPE}, [P_GEST] = {"GESTURE", 0, 2, 0, 1, F_ENUM, E_GEST},
     [P_VOWEL] = {"VOWEL", 0, 100, 50, 1, F_VOWEL, 0},       [P_VSIZE] = {"SIZE", -12, 12, 0, 1, F_SEMI, 0},
     [P_VRES] = {"RES", 0, 100, 50, 1, F_PCT, 0},            [P_VMIX] = {"V MIX", 0, 100, 0, 1, F_PCT, 0},
@@ -1846,6 +1847,7 @@ static void all_off(void) { nstk = 0; v_gate = 0; }
 
 /* ======================================================================== actions */
 static uint8_t page, sub, mutant, session_dirty;
+static uint32_t sel_t, help_n;                  /* SEL: when it went down, the help lines shown while held */
 static uint8_t ui_dirty = 0xFF;                 /* 1 header 2 vis 4 knobs 8 footer */
 static uint32_t t_toast, mutant_t;
 static char toast[40];
@@ -2239,6 +2241,7 @@ static void morph_set(int32_t v)                /* the MORPH knob: the panel sho
     }
     morph_on = 1;
 }
+static uint32_t var_store_b(void) { return !(has_ab & 1u) ? 0u : !(has_ab & 2u) ? 1u : P[P_MORPH] > 50; }
 static void morph_store(uint32_t which)
 {
     uint32_t i;
@@ -2486,11 +2489,13 @@ static void phys_poll(void)
 /* 05 SAMPLE LAB: the active slot worked on in place (no CPU while playing): REVERSE, CROP to 01's loop, FADE IN / OUT
  * over AMOUNT, HALF SPD (an octave down, twice as long), DOUBLE, NORMALIZE; REVERT: the slot as it is in flash */
 static void slot_select(int32_t i);
+static void slot_factory(void);
 static void lab_apply(void)
 {
     uint32_t tool = (uint32_t)P[P_STOOL], n = smp_len, i, k;
     char t[32] = "LAB: ";
     if (rec_state != REC_IDLE) { say("LAB: BUSY RECORDING"); return; }
+    if (tool == 8u) { slot_factory(); return; }  /* FACTORY: the slot's factory sound back (it was SEL + PLAY) */
     if (tool == 7u) {                           /* REVERT */
         SL[cur_slot].dirty = 0;
         slot_select(cur_slot);
@@ -2535,7 +2540,7 @@ static void lab_apply(void)
     smp_busy = 0;
     lp_pb = 0;
     smp_overview();
-    cat(t, E_STOOL[tool & 7u]); cat(t, " DONE");
+    cat(t, E_STOOL[tool % 9u]); cat(t, " DONE");
     say(t);
     ui_dirty |= 2 | 4 | 8;
 }
@@ -2586,6 +2591,42 @@ static void evolve_step(void)
         }
     ui_dirty |= 4;
 }
+static void asset_take(uint32_t k)              /* an asset loaded (with an undo step) and played */
+{
+    char t[24] = "ASSET: ";
+    k %= NASSET;
+    push_undo();
+    morph_on = 0;
+    phys_stop();
+    asset_load(k);
+    P[P_ASSET] = (int16_t)k;
+    touched();
+    asset_cur = (uint8_t)k; asset_sum = patch_sum();
+    cat(t, E_ASSET[k]); say(t);
+    if (P[P_PMODE]) phys_start(60, 32767, 999u); else audition_ms(asset_hold_ms(k));
+}
+static void stop_all(void)                      /* SEL + PLAY: everything that plays on its own stops, every note */
+{
+    if (batch_on) batch_start();
+    if (ft_on) fire_start();
+    phys_stop();
+    rt_on = 0;
+    sp_off = 0;
+    aud_t = 0;
+    all_off();
+    say("ALL STOPPED");
+    ui_dirty |= 2 | 8;
+}
+static void module_random(void)                 /* SEL + OCT+: this page's module at random (ASSETS: an asset at random) */
+{
+    if (page == PG_ASSET) { asset_take((uint32_t)rnd_range(0, NASSET - 1)); return; }
+    if (page == PG_LAB || page == PG_BAT) { say("NOTHING TO RANDOMIZE HERE"); return; }
+    push_undo();
+    rnd_module(page);
+    touched();
+    say(page == PG_LFO ? "RND LFOs" : page == PG_PAD ? "RND PAD TARGETS" : "RANDOMIZED MODULE");
+    audition();
+}
 static void page_action(void)
 {
     if (page == PG_SRC) {                       /* REC ARM / STOP */
@@ -2615,19 +2656,8 @@ static void page_action(void)
         sp_off = fm1_ms + (P[P_SPASS] ? (uint32_t)P[P_SPASS] * 100u : 1000u);
         return;
     }
-    if (page == PG_ASSET) {                     /* load the asset, play it */
-        char t[24] = "ASSET: ";
-        uint32_t k = (uint32_t)P[P_ASSET] % NASSET;
-        push_undo();
-        morph_on = 0;
-        phys_stop();
-        asset_load(k);
-        touched();
-        asset_cur = (uint8_t)k; asset_sum = patch_sum();
-        cat(t, E_ASSET[k]); say(t);
-        if (P[P_PMODE]) phys_start(60, 32767, 999u); else audition_ms(asset_hold_ms(k));
-        return;
-    }
+    if (page == PG_ASSET) { asset_take((uint32_t)P[P_ASSET] % NASSET); return; }   /* load the asset, play it */
+    if (page == PG_VAR && sub == 1u) { morph_store(var_store_b()); return; }   /* B: STORE A, then B (both kept: the side MORPH is nearer) */
     if (page == PG_VAR) { P[P_VSEED] = (int16_t)rnd_range(1, 999); say("NEW SEED"); ui_dirty |= 2 | 4; audition(); return; }
     if (page == PG_CHIP) {                      /* a new sound of the PRESET's kind */
         char t[24] = "NEW ";
@@ -2696,7 +2726,7 @@ static void rec_commit(void)                    /* the recording, trimmed and no
     }
     ui_dirty |= 2 | 4;
 }
-static void slot_factory(void)                  /* SEL + PLAY: the factory sound back */
+static void slot_factory(void)                  /* LAB TOOL FACTORY: the factory sound back */
 {
     if (!SL[cur_slot].user) { say("ALREADY FACTORY"); return; }
     smp_busy = 1;
@@ -3783,9 +3813,10 @@ static void draw_vis(void)
         break;
     }
     case PG_LAB: {                              /* the slot, what the TOOL will do to it */
-        static const char *const D[8] = {"PLAYS BACKWARDS", "KEEPS 01 C'S LOOP REGION", "FADES IN OVER AMOUNT", "FADES OUT OVER AMOUNT",
-                                         "TWICE AS LONG, -12st", "HALF AS LONG, +12st", "PEAK TO FULL LEVEL", "BACK TO THE SAVED SLOT"};
-        int32_t tool = P[P_STOOL] & 7, len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1, w = P[P_SAMT] * 228 / 100;
+        static const char *const D[9] = {"PLAYS BACKWARDS", "KEEPS THE LOOP REGION", "FADES IN OVER AMOUNT", "FADES OUT OVER AMOUNT",
+                                         "TWICE AS LONG, -12st", "HALF AS LONG, +12st", "PEAK TO FULL LEVEL", "BACK TO THE SAVED SLOT",
+                                         "THE FACTORY SOUND BACK"};
+        int32_t tool = P[P_STOOL] % 9, len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1, w = P[P_SAMT] * 228 / 100;
         vis_smp(th->cyan, 6, 228, 20, 68);
         if (tool == 1) { int32_t xs = 6 + lp_s * 228 / len, xe = 6 + lp_e * 228 / len; cv_frame(xs, 20, xe - xs > 2 ? xe - xs : 2, 68, th->acc); }
         if (tool == 2) { cv_line(6, 88, 6 + w, 20, th->mut); cv_rect(6 + w, 20, 1, 68, th->mut); }
@@ -3846,8 +3877,9 @@ static void draw_vis(void)
             cv_rect(54, 36, 132, 2, C_DK);
             cv_rect(54, 36, x - 54, 2, morph_on ? th->mut : C_MUTE);
             cv_rect(x - 2, 29, 5, 16, morph_on ? C_TXT : C_MUTE);
-            cv_text_fit(8, 60, 226, "SEL + OCT-   STORE A", has_ab & 1u ? C_MUTE : th->acc, 1);
-            cv_text_fit(8, 76, 226, "SEL + OCT+   STORE B", has_ab & 2u ? C_MUTE : th->cyan, 1);
+            cv_text_fit(8, 60, 226, has_ab == 3u ? "SEL: STORE THE NEARER ONE" : has_ab ? "SEL: STORE B" : "SEL: STORE A, THEN B",
+                        has_ab == 3u ? C_MUTE : has_ab ? th->cyan : th->acc, 1);
+            cv_text_fit(8, 76, 226, "TURN MORPH: A TO B", has_ab == 3u ? th->mut : C_MUTE, 1);
             if (morph_on) cv_text_fit(8, 94, 226, "MORPH ON: KNOBS SHOW THE MIX", th->mut, 1);
             break;
         }
@@ -4256,7 +4288,7 @@ static const char *sel_hint(void)               /* what a tap on SEL does on thi
     case PG_SRC: return rec_state == REC_IDLE ? "REC ARM" : rec_state == REC_ARMED ? "CANCEL" : "REC STOP";
     case PG_CHIP: return "NEW SFX";
     case PG_SPC: return P[P_SPASS] ? "PLAY PASS" : "PLAY";
-    case PG_VAR: return "NEW SEED";
+    case PG_VAR: return sub == 1u ? (var_store_b() ? "STORE B" : "STORE A") : "NEW SEED";
     case PG_BAT: return batch_on || ft_on ? "STOP" : sub == 1u ? "FIRE" : "BATCH";
     case PG_RTPC: return rt_on ? "STOP" : "SWEEP";
     case PG_LAB: return "APPLY";
@@ -4575,7 +4607,7 @@ static void turn(uint32_t knob, int32_t e, int sel_held)
     if (p == P_THEME) { P[p] = (int16_t)((P[p] + (e > 0 ? 1u : NTHEME - 1u)) % NTHEME); ui_dirty = 0xFF; return; }
     if (p == P_MORPH) {
         morph_set(P[p] + e * step);
-        if (has_ab != 3u) say(has_ab ? "STORE B: SEL + OCT+" : "STORE A / B: SEL + OCT- / OCT+");
+        if (has_ab != 3u) say(has_ab ? "STORE B FIRST: SEL" : "STORE A AND B: SEL");
         touched();
         return;
     }
@@ -4636,7 +4668,7 @@ static void app_main(void)
         if (rec_state == REC_DONE) rec_commit();
         /* buttons */
         b = fm1_input_edges(&rel);
-        if (b & (1u << BTN_SEL)) { sel_down = 1; sel_used = 0; }
+        if (b & (1u << BTN_SEL)) { sel_down = 1; sel_used = 0; sel_t = fm1_ms; help_n = 0; }
         for (k = 0; k < NGRP; k++)
             if (b & (1u << GRP_BTN[k])) {           /* its modules in turn, each one's knob sets in turn */
                 if (PAGE_GRP[page] != k) { uint32_t q = 0; while (PAGE_GRP[q] != k) q++; page = (uint8_t)q; sub = 0; }
@@ -4644,24 +4676,47 @@ static void app_main(void)
                 else { uint32_t q = page + 1u; if (q >= NPAGE || PAGE_GRP[q] != k) while (q > 0u && PAGE_GRP[q - 1u] == k) q--; page = (uint8_t)q; sub = 0; }
                 ui_dirty = 0xFF;
             }
-        if (b & (1u << BTN_PLAY)) { if (sel) { slot_factory(); sel_used = 1; } else note_on(60, 32767); }
+        /* one rule on every page: a button alone does its job; with SEL held, its second job (the same everywhere):
+           PLAY note / STOP ALL, REC HAPPY ACCIDENT / UNDO, SAVE session / unlock all, OCT- octave / RESET the module,
+           OCT+ octave / RANDOMIZE the module; a tap on SEL alone is the page's own action (the footer says which) */
+        if (b & (1u << BTN_PLAY)) { if (sel) { stop_all(); sel_used = 1; } else note_on(60, 32767); }
         if (rel & (1u << BTN_PLAY)) note_off(60);
         if (b & (1u << BTN_REC)) { if (sel) { undo(); sel_used = 1; } else happy_accident(); }
         if (b & (1u << BTN_SAVE)) { if (sel) { for (i = 0; i < NLOCKW; i++) locks[i] = 0; say("ALL LOCKS CLEARED"); ui_dirty |= 4; sel_used = 1; } else session_save(); }
         if (b & (1u << BTN_OCT_DOWN)) {
-            if (sel) { if (page == PG_VAR && sub == 1u) morph_store(0); else reset_module(page); sel_used = 1; }
+            if (sel) { reset_module(page); sel_used = 1; }
             else if (oct_shift > -3) { oct_shift--; ui_dirty |= 8; }
         }
         if (b & (1u << BTN_OCT_UP)) {
-            if (sel && page == PG_VAR && sub == 1u) { morph_store(1); sel_used = 1; }
-            else if (sel) { P[P_THEME] = (int16_t)((P[P_THEME] + 1) % NTHEME); ui_dirty = 0xFF; sel_used = 1; say(E_THEME[P[P_THEME]]); }
+            if (sel) { module_random(); sel_used = 1; }
             else if (oct_shift < 3) { oct_shift++; ui_dirty |= 8; }
         }
-        if (rel & (1u << BTN_SEL)) { if (sel_down && !sel_used) page_action(); sel_down = 0; }
-        /* encoders */
-        if ((e = fm1_enc_take(ENC_SELECT)) != 0) { page = (uint8_t)((page + (e > 0 ? 1u : NPAGE - 1u)) % NPAGE); sub = 0; ui_dirty = 0xFF; }
-        if ((e = fm1_enc_take(ENC_ALGORITHM)) != 0) { P[P_WAVE] = (int16_t)clampi(P[P_WAVE] + e, 0, NWAVE - 1); touched(); }
-        if ((e = fm1_enc_take(ENC_PRESETS)) != 0) { P[P_SLOT] = (int16_t)clampi(P[P_SLOT] + e, 0, 7); touched(); }
+        if (rel & (1u << BTN_SEL)) {
+            if (sel_down && !sel_used && fm1_ms - sel_t < 700u) page_action();   /* (a tap; held longer it was a look at the help) */
+            if (help_n) { toast[0] = 0; ui_dirty |= 8; }
+            sel_down = 0; help_n = 0;
+        }
+        if (sel && sel_down && !sel_used && fm1_ms - sel_t >= 700u + help_n * 900u) {   /* SEL held: its second jobs, in turn */
+            static const char *const HELP[9] = {"SEL+K1..K4: LOCK", "SEL+REC: UNDO", "SEL+PLAY: STOP ALL", "SEL+OCT-: RESET MODULE",
+                                                "SEL+OCT+: RANDOMIZE", "SEL+SAVE: UNLOCK ALL", "SEL+SELECT: KNOB SET",
+                                                "SEL+ALGORITHM: THEME", "SEL+PRESETS: ASSET"};
+            say(HELP[help_n % 9u]); help_n++;
+        }
+        /* encoders: alone, as printed (SELECT the page, ALGORITHM the wave, PRESETS the sample); with SEL held, a step
+           further: SELECT the knob set (A B C D), ALGORITHM the look (theme), PRESETS the asset (loaded and played) */
+        if ((e = fm1_enc_take(ENC_SELECT)) != 0) {
+            if (sel) { sub = (uint8_t)((sub + (e > 0 ? 1u : NSUB[page] - 1u)) % NSUB[page]); sel_used = 1; }
+            else { page = (uint8_t)((page + (e > 0 ? 1u : NPAGE - 1u)) % NPAGE); sub = 0; }
+            ui_dirty = 0xFF;
+        }
+        if ((e = fm1_enc_take(ENC_ALGORITHM)) != 0) {
+            if (sel) { P[P_THEME] = (int16_t)((P[P_THEME] + (e > 0 ? 1u : NTHEME - 1u)) % NTHEME); ui_dirty = 0xFF; sel_used = 1; say(E_THEME[P[P_THEME]]); }
+            else { P[P_WAVE] = (int16_t)clampi(P[P_WAVE] + e, 0, NWAVE - 1); touched(); }
+        }
+        if ((e = fm1_enc_take(ENC_PRESETS)) != 0) {
+            if (sel) { asset_take((uint32_t)(P[P_ASSET] + (e > 0 ? 1 : NASSET - 1))); sel_used = 1; }
+            else { P[P_SLOT] = (int16_t)clampi(P[P_SLOT] + e, 0, 7); touched(); }
+        }
         {
             static const uint8_t KN[4] = {ENC_KNOB1, ENC_KNOB2, ENC_KNOB3, ENC_KNOB4};
             for (k = 0; k < 4u; k++) if ((e = fm1_enc_take(KN[k])) != 0) { turn(k, e, sel); if (sel) sel_used = 1; }

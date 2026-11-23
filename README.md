@@ -416,7 +416,7 @@ DELAY + FLANGER → REVERB → OTT (POST) → SPACE (aire / pared / distancia) �
 - **Samples:** 8 slots con sonidos de fábrica (BOOM, METAL, ZAP, GLITCH, WHOOSH, VOX AH, BELL, DRONE), afinados en C4.
   **Grabar en un slot:** en la página 01, toca **SEL** (REC ARMED), toca una nota: graba la salida del FM-1 (todo
   el procesamiento, reverb incluida) hasta 1.48 s o hasta 0.6 s de silencio. **SAVE** lo guarda en flash.
-  **SEL + PLAY** regresa el slot a su sonido de fábrica.
+  **SAMPLE LAB → TOOL FACTORY** regresa el slot a su sonido de fábrica.
 - **OTT:** el algoritmo del preset OTT de Ableton (el que copia el OTT de Xfer): 3 bandas Linkwitz-Riley de 24 dB/oct en
   88.3 Hz y 2.5 kHz, detección RMS, compresión hacia abajo (66.7:1 / ∞:1) y hacia arriba (1:4.17) por banda. DEPTH,
   TIME, UPWD, DOWNWD, IN, OUT, LOW/MID/HIGH, THRESH, SOLO, STYLE (OTT, SMOOTH, PUNCH, AGGR) y PLACE (PRE FX / POST FX).
@@ -425,19 +425,29 @@ DELAY + FLANGER → REVERB → OTT (POST) → SPACE (aire / pared / distancia) �
 
 ## Panel
 
-| Control | Función |
-| --- | --- |
-| Botones de página | sus módulos; presiona otra vez: perillas A/B…, luego el siguiente módulo del botón |
-| **SELECT** | página anterior / siguiente (las 21) |
-| **K1..K4** | parámetros · **SEL sostenido + girar** = lock/unlock |
-| **ALGORITHM / PRESETS** | onda del oscilador / slot de sample |
-| Teclas **F3..G5** | tocar (sostener = nota sostenida, monofónico, última nota gana, glide legato) · **OCT- / OCT+** octava |
-| **PLAY** | un C4 sostenido |
-| **REC** | ☢ HAPPY ACCIDENT (a veces enciende el resonador, DESTROY o el transient) · **SEL + REC** = UNDO |
-| **SAVE** | guardar sesión (con A y B, y el sample grabado) · **SEL + SAVE** = borrar todos los locks |
-| **SEL (toque)** | El pie de la pantalla dice qué hace en cada página. **01: cargar y tocar el asset** · 02: REC ARM / STOP · 03: un sonido nuevo del PRESET · 05: aplicar la herramienta · 15: tocar una pasada · 17: barrido RTPC · 18: grabar un gesto · 19: semilla nueva · 20: tocar el patrón · 21: BATCH (A, C) o FIRE TEST (B) / detener · las demás: aleatorizar el módulo (respeta locks) |
-| **SEL + OCT-** / **SEL + OCT+** | reset del módulo / siguiente tema · en la página 19, juego B: **guardar A / guardar B** |
-| **SEL + PLAY** | el slot a su sonido de fábrica |
+Una sola regla: **cada control solo hace su trabajo; con SEL sostenido hace su segundo trabajo, el mismo en todas las
+páginas**. Un toque de SEL es la acción de la página (el pie de pantalla dice cuál). Si sostienes SEL sin tocar nada,
+el pie muestra los segundos trabajos uno tras otro, y al soltar no pasa nada.
+
+| Control | Solo | Con SEL sostenido |
+| --- | --- | --- |
+| Botones de página | su paso del trabajo; otra vez: perillas A/B…, luego la siguiente página del botón | (lo mismo) |
+| **SELECT** | página anterior / siguiente (las 21) | juego de perillas A B C D de la página |
+| **K1..K4** | los parámetros de la página | lock / unlock de ese parámetro |
+| **ALGORITHM** | onda del oscilador | tema (EVA-01, 01 TEST, 02 PROD…) |
+| **PRESETS** | slot de sample | asset anterior / siguiente: se carga y suena (desde cualquier página) |
+| **PLAY** | un C4 sostenido | **STOP ALL**: detiene BATCH, FIRE TEST, PHYSICS, el barrido RTPC y toda nota |
+| **REC** | ☢ HAPPY ACCIDENT (en la familia de HA KIND) | **UNDO** |
+| **SAVE** | guardar sesión (con A y B, y el sample grabado) | borrar todos los locks |
+| **OCT− / OCT+** | octava | **RESET** / **RANDOMIZE** el módulo de la página (en ASSETS: un asset al azar) |
+| Teclas **F3..G5** | tocar (sostener = nota sostenida, monofónico, última nota gana, glide legato) | |
+| **SEL (toque)** | la acción de la página: **01** cargar y tocar el asset · **02** REC ARM / STOP · **03** un sonido nuevo del PRESET · **05** aplicar la herramienta · **15** tocar una pasada · **17** barrido RTPC · **18** grabar un gesto · **19** A: semilla nueva, B: guardar A, luego B · **20** tocar el patrón · **21** BATCH (A, C) o FIRE TEST (B) / detener · las demás: aleatorizar el módulo (respeta locks) | |
+
+Cambios de la 1.3: el tema pasó de SEL + OCT+ a **SEL + ALGORITHM**; SEL + OCT+ ahora aleatoriza el módulo (el par
+de SEL + OCT−, reset). Guardar A / B en VARIATION B pasó a **SEL** (A primero, luego B; con los dos, el más cercano a
+MORPH). Regresar el slot a su sonido de fábrica pasó de SEL + PLAY a **SAMPLE LAB → TOOL FACTORY**. Son nuevos SEL +
+SELECT, SEL + PRESETS y SEL + PLAY (stop all).
+
 | **MIDI in** | notas con velocity, pitch bend ±2, CC1 = MIX del LFO1, **CC11 = MORPH**, CC74 = FREQ del filtro, **CC16 / CC17 / CC18 = pad X / Y / tocar**, **CC19 = armar la grabación de gesto**, channel y poly pressure = aftertouch, CC123 = all notes off |
 | **SysEx** | `F0 7D 4E 37 cmd … F7`: samples desde `web/index.html` (HELLO, BEGIN slot largo, DATA μ-law en 7 bits, END guardar) y de vuelta (LEN: largo y nombre del slot activo; READ pos: 128 muestras de 16 bits) |
 
