@@ -2766,6 +2766,7 @@ static const theme_t THEMES[NTHEME] = {
 #define EV_MUT RGB(140, 145, 165)
 #define EV_INK RGB(0, 0, 0)
 #define TER_BASE 12                             /* Terminus 8x16: the baseline row */
+static const uint16_t EV_KC[4] = {EV_LIM, EV_GRN, EV_PUR, EV_TXT};   /* (the knobs' colours, EVA-01) */
 static uint32_t hot_k = 4u, hot_t;              /* the knob turned last, when (EVA: its cell lights up a moment) */
 #define C_TXT RGB(232, 236, 245)
 #define C_MUTE RGB(140, 145, 165)
@@ -3474,6 +3475,110 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     if (EVA) { if (lo == th->cyan) lo = EV_GRN; }
     fx_lo = lo; fx_hi = hi; fx_bg = bg;
 }
+/* ======================================================================== the hero value, the solids (v1.3)
+ * A knob just turned: its value takes the screen a moment, big, in thin drawn numerals, in the knob's colour, over the
+ * page dimmed (the number is the picture). Numerals drawn as strokes on a 6 x 10 grid (corners cut), not a font. */
+static const uint8_t HN_PTS[] = {   /* per glyph: strokes of points (x,y); 0xFF ends a stroke, 0xFE the glyph */
+    /* 0 */ 1,0, 5,0, 6,1, 6,9, 5,10, 1,10, 0,9, 0,1, 1,0, 0xFF, 0xFE,
+    /* 1 */ 1,2, 3,0, 3,10, 0xFF, 0xFE,
+    /* 2 */ 0,1, 1,0, 5,0, 6,1, 6,4, 0,10, 6,10, 0xFF, 0xFE,
+    /* 3 */ 0,1, 1,0, 5,0, 6,1, 6,4, 5,5, 2,5, 0xFF, 5,5, 6,6, 6,9, 5,10, 1,10, 0,9, 0xFF, 0xFE,
+    /* 4 */ 5,10, 5,0, 0,7, 6,7, 0xFF, 0xFE,
+    /* 5 */ 6,0, 0,0, 0,5, 5,5, 6,6, 6,9, 5,10, 1,10, 0,9, 0xFF, 0xFE,
+    /* 6 */ 5,0, 1,0, 0,1, 0,9, 1,10, 5,10, 6,9, 6,6, 5,5, 0,5, 0xFF, 0xFE,
+    /* 7 */ 0,0, 6,0, 2,10, 0xFF, 0xFE,
+    /* 8 */ 1,0, 5,0, 6,1, 6,4, 5,5, 1,5, 0,4, 0,1, 1,0, 0xFF, 1,5, 0,6, 0,9, 1,10, 5,10, 6,9, 6,6, 5,5, 0xFF, 0xFE,
+    /* 9 */ 6,5, 1,5, 0,4, 0,1, 1,0, 5,0, 6,1, 6,9, 5,10, 1,10, 0xFF, 0xFE,
+    /* - */ 1,5, 5,5, 0xFF, 0xFE,
+    /* + */ 1,5, 5,5, 0xFF, 3,3, 3,7, 0xFF, 0xFE,
+    /* . */ 1,9, 1,10, 2,10, 2,9, 1,9, 0xFF, 0xFE};
+static int32_t hn_glyph(char c) { return c >= '0' && c <= '9' ? c - '0' : c == '-' ? 10 : c == '+' ? 11 : c == '.' ? 12 : -1; }
+static int32_t hn_adv(char c, int32_t u) { return c == '.' ? u * 4 : u * 9; }
+static int32_t hn_width(const char *t, int32_t u) { int32_t w = 0; while (*t) w += hn_adv(*t++, u); return w; }
+static void hn_draw(int32_t x, int32_t y, const char *t, int32_t u, uint16_t c)   /* u: pixels a grid step (x4 Q2) */
+{
+    for (; *t; t++) {
+        int32_t g = hn_glyph(*t), i = 0, px = -1, py = -1;
+        while (g > 0) { if (HN_PTS[i++] == 0xFEu) g--; }
+        if (g == 0) for (; HN_PTS[i] != 0xFEu; i++) {
+            if (HN_PTS[i] == 0xFFu) { px = -1; continue; }
+            {
+                int32_t qx = x + HN_PTS[i] * u / 4, qy = y + HN_PTS[i + 1] * u / 4;
+                if (px >= 0) { cv_line(px, py, qx, qy, c); cv_line(px + 1, py, qx + 1, qy, c); }   /* (two pixels: crisp on the FM-1) */
+                px = qx; py = qy; i++;
+            }
+        }
+        x += hn_adv(*t, u) / 4;
+    }
+}
+static void vis_dim(int32_t keep)               /* the canvas toward black: keep/256 of each colour */
+{
+    uint32_t i, n = (uint32_t)cv_w * cv_h;
+    for (i = 0; i < n; i++) {
+        uint16_t v = swap16(cv_px[i]);
+        int32_t r = (v >> 11) * keep >> 8, g = (v >> 5 & 63) * keep >> 8, b = (v & 31) * keep >> 8;
+        cv_px[i] = swap16((uint16_t)(r << 11 | g << 5 | b));
+    }
+}
+static void hero_value(const theme_t *th)       /* the knob turned last: its name, its value big (1.2 s) */
+{
+    uint32_t p;
+    char t[24], num[12], unit[12];
+    int32_t i = 0, j = 0, u = 18, w, x;
+    uint16_t c;
+    if (hot_k >= 4u || fm1_ms - hot_t >= 1200u) return;
+    p = PAGE_P[page][sub][hot_k];
+    if (p >= NP) return;
+    c = EVA ? EV_KC[hot_k] : hot_k == 0u ? th->acc : hot_k == 1u ? th->cyan : hot_k == 2u ? th->mut : C_TXT;
+    if (lock_get(p)) c = EVA ? EV_ORG : th->haz;
+    fmt_param(p, P[p], t);
+    while (t[i] && hn_glyph(t[i]) >= 0 && i < 11) { num[i] = t[i]; i++; }
+    num[i] = 0;
+    while (t[i] && j < 11) unit[j++] = t[i++];
+    unit[j] = 0;
+    vis_dim(56);                                /* (the plot a shadow under it) */
+    cv_rect(2, 0, 236, 17, EVA ? EV_BG : RGB(5, 5, 7));   /* (the name alone on the top line) */
+    cv_text_fit(8, 1, 224, PD[p].name, c, 1);
+    if (!num[0] || (hn_glyph(num[0]) > 9 && !num[1]) || unit[0] == ' ') {   /* a word (a list, a target): big letters */
+        cv_text_fit(8, 44, 224, t, c, 1);
+        return;
+    }
+    while (u > 8 && hn_width(num, u) / 4 + text_w(&FONT_S, unit) + 4 > 220) u--;
+    w = hn_width(num, u) / 4 + (unit[0] ? text_w(&FONT_S, unit) + 4 : 0);
+    x = (240 - w) / 2;
+    hn_draw(x, 30, num, u, c);
+    if (unit[0]) cv_text(x + hn_width(num, u) / 4 + 2, 30 + 10 * u / 4 - 16 + 2, &FONT_S, unit, c);
+}
+static void solid(int32_t kind, int32_t cx, int32_t base, int32_t h, uint16_t c, uint16_t back)   /* wireframe: 0 cylinder,
+                                                   1 prism, 2 pyramid; h tall, standing on base, the hidden edges dim */
+{
+    int32_t rx = 16, ry = 5, k, top = base - h;
+    if (h < 2) h = 2;
+    if (kind == 0) {
+        int32_t px = 0, py = 0, qx = 0, qy = 0;
+        for (k = 0; k <= 24; k++) {
+            uint32_t a = (uint32_t)k * (0xFFFFFFFFu / 24u);
+            int32_t x = cx + (rx * isin(a + 0x40000000u) >> 15), y = (ry * isin(a) >> 15);
+            if (k) { cv_line(px, top + py, x, top + y, c); cv_line(qx, base + qy, x, base + y, y < 0 || py < 0 ? back : c); }
+            px = x; py = y; qx = x; qy = y;
+        }
+        cv_line(cx - rx, top, cx - rx, base, c); cv_line(cx + rx, top, cx + rx, base, c);
+    } else if (kind == 1) {
+        int32_t dx = 7, dy = 5, w = 12;
+        cv_frame(cx - w - dx / 2, top + dy, 2 * w, h - dy + 1, c);
+        cv_line(cx - w - dx / 2, top + dy, cx - w + dx / 2, top, c); cv_line(cx + w - dx / 2, top + dy, cx + w + dx / 2, top, c);
+        cv_line(cx - w + dx / 2, top, cx + w + dx / 2, top, c);
+        cv_line(cx + w + dx / 2, top, cx + w + dx / 2, base - dy, c); cv_line(cx + w - dx / 2, base, cx + w + dx / 2, base - dy, c);
+        cv_line(cx - w + dx / 2, top, cx - w + dx / 2, base - dy, back); cv_line(cx - w + dx / 2, base - dy, cx + w + dx / 2, base - dy, back);
+        cv_line(cx - w - dx / 2, base, cx - w + dx / 2, base - dy, back);
+    } else {
+        int32_t w = 15, dy = 5;
+        cv_line(cx - w, base, cx + w - 6, base, c); cv_line(cx + w - 6, base, cx + w, base - dy, c);
+        cv_line(cx - w, base, cx - w + 6, base - dy, back); cv_line(cx - w + 6, base - dy, cx + w, base - dy, back);
+        cv_line(cx, top, cx - w, base, c); cv_line(cx, top, cx + w - 6, base, c); cv_line(cx, top, cx + w, base - dy, c);
+        cv_line(cx, top, cx - w + 6, base - dy, back);
+    }
+}
 static void draw_vis(void)
 {
     const theme_t *th = &TH;
@@ -3612,18 +3717,19 @@ static void draw_vis(void)
         cv_text_fit(8, 0, 110, s, on ? th->acc : C_MUTE, 0);
         fmt_hz(s, T_HZ[T_OXLO_LI[P[P_OXLO]]]); cat(s, "|"); fmt_hz(t, T_HZ[T_OXHI_LI[P[P_OXHI]]]); cat(s, t);
         cv_text_fit(110, 0, 124, s, th->cyan, 2);
-        for (k = 0; k < 3; k++) {
-            int32_t y = 22 + (2 - k) * 29, gd = on ? tm_gd[k] : 0, w = clampi(gd * 90 / (24 * 256), -90, 90);
-            int32_t lv = clampi((tm_benv[k] + 60 * 256) * 180 / (60 * 256), 0, 180);
+        for (k = 0; k < 3; k++) {               /* a solid a band (LOW a cylinder, MID a prism, HIGH a pyramid): as tall
+                                                   as the band is loud; the gain the compressor gives under it */
+            static const char *const BN[3] = {"LOW", "MID", "HIGH"};
+            int32_t cx = 46 + k * 74, gd = on ? tm_gd[k] : 0, lv = clampi((tm_benv[k] + 60 * 256) * 56 / (60 * 256), 2, 56);
             int32_t muted = P[P_OSOLO] && P[P_OSOLO] != k + 1;
-            cv_text(8, y + 2, &FONT_S, B[k], muted ? C_DK : C_TXT);
-            cv_rect(26, y, 180, 22, RGB(16, 16, 20));
-            if (on) cv_rect(26, y, lv, 22, RGB(30, 30, 38));
-            if (!muted) { if (w >= 0) cv_rect(116, y + 4, w, 14, th->cyan); else cv_rect(116 + w, y + 4, -w, 14, th->acc); }
-            cv_rect(116, y - 1, 1, 24, C_TXT);
+            uint16_t c = muted ? C_DK : k == 0 ? th->cyan : k == 1 ? th->acc : C_TXT;
+            solid(k, cx, 78, lv + 4, c, mix565(RGB(0, 0, 0), c, 90));
+            cv_text_fit(cx - 34, 82, 68, BN[k], c, 1);
             if (absi(gd) >= 10 * 256) fmt_num(s, gd / 256, 1); else fmt_dec(s, gd * 10 / 256, 10u, 1u, 1);
-            cv_text_fit(206, y + 2, 32, muted ? "SOLO" : s, C_MUTE, 2);
+            cat(s, "dB");
+            cv_text_fit(cx - 34, 96, 68, muted ? "SOLO" : s, muted ? C_DK : C_MUTE, 1);
         }
+        (void)B;
         break;
     }
     case PG_DLY: {                              /* the repeats over 2 s, the flanger's comb */
@@ -3651,15 +3757,15 @@ static void draw_vis(void)
         uint32_t mid = T_RDEC_MS[P[P_RDEC]], tt[3];
         tt[0] = mid * (uint32_t)P[P_RLOW] / 100u; tt[1] = mid; tt[2] = mid * (uint32_t)P[P_RHIGH] / 100u;
         cv_text(8, 0, &FONT_S, "FDN x4 // 3-BAND", th->acc);
-        for (k = 0; k < 3; k++) {
-            int32_t y = 22 + k * 24, w = clampi((ilog2_q8(tt[k]) - ilog2_q8(100u)) * 150 / (ilog2_q8(40000u) - ilog2_q8(100u)), 2, 150);
-            cv_text(8, y + 1, &FONT_S, B[k], C_TXT);
-            cv_rect(52, y + 3, 150, 14, RGB(16, 16, 20));
-            cv_rect(52, y + 3, w, 14, k == 1 ? th->acc : th->cyan);
-            fmt_ms(s, tt[k]); cv_text_fit(204, y + 1, 32, s, C_MUTE, 2);
+        for (k = 0; k < 3; k++) {               /* a solid a band, as tall as its decay lasts (log, 0.1 .. 40 s) */
+            int32_t cx = 46 + k * 74, h = clampi((ilog2_q8(tt[k]) - ilog2_q8(100u)) * 58 / (ilog2_q8(40000u) - ilog2_q8(100u)), 3, 58);
+            uint16_t c = k == 1 ? th->acc : th->cyan;
+            solid(k, cx, 76, h + 4, c, mix565(RGB(0, 0, 0), c, 90));
+            cv_text_fit(cx - 34, 80, 68, B[k], c, 1);
+            fmt_ms(s, tt[k]); cv_text_fit(cx - 34, 94, 68, s, C_MUTE, 1);
         }
         k = meter_px(tm_rv, 220);
-        cv_rect(8, 98, 224, 6, C_DK); cv_rect(8, 98, k, 6, th->cyan);
+        cv_rect(8, 110, 224, 1, C_DK); cv_rect(8, 110, k, 1, th->cyan);
         break;
     }
     case PG_LFO: {                              /* the two LFOs, their targets */
@@ -4067,6 +4173,7 @@ static void draw_vis(void)
     }
     }
     fx_composite();                             /* the motion, in what the plot leaves empty */
+    hero_value(th);                             /* (a knob just turned: its value, big) */
     cv_blit(0, 40);
 }
 static uint32_t knob_ph(int32_t norm) { return ((uint32_t)norm + 225u) * 11930465u; }   /* degrees -> phase */
@@ -4090,7 +4197,6 @@ static void glyph_undo(int32_t x, int32_t y, uint16_t c)   /* an arrow turning b
 /* EVA-01's knob row: four cells, each its knob's colour (K1 lime, K2 green, K3 purple, K4 bone). The knob turned last
  * fills its cell for a moment, black on colour. Top left the knob (an arc of dots; a list: its positions), top right
  * K1..K4 and a bar (orange: locked, else who modulates it), the name, the value big (numbers) or medium (words) */
-static const uint16_t EV_KC[4] = {EV_LIM, EV_GRN, EV_PUR, EV_TXT};
 static int eva_numlike(uint32_t p, const char *s)   /* a number with a unit: digits big, the unit small */
 {
     uint32_t n = 0;

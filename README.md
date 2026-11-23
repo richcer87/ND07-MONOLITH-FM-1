@@ -110,6 +110,11 @@ respirando despacio.
 | PHYSICS | una pelota por golpe que cae y rebota |
 | BATCH | una cascada (waterfall) del espectro que se aleja |
 
+- **El valor protagonista** (idea tomada del lenguaje de las pantallas del OP-1, con formas propias): al girar una
+  perilla, su valor ocupa la pantalla 1.2 s, grande, con numerales de trazo fino dibujados (no una fuente), en el color
+  de esa perilla (naranja si tiene lock); la gráfica queda como sombra debajo y el nombre arriba.
+- **OTT y REVERB como sólidos de alambre:** LOW un cilindro, MID un prisma, HIGH una pirámide. En OTT miden lo fuerte
+  que suena cada banda, con la ganancia del compresor debajo; en REVERB, cuánto dura cada banda.
 - Costo: la pantalla se redibuja a 25 cuadros por segundo mientras algo suena y a 15 en reposo. El audio solo copia
   sus muestras; todo lo demás corre en el loop principal, fuera del audio. En el host cuesta ~0.1 ms por cuadro; en el
   FM-1 hay que verlo en el CPU del pie de pantalla.
