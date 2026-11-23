@@ -3258,7 +3258,7 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
         fx_feedback(0, 256, 0, 0, 150, FXW / 2, FXH / 2);
         fx_cx0 = 176 * 2; fx_cy0 = 0; fx_cx1 = 236 * 2; fx_cy1 = 14 * 2;
         for (k = 0; k < 18; k++) {
-            int32_t h = live ? fx_band[k + 3] * 22 / 255 : (int32_t)((uint32_t)(isin(t * 0x00040000u + (uint32_t)k * 0x0A000000u) + 32768) >> 13), x = (180 + k * 3) * 2, j;
+            int32_t h = live ? fx_band[k + 3] * 22 / 255 : (int32_t)((uint32_t)(isin(t * (1u << 18) + (uint32_t)k * 0x0A000000u) + 32768) >> 13), x = (180 + k * 3) * 2, j;
             for (j = 0; j <= h; j += 4) fx_dot(x, 26 - j, 80);
         }
         lo = th->mut; hi = th->acc; break;
@@ -3293,7 +3293,7 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
         } else fx_dot(cx + (int32_t)(((t >> 7) % 24u) * 16u) - 192, cy + ((int32_t)(br >> 4) & ~3) - 32, 120);
         lo = th->mut; break;
     case PG_GRN:                                /* the grains, a vortex: each one where it reads, drawn inward */
-        fx_feedback(0x02000000u, 250, 0, 0, 222, FXW / 2, FXH / 2);
+        fx_feedback((1u << 25), 250, 0, 0, 222, FXW / 2, FXH / 2);
         for (k = 0; k < 16; k++) if (tm_gpos[k] && P[P_GMODE]) {
             int32_t x, y;
             fx_polar(cx, cy, 30 + (int32_t)tm_gpos[k] * 70 / 32768, (uint32_t)k * 0x10000000u + fx_ang, &x, &y);
