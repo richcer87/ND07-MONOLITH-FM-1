@@ -37,6 +37,7 @@ run "ND-07: MOD ENV, the HAPPY ACCIDENT's recipes" sh tests/run_host.sh tests/sc
 run "ND-07: the pad's GESTURE recorded and replayed" sh tests/run_host.sh tests/scripts/gesture.txt
 run "ND-07: VOWEL + SHIFT: shift up and down, the feedback spiral, U O A E I" sh tests/run_host.sh tests/scripts/vox.txt
 run "ND-07: the slot back out as a WAV (SysEx LEN / READ)" sh tests/run_host.sh tests/scripts/export.txt
+run "ND-07: the controls: SEL + a button is its second job on every page (stop all, undo, reset, randomize, theme, asset, knob set, store A/B, LAB FACTORY)" sh tests/run_host.sh tests/scripts/controls.txt
 run "ND-07: 15 ASSETS: pick, SEL loads and plays, HAPPY ACCIDENT in the family, a PHYSICS asset" sh tests/run_host.sh tests/scripts/assets.txt
 run "ND-07 EVA-01 theme: every page and knob set on screen" sh tests/run_host.sh tests/scripts/screens.txt
 run "ND-07 EVA-01 theme: a knob just turned, a lock, HAPPY ACCIDENT, modulated" sh tests/run_host.sh tests/scripts/eva_states.txt
@@ -87,6 +88,7 @@ done
 [ "$found" = 1 ] || echo "(no SMK-37 packages in build/: BOARD=smk37 sh build.sh first)"
 
 run "installer (tools/fm1_install.py): FM-1 and SMK-37, install and the update-mode resume check the model" python3 tests/install_test.py
+run "install page (web/install.html, current with its source): the web installer against a simulated FM-1" sh -c "python3 tools/make_install_page.py --check && node tests/web_install_test.mjs"
 
 [ "$fail" = 0 ] && echo "ALL TESTS PASSED" || echo "SOME TESTS FAILED"
 exit "$fail"

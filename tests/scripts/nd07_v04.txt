@@ -1,3 +1,4 @@
+1 btn 8
 # ND-07 // MONOLITH on the host (v0.8 pages): resonator, transient, DESTROY, MORPH, BATCH (tests/run_host.sh tests/scripts/nd07_v04.txt)
 # keys: bit k = key k (0 = F3, 7 = C4). btn: 0 OCT- 1 OCT+ 2 FX 3 SEL 4 ENV 5 LFO 6 EDIT 7 GLO 8 HOME 9 SAVE 10 ARP 11 SEQ 12 PLAY 13 REC
 # enc: 0 SELECT 1 ALGORITHM 2..5 K1..K4 6 PRESETS
@@ -10,9 +11,7 @@
 1200 enc 4 -70
 1300 enc 1 4
 # 03 RESONATOR: SELECT three pages back (06 > 05 > 04 > 03)
-1400 enc 0 -1
-1450 enc 0 -1
-1500 enc 0 -1
+1400 btn 6
 1600 enc 5 90
 1700 enc 4 12
 1800 keys 0x1
@@ -28,10 +27,7 @@
 3050 keys 0
 3300 shot
 # 07 TRANSIENT: ENV x4 (06 A, B, C, 07)
-3700 btn 4
-3730 btn 4
-3760 btn 4
-3800 btn 4
+3700 enc 0 -1
 3900 enc 2 50
 4000 enc 3 -30
 4100 keys 0x80
@@ -39,6 +35,7 @@
 4250 shot
 # 08 DESTROY: EDIT
 4800 btn 6
+4801 enc 0 1
 4900 enc 2 14
 5000 enc 3 1
 5010 enc 3 1
@@ -47,24 +44,21 @@
 5300 keys 0x80
 5400 shot
 5700 keys 0
-# 14 VARIATION + MORPH (SEQ): VARY 60 %; set B: STORE A (SEL + OCT-), HAPPY ACCIDENT, STORE B (SEL + OCT+), MORPH 50 %
+# 14 VARIATION + MORPH (SEQ): VARY 60 %; set B: STORE A (SEL), HAPPY ACCIDENT, STORE B (SEL), MORPH 50 %
 5900 btn 11
-5905 btn 11
 5950 enc 2 20
 6000 btn 11
-6100 btndown 3
-6150 btn 0
-6200 btnup 3
+6150 btn 3
 6300 btn 13
-6600 btndown 3
-6650 btn 1
-6700 btnup 3
+6650 btn 3
 6800 enc 2 17
 6900 keys 0x80
 7000 keys 0
 7200 shot
 # 15 BATCH x4 (SEQ, COUNT down, SEL tap), SPACE AUTO: each hit waits for the last one's tail to die
-7400 btn 11
+7400 btn 8
+7401 enc 0 -1
+7402 enc 0 -1
 7450 enc 3 -1
 7700 btn 3
 9000 shot

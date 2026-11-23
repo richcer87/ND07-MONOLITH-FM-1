@@ -1,3 +1,4 @@
+1 btn 8
 # MIDI in: USB, the TRS jack, a clock at 96 BPM with START / STOP, the channel (PRESETS) filtering
 200 midi 0x90 60 100
 600 midi 0x80 60 0

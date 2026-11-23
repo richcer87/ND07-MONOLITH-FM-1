@@ -1,3 +1,4 @@
+1 btn 8
 # SMK-37: velocity on the keys, a pad, an outer key, the pitch wheel bent up and back
 200 vel 40
 300 keys 0x80

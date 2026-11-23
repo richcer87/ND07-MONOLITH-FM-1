@@ -1,7 +1,7 @@
+1 btn 8
 # 16 VARIATION and 17 BATCH + FIRE TEST (SEQ button; 15 ASSETS comes first): the keys as the seed's variations, then the fire test
 # btn: 3 SEL, 11 SEQ; enc: 2..5 = K1..K4
 100 btn 11
-105 btn 11
 200 enc 2 40
 300 enc 4 1
 400 keys 1
@@ -9,17 +9,15 @@
 700 keys 16
 900 keys 0
 1000 shot
-1200 btn 11
-1300 btn 11
-1400 btn 11
+1200 btn 8
+1201 enc 0 -1
+1202 enc 0 -1
+1203 btn 11
 1500 btn 3
 4000 shot
 4200 btn 3
-4400 btn 11
-4430 btn 11
-4460 btn 11
-4500 btn 11
-4530 btn 11
+4400 btn 8
+4401 btn 11
 4600 btn 3
 9000 shot
 12000 end

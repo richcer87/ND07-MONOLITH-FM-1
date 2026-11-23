@@ -1,49 +1,55 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* ND-07 // MONOLITH for the M-VAVE FM-1 (Noise Dungeon) - v0.6: a sampler and synth for game-audio SFX design.
- * The REAPER SFX workstation (Lua ReaImGui + JSFX) rebuilt for the FM-1 in integer C (JieLi AC79: no FPU, no libgcc).
+/* ND-07 // MONOLITH for the M-VAVE FM-1: a sampler and synth for game-audio sound effects.
+ * The REAPER workstation (Lua ReaImGui + JSFX) rebuilt for the FM-1 in integer C (JieLi AC79: no FPU, no libgcc).
  *
- *   01 OSC & SAMPLE      an oscillator (SINE TRI SAW SQUARE PULSE SUPERSAW NOISE + SUB-SAW FORMANT METAL FM PAD SCAN,
- *                        PolyBLEP) and an 8-slot sample bank (factory sounds in flash; record your own into a slot by
- *                        resampling the FM-1's output, kept in flash); OSC only, SAMPLE only, or MIX with a blend
- *   02 RESONATOR         6-mode modal bank (METAL GLASS WOOD STRING BELL DRUM TUBE): the source becomes a struck material
- *   03 AMP ENVELOPE      ADSR on a mono voice (held keys, last-note priority, legato glide), velocity, pitch, out
- *   04 TRANSIENT         transient shaper: ATTACK and SUSTAIN boost / cut (3 envelope followers), TIME, OUT
- *   05 RES MOD FILTER    ZDF SVF 12/24 dB, LP/BP/HP/NOTCH, mod by env follower / LFO / S&H / the amp envelope
- *   06 DESTROY           drive into SOFT / HARD / FOLD / RECTIFY, bit crusher, sample-rate reducer, ring mod, tone, mix
- *   07 GRAIN ENGINE      grain stream on the sample: position, size, density, spray, reverse, freeze
- *   08 OTT MULTIBAND     Ableton's OTT preset / Xfer OTT: LR4 crossovers (88.3 Hz, 2.5 kHz), RMS, 66.7:1 / inf:1 down and
- *                        1:4.17 up per band; DEPTH TIME UPWD DOWNWD IN OUT, band gains, THRESH, SOLO, PRE or POST the FX
- *   09 DELAY + FLANGER   1 s delay (smoothed time: tape glides) and a flanger, four routings
- *   10 MULTIBAND REVERB  predelay, diffusion, a 4-line FDN whose LOW / MID / HIGH bands decay separately
- *   11 LFO x2            shape, rate, mix and a target: any parameter, the other LFO and MORPH included
- *   12 MORPH + BATCH     two stored patches A and B and a MORPH knob between them (locks stay put); VARY: every note a
- *                        little different; BATCH: 4..16 hits in a row with silence between, for one take in REAPER
- *   13 CHAOS PAD + KEYS  an XY pad over MIDI (CC16 X, CC17 Y, CC18 touch: web/pad.html on a phone, or any XY app), each
- *                        axis on any parameter; key velocity and aftertouch from the FM-1's keys (beta, OFF by default)
- *   14 CHIP OSC          8-bit console voices (NES-style pulse 12.5 / 25 / 50 / 75 %, 32-step triangle, LFSR noise long /
- *                        93-step), and the console's 60 Hz frame on any source: pitch SWEEP, ARP, 16-step volume;
- *                        SEL makes a new sound of the PRESET kind (COIN, JUMP, LASER, HIT, POWERUP, EXPLODE, BLIP), sfxr-style
- *   + HAPPY ACCIDENT, parameter locks, 16-step undo, 5 themes (EVA-01 by default), the session in flash.
- *   The chain (mono): SOURCE (osc / sample / grains) x ENV > RESONATOR > TRANSIENT > DESTROY > FILTER > OTT PRE > DLY+FLG >
- *   REVERB > OTT POST > out. Modules at rest cost nothing; after ~1 s of silence the whole chain sleeps.
- *   It runs in 64-sample blocks, module by module; the heavy stages run from RAM (.ram_text) and call nothing.
+ * 22 pages, in the order of the work; the eight buttons each hold one step of it:
+ *   HOME  01 ASSETS           18 starting points (EXPLODE ... ENGINE): a whole patch, loaded and played
+ *         02 OSC & SAMPLE     15 waves (PolyBLEP, CHIP voices, SHEPARD) and 8 sample slots; OSC, SAMPLE or a blend;
+ *                             loop / sustain points, up to 3 layered voices; record your own into a slot
+ *         03 CHIP OSC         NES-style pulse, triangle and LFSR noise; the 60 Hz frame: SWEEP, ARP, 16-step volume
+ *   ARP   04 GRAIN ENGINE     grains on the sample: position, size, density, spray, reverse, freeze
+ *         05 SAMPLE LAB       reverse, crop, fades, half / double speed, normalize, revert, factory sound
+ *   ENV   06 ENVELOPES        ADSR, glide, velocity, pitch, out; a modulation envelope to any target
+ *         07 TRANSIENT        attack and sustain boost / cut
+ *   EDIT  08 RESONATOR        6 modes: METAL GLASS WOOD STRING BELL DRUM TUBE
+ *         09 DESTROY          drive (SOFT HARD FOLD RECTIFY), bits, rate, ring mod, tone
+ *         10 VOWEL + SHIFT    formants U O A E I, a frequency shifter with a feedback spiral, growl
+ *         11 RES MOD FILTER   ZDF SVF 12 / 24 dB, LP BP HP NOTCH, moved by envelope, LFO, S&H or the amp envelope
+ *   GLO   12 OTT MULTIBAND    three-band up / down compression (the OTT preset), before or after the effects
+ *   FX    13 DELAY + FLANGER  1 s delay and a flanger, four routings
+ *         14 MULTIBAND REVERB a 4-line FDN with separate LOW / MID / HIGH decay
+ *         15 SPACE + MOTION   distance, occlusion, a pass-by with Doppler
+ *   LFO   16 LFO 1 + 2        shape, rate, mix and any target
+ *         17 RTPC             one game value swept or set by hand, on three targets, with a curve
+ *         18 CHAOS PAD + KEYS an XY pad over MIDI, key velocity and aftertouch, a recorded gesture
+ *   SEQ   19 VARIATION + MORPH a seed of variations on the keys; two patches and a MORPH between them
+ *         20 PHYSICS TRIGGER  one key, many hits: BOUNCE DEBRIS ROLL STUTTER SCATTER
+ *         21 BATCH + FIRE TEST a run of varied hits to record, or fired as a game would, level matched
+ *         22 SOUND CHIPS      the result through a console's chip: YM2149, YM2612, S-DSP, SCSP, DMG
+ *   Also: HAPPY ACCIDENT, parameter locks, 16 undo steps, 5 themes (EVA-01 by default), the session in flash.
  *
- * Panel:
- *   HOME ENV EDIT ARP SEQ FX GLO LFO   the modules; press again: the next set of knobs (A/B/C/D), then the button's
- *                                     next module (HOME: 01 02 14, ENV: 03 04, EDIT: 05 06, LFO: 11 12 13)
- *   SELECT                            previous / next page
- *   K1..K4                            the page's parameters (hold SEL + turn: lock / unlock)
- *   ALGORITHM / PRESETS               oscillator wave / sample slot
- *   keys F3..G5                       play (held = gate); OCT- / OCT+ the octave. PLAY: a held C4
- *   REC                               HAPPY ACCIDENT            SEL + REC   UNDO
- *   SAVE                              the session (and a recorded sample) into flash      SEL + SAVE   clear all locks
- *   SEL tap                           the page's action: 01 REC ARM / STOP, 12 BATCH start / stop, the rest randomize
- *   SEL + OCT- / SEL + OCT+           reset the module / next theme (on 12: STORE A / STORE B)
- *   SEL + PLAY                        the slot back to its factory sound
- *   MIDI in                           notes (velocity), pitch bend +-2, CC1 LFO1 mix, CC11 MORPH, CC74 filter freq,
- *                                     CC16 / 17 / 18 the pad's X / Y / touch, channel and key pressure (aftertouch)
- *  * The engine reads every parameter in Q8, glided over ~6 ms (S8): knob turns and LFOs move without steps.
- * Integer only: no float, no 64-bit division (docs/RULES.md). Tables: tools/gen_nd07_tables.py; samples: tools/gen_samples.py */
+ * The chain (mono): SOURCE x ENV > RESONATOR > TRANSIENT > DESTROY > VOWEL + SHIFT > FILTER > OTT (pre) > DELAY +
+ * FLANGER > REVERB > OTT (post) > SOUND CHIPS > SPACE > limiter > out. A module at rest costs nothing; after about a
+ * second of silence the whole chain sleeps. It runs in 64-sample blocks; the heavy stages run from RAM (.ram_text)
+ * and call nothing.
+ *
+ * The panel follows one rule: a control alone does its job; with SEL held it does its second job, the same on
+ * every page.
+ *   HOME ARP ENV EDIT GLO FX LFO SEQ  a step of the work; again: the next knob set (A B C D), then the next page
+ *   SELECT       previous / next page              SEL + SELECT      the knob set
+ *   K1..K4       the page's parameters             SEL + K           lock / unlock
+ *   ALGORITHM    oscillator wave                   SEL + ALGORITHM   the theme
+ *   PRESETS      sample slot                       SEL + PRESETS     the next asset, loaded and played
+ *   PLAY         a held C4                         SEL + PLAY        stop everything
+ *   REC          HAPPY ACCIDENT                    SEL + REC         undo
+ *   SAVE         the session into flash            SEL + SAVE        clear all locks
+ *   OCT- / OCT+  the octave                        SEL + OCT- / +    reset / randomize this page
+ *   SEL tap      the page's own action (the footer names it); SEL held: the second jobs, one by one, on the footer
+ *   MIDI in      notes with velocity, pitch bend +-2, CC1 LFO 1 mix, CC11 MORPH, CC74 filter, CC16/17/18 the pad,
+ *                channel and key pressure
+ *
+ * Every parameter reaches the engine in Q8, glided over ~6 ms (S8), so knobs and LFOs move without steps.
+ * Integer only, no 64-bit division (docs/RULES.md). Tables: tools/gen_nd07_tables.py; samples: tools/gen_samples.py */
 
 #define APP_NAME "ND-07"
 #define STORE_MAGIC 0x3730444Eu                 /* "ND07" */
@@ -107,6 +113,8 @@ static int16_t rv_ap2[256] __attribute__((section(".pool")));
 static int16_t smp16[SMP_MAX] __attribute__((section(".pool")));   /* the active slot when it holds a recording: 16-bit */
 #define SH_N 4096u                              /* 09 SHIFT's feedback line: 93 ms */
 static int16_t sh_buf[SH_N] __attribute__((section(".pool")));
+#define EM_N 16384u                             /* 22 SOUND CHIPS' echo line: 371 ms */
+static int16_t em_buf[EM_N] __attribute__((section(".pool")));
 static smprec_t rec __attribute__((section(".pool")));       /* the recorder, and the flash staging (8-bit mu-law) */
 
 /* ======================================================================== parameters */
@@ -133,11 +141,13 @@ enum { P_MODE, P_WAVE, P_SLOT, P_BLEND, P_TUNE, P_COLOR, P_STR, P_SLOOP,
        P_PMODE, P_PHITS, P_PTIME, P_PFALL, P_PPIT, P_PJIT,
        P_STOOL, P_SAMT, P_RECIPE, P_GEST,
        P_VOWEL, P_VSIZE, P_VRES, P_VMIX, P_SHIFT, P_SFB, P_STIME, P_SMIX, P_GROWL, P_GRATE,
-       P_THEME, P_ASSET, NP };
-#define NTGT_N (NP - 48)                        /* the mod targets: all but the slot, the theme, the asset, the target pickers, the PAD page */
+       P_THEME, P_ASSET,
+       P_EMU, P_ERATE, P_EGRIT, P_EMIX, P_EECHO, P_ETIME, P_ETONE, NP };
+#define NP_V13 (P_ASSET + 1)                    /* the parameters of a v1.2 / v1.3 session */
+#define NTGT_N (NP_V13 - 48)                    /* the mod targets: all but the slot, the theme, the asset, the target pickers, the PAD page, SOUND CHIPS */
 enum { F_VOWEL, F_SHZ, F_CENT, F_SEC10, F_RPM, F_INT, F_PCT, F_X100, F_ENUM, F_ATT, F_DEC, F_REL, F_GLIDE, F_RFHZ, F_RATE, F_DBH, F_XLO, F_XHI, F_PM, F_MS, F_DENS,
        F_SPR, F_SLOT, F_SEMI, F_BLEND, F_DTIME, F_FRATE, F_LRATE, F_RDEC, F_TGT, F_OXLO, F_OXHI, F_TSC,
-       F_ZDEC, F_BITS, F_XSR, F_XRHZ, F_BSPC };
+       F_ZDEC, F_BITS, F_XSR, F_XRHZ, F_BSPC, F_ERATE, F_ETIME, F_ETONE };
 typedef struct { const char *name; int16_t lo, hi, def; uint8_t step, fmt; const char *const *en; } pdesc_t;
 static const char *const E_ONOFF[] = {"OFF", "ON"};
 static const char *const E_MODE[] = {"OSC", "SAMPLE", "MIX"};
@@ -165,7 +175,7 @@ static const char *const E_XSHP[] = {"SOFT", "HARD", "FOLD", "RECTIFY"};
 static const char *const E_BMODE[] = {"RANDOM", "A>B", "A>B+RND"};
 static const char *const E_PADM[] = {"SPRING", "LATCH", "PLAY"};
 static const char *const E_PMODE[] = {"OFF", "BOUNCE", "DEBRIS", "ROLL", "STUTTER", "SCATTER"};
-static const char *const E_STOOL[] = {"REVERSE", "CROP", "FADE IN", "FADEOUT", "1/2 SPD", "2x SPD", "MAX LVL", "REVERT"};
+static const char *const E_STOOL[] = {"REVERSE", "CROP", "FADE IN", "FADEOUT", "1/2 SPD", "2x SPD", "MAX LVL", "REVERT", "FACTORY"};
 static const char *const E_RECIPE[] = {"FREE", "IMPACT", "WHOOSH", "UI", "MAGIC", "MONSTER", "WEAPON", "AMBIENT"};
 static const char *const E_GEST[] = {"OFF", "1-SHOT", "LOOP"};
 static const char *const E_KVEL[] = {"OFF", "VEL", "VEL+AT"};
@@ -176,6 +186,9 @@ static const char *const E_CSTEP[] = {"OFF", "60 Hz", "30 Hz", "15 Hz"};
 static const char *const E_CNOISE[] = {"LONG", "SHORT 93"};
 static const char *const E_CPRE[] = {"COIN", "JUMP", "LASER", "HIT", "POWERUP", "EXPLODE", "BLIP"};
 static const char *const E_BCNT[] = {"4", "8", "12", "16"};
+/* 22 SOUND CHIPS: the sound printed through a console's chip; each with the machines it sounds like */
+static const char *const E_EMU[] = {"OFF", "YM2149", "YM2612", "S-DSP", "SCSP", "DMG"};
+static const char *const EMU_HOST[] = {"", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY"};
 /* 15 ASSETS: base sounds for game audio, three to a row (the screen's grid): hits, weapons, motion, UI, rewards, beings */
 static const char *const E_ASSET[] = {"EXPLODE", "IMPACT", "HIT", "DEBRIS", "GUNSHOT", "LASER", "ZAP", "WHOOSH", "RISER",
                                       "UI OK", "UI ERR", "UI TICK", "PICKUP", "POWERUP", "MAGIC", "MONSTER", "ALARM", "ENGINE"};
@@ -195,10 +208,10 @@ static const pdesc_t PD[NP] = {
     [P_RFSRC] = {"MOD SRC", 0, 3, 3, 1, F_ENUM, E_RFSRC},  [P_RFDRV] = {"ANALOG", 0, 100, 20, 1, F_PCT, 0},
     [P_GPOS] = {"POS", 5, 90, 30, 1, F_PCT, 0},            [P_GSIZE] = {"SIZE", 20, 220, 80, 2, F_MS, 0},
     [P_GDENS] = {"DENS", 5, 42, 18, 1, F_DENS, 0},         [P_GSPRAY] = {"SPRAY", 0, 50, 12, 1, F_SPR, 0},
-    [P_GREV] = {"REV %", 0, 100, 25, 1, F_PCT, 0},         [P_GMODE] = {"GRAIN", 0, 1, 0, 1, F_ENUM, E_ONOFF},
+    [P_GREV] = {"REVERSE", 0, 100, 25, 1, F_PCT, 0},         [P_GMODE] = {"GRAIN", 0, 1, 0, 1, F_ENUM, E_ONOFF},
     [P_GFRZ] = {"FREEZE", 0, 1, 0, 1, F_ENUM, E_ONOFF},    [P_RNDP] = {"RND PIT", 0, 1, 0, 1, F_ENUM, E_ONOFF},
     [P_ODEPTH] = {"DEPTH", 0, 100, 30, 1, F_PCT, 0},       [P_OTIME] = {"TIME", 0, 100, 50, 1, F_TSC, 0},
-    [P_OUP] = {"UPWD", 0, 100, 100, 1, F_PCT, 0},          [P_ODOWN] = {"DOWNWD", 0, 100, 100, 1, F_PCT, 0},
+    [P_OUP] = {"UP", 0, 100, 100, 1, F_PCT, 0},          [P_ODOWN] = {"DOWN", 0, 100, 100, 1, F_PCT, 0},
     [P_OIN] = {"IN", -48, 48, 0, 1, F_DBH, 0},             [P_OOUT] = {"OUT", -48, 48, 0, 1, F_DBH, 0},
     [P_OSTYLE] = {"STYLE", 0, 4, 1, 1, F_ENUM, E_OSTY},    [P_OPOS] = {"PLACE", 0, 1, 0, 1, F_ENUM, E_OPOS},
     [P_OLOW] = {"LOW", -24, 24, 0, 1, F_DBH, 0},           [P_OMID] = {"MID", -24, 24, 0, 1, F_DBH, 0},
@@ -217,15 +230,15 @@ static const pdesc_t PD[NP] = {
     [P_L1MIX] = {"MIX", 0, 100, 0, 1, F_PCT, 0},           [P_L1TGT] = {"TARGET", 0, NTGT_N - 1, 13, 1, F_TGT, 0},
     [P_L2SHP] = {"SHAPE", 0, 8, 1, 1, F_ENUM, E_LSHP},     [P_L2RATE] = {"RATE", 0, 63, 25, 1, F_LRATE, 0},
     [P_L2MIX] = {"MIX", 0, 100, 0, 1, F_PCT, 0},           [P_L2TGT] = {"TARGET", 0, NTGT_N - 1, 15, 1, F_TGT, 0},
-    [P_ZMAT] = {"MATERL", 0, 6, 0, 1, F_ENUM, E_ZMAT},     [P_ZPITCH] = {"PITCH", -24, 24, 0, 1, F_SEMI, 0},
+    [P_ZMAT] = {"BODY", 0, 6, 0, 1, F_ENUM, E_ZMAT},     [P_ZPITCH] = {"PITCH", -24, 24, 0, 1, F_SEMI, 0},
     [P_ZDEC] = {"DECAY", 0, 63, 34, 1, F_ZDEC, 0},         [P_ZMIX] = {"RES MIX", 0, 100, 0, 1, F_PCT, 0},
     [P_ZDAMP] = {"DAMP", 0, 100, 35, 1, F_PCT, 0},         [P_ZSPRD] = {"SPREAD", 0, 100, 50, 1, F_PCT, 0},
-    [P_ZHIT] = {"HIT POS", 2, 50, 13, 1, F_PCT, 0},        [P_ZTRK] = {"KEYTRK", 0, 1, 1, 1, F_ENUM, E_ONOFF},
+    [P_ZHIT] = {"HIT POS", 2, 50, 13, 1, F_PCT, 0},        [P_ZTRK] = {"KEY TRK", 0, 1, 1, 1, F_ENUM, E_ONOFF},
     [P_TATK] = {"ATTACK", -100, 100, 0, 2, F_PM, 0},       [P_TSUS] = {"SUSTAIN", -100, 100, 0, 2, F_PM, 0},
     [P_TTIME] = {"TIME", 0, 100, 50, 1, F_TSC, 0},         [P_TOUT] = {"OUT", -48, 48, 0, 1, F_DBH, 0},
     [P_XDRV] = {"DRIVE", 0, 72, 0, 1, F_DBH, 0},           [P_XSHP] = {"SHAPE", 0, 3, 0, 1, F_ENUM, E_XSHP},
     [P_XBITS] = {"BITS", 2, 16, 16, 1, F_BITS, 0},         [P_XSR] = {"RATE", 0, 63, 0, 1, F_XSR, 0},
-    [P_XRING] = {"RING HZ", 0, 63, 30, 1, F_XRHZ, 0},      [P_XRMIX] = {"RNG MIX", 0, 100, 0, 1, F_PCT, 0},
+    [P_XRING] = {"RING HZ", 0, 63, 30, 1, F_XRHZ, 0},      [P_XRMIX] = {"RING MIX", 0, 100, 0, 1, F_PCT, 0},
     [P_XTONE] = {"TONE", 0, 63, 63, 1, F_RFHZ, 0},         [P_XMIX] = {"MIX", 0, 100, 100, 1, F_PCT, 0},
     [P_MORPH] = {"MORPH", 0, 100, 0, 1, F_PCT, 0},         [P_VARY] = {"VARY", 0, 100, 0, 1, F_PCT, 0},
     [P_BMODE] = {"BATCH", 0, 2, 0, 1, F_ENUM, E_BMODE},    [P_BCNT] = {"COUNT", 0, 3, 1, 1, F_ENUM, E_BCNT},
@@ -252,7 +265,7 @@ static const pdesc_t PD[NP] = {
     [P_EVOLVE] = {"EVOLVE", 0, 100, 0, 1, F_PCT, 0},
     [P_TRATE] = {"RATE", 30, 1200, 300, 10, F_RPM, 0},     [P_TPOOL] = {"POOL", 2, 16, 6, 1, F_INT, 0},
     [P_TORDER] = {"ORDER", 0, 2, 1, 1, F_ENUM, E_TORDER},
-    [P_QINT] = {"INTENS", 0, 100, 0, 1, F_PCT, 0},          [P_QSWP] = {"SWEEP", 5, 200, 30, 1, F_SEC10, 0},
+    [P_QINT] = {"VALUE", 0, 100, 0, 1, F_PCT, 0},          [P_QSWP] = {"SWEEP", 5, 200, 30, 1, F_SEC10, 0},
     [P_QCRV] = {"CURVE", 0, 3, 0, 1, F_ENUM, E_QCRV},
     [P_Q1T] = {"TARGET 1", 0, NTGT_N - 1, 15, 1, F_TGT, 0}, [P_Q1A] = {"AMT 1", -100, 100, 60, 2, F_PM, 0},
     [P_Q2T] = {"TARGET 2", 0, NTGT_N - 1, 14, 1, F_TGT, 0}, [P_Q2A] = {"AMT 2", -100, 100, 0, 2, F_PM, 0},
@@ -262,7 +275,7 @@ static const pdesc_t PD[NP] = {
     [P_PMODE] = {"TRIGGER", 0, 5, 0, 1, F_ENUM, E_PMODE},   [P_PHITS] = {"HITS", 2, 32, 8, 1, F_INT, 0},
     [P_PTIME] = {"TIME", 2, 80, 15, 1, F_SEC10, 0},         [P_PFALL] = {"FALL", 0, 100, 70, 1, F_PCT, 0},
     [P_PPIT] = {"PITCH", -12, 12, 0, 1, F_SEMI, 0},         [P_PJIT] = {"JITTER", 0, 100, 20, 1, F_PCT, 0},
-    [P_STOOL] = {"TOOL", 0, 7, 0, 1, F_ENUM, E_STOOL},      [P_SAMT] = {"AMOUNT", 1, 100, 25, 1, F_PCT, 0},
+    [P_STOOL] = {"TOOL", 0, 8, 0, 1, F_ENUM, E_STOOL},      [P_SAMT] = {"AMOUNT", 1, 100, 25, 1, F_PCT, 0},
     [P_RECIPE] = {"HA KIND", 0, 7, 0, 1, F_ENUM, E_RECIPE}, [P_GEST] = {"GESTURE", 0, 2, 0, 1, F_ENUM, E_GEST},
     [P_VOWEL] = {"VOWEL", 0, 100, 50, 1, F_VOWEL, 0},       [P_VSIZE] = {"SIZE", -12, 12, 0, 1, F_SEMI, 0},
     [P_VRES] = {"RES", 0, 100, 50, 1, F_PCT, 0},            [P_VMIX] = {"V MIX", 0, 100, 0, 1, F_PCT, 0},
@@ -271,6 +284,10 @@ static const pdesc_t PD[NP] = {
     [P_GROWL] = {"GROWL", 0, 100, 0, 1, F_PCT, 0},          [P_GRATE] = {"G RATE", 15, 120, 45, 1, F_INT, 0},
     [P_THEME] = {"THEME", 0, 4, 4, 1, F_ENUM, E_THEME},
     [P_ASSET] = {"ASSET", 0, NASSET - 1, 0, 1, F_ENUM, E_ASSET},
+    [P_EMU] = {"CHIP", 0, 5, 0, 1, F_ENUM, E_EMU},          [P_ERATE] = {"RATE", 0, 100, 50, 1, F_ERATE, 0},
+    [P_EGRIT] = {"GRIT", 0, 100, 30, 1, F_PCT, 0},          [P_EMIX] = {"MIX", 0, 100, 100, 1, F_PCT, 0},
+    [P_EECHO] = {"ECHO", 0, 100, 0, 1, F_PCT, 0},           [P_ETIME] = {"E TIME", 1, 15, 5, 1, F_ETIME, 0},
+    [P_ETONE] = {"TONE", 0, 100, 60, 1, F_ETONE, 0},
 };
 static volatile int16_t P[NP];                  /* as set */
 static volatile int16_t E[NP];                  /* as heard: P plus the LFOs, rounded (for the screen) */
@@ -280,19 +297,22 @@ static uint8_t CONT[NP];                        /* a continuous parameter: smoot
 static uint32_t locks[NLOCKW];                  /* (NP <= 256) bit p: locked (mutations and MORPH leave it alone) */
 static int lock_get(uint32_t p) { return (int)(locks[p >> 5] >> (p & 31u) & 1u); }
 
-/* the pages in the order of the sound: sources, envelope, shaping, dynamics, effects and space, variation, modulation;
- * each button holds its pages one after the other (PAGE_GRP), so its presses walk them in that order too */
-enum { PG_SRC, PG_CHIP, PG_RES, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY, PG_REV, PG_SPC,
-       PG_ASSET, PG_VAR, PG_BAT, PG_PHY, PG_LFO, PG_RTPC, PG_PAD, NPAGE };
+/* The pages follow the work, one button a step: start from an ASSET and make the source (HOME, ARP), shape it (ENV),
+ * colour it (EDIT), glue it (GLO), place it (FX), move it (LFO: what the game drives), then vary it, deliver it and print
+ * it through a console chip (SEQ). The audio chain keeps its own order (see the audio). Each button holds its pages one
+ * after the other (PAGE_GRP), so pressing it walks them in that order. */
+enum { PG_ASSET, PG_SRC, PG_CHIP, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_RES, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY, PG_REV,
+       PG_SPC, PG_LFO, PG_RTPC, PG_PAD, PG_VAR, PG_PHY, PG_BAT, PG_EMU, NPAGE };
 #define NO 255u                                 /* (an empty knob) */
 static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
+    {{P_ASSET, P_VARY, P_RECIPE, P_VOL}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},   /* (VARY, HA KIND, OUT: here too) */
     {{P_MODE, P_WAVE, P_SLOT, P_BLEND}, {P_TUNE, P_COLOR, P_STR, P_RECM}, {P_SLOOP, P_LPOS, P_LLEN, P_LXF}, {P_VOICES, P_LPIT, P_LDET, P_LLVL}},
     {{P_CDUTY, P_CSWEEP, P_CARP, P_CARPS}, {P_CSTEP, P_CNOISE, P_CPRE, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
-    {{P_ZMAT, P_ZPITCH, P_ZDEC, P_ZMIX}, {P_ZDAMP, P_ZSPRD, P_ZHIT, P_ZTRK}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_GPOS, P_GSIZE, P_GDENS, P_GSPRAY}, {P_GREV, P_GMODE, P_GFRZ, P_RNDP}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_STOOL, P_SAMT, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_ATT, P_DEC, P_SUS, P_REL}, {P_GLIDE, P_VELO, P_PITCH, P_VOL}, {P_MATK, P_MDEC, P_MAMT, P_MTGT}, {NO, NO, NO, NO}},
     {{P_TATK, P_TSUS, P_TTIME, P_TOUT}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
+    {{P_ZMAT, P_ZPITCH, P_ZDEC, P_ZMIX}, {P_ZDAMP, P_ZSPRD, P_ZHIT, P_ZTRK}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_XDRV, P_XSHP, P_XBITS, P_XSR}, {P_XRING, P_XRMIX, P_XTONE, P_XMIX}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_VOWEL, P_VSIZE, P_VRES, P_VMIX}, {P_SHIFT, P_SFB, P_STIME, P_SMIX}, {P_GROWL, P_GRATE, NO, NO}, {NO, NO, NO, NO}},
     {{P_RFFREQ, P_RFRES, P_RFMODE, P_RFPOLE}, {P_RFDEP, P_RFRATE, P_RFSRC, P_RFDRV}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
@@ -300,22 +320,22 @@ static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
     {{P_DTIME, P_DFB, P_DMIX, P_DROUTE}, {P_FRATE, P_FDEPTH, P_FREGEN, P_FMIX}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_RSIZE, P_RDEC, P_RPRE, P_RMIX}, {P_RLOW, P_RHIGH, P_RXLO, P_RXHI}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_SDIST, P_SOCCL, P_SPASS, P_SDOPP}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
-    {{P_ASSET, P_VARY, P_RECIPE, P_VOL}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},   /* (VARY, HA KIND, OUT: here too) */
-    {{P_VARY, P_VSEED, P_VKEYS, P_VLOCK}, {P_MORPH, P_HAAMT, P_EVOLVE, P_RECIPE}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
-    {{P_BMODE, P_BCNT, P_BSPC, P_BGATE}, {P_TRATE, P_TPOOL, P_TORDER, NO}, {P_LMATCH, P_LTGT, NO, NO}, {NO, NO, NO, NO}},
-    {{P_PMODE, P_PHITS, P_PTIME, P_PFALL}, {P_PPIT, P_PJIT, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_L1SHP, P_L1RATE, P_L1MIX, P_L1TGT}, {P_L2SHP, P_L2RATE, P_L2MIX, P_L2TGT}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_QINT, P_QSWP, P_QCRV, NO}, {P_Q1T, P_Q1A, P_Q2T, P_Q2A}, {P_Q3T, P_Q3A, NO, NO}, {NO, NO, NO, NO}},
     {{P_XTGT, P_XAMT, P_YTGT, P_YAMT}, {P_PADM, P_GEST, P_KVEL, P_KSENS}, {P_ATTGT, P_ATAMT, NO, NO}, {NO, NO, NO, NO}},
+    {{P_VARY, P_VSEED, P_VKEYS, P_VLOCK}, {P_MORPH, P_HAAMT, P_EVOLVE, P_RECIPE}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
+    {{P_PMODE, P_PHITS, P_PTIME, P_PFALL}, {P_PPIT, P_PJIT, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
+    {{P_BMODE, P_BCNT, P_BSPC, P_BGATE}, {P_TRATE, P_TPOOL, P_TORDER, NO}, {P_LMATCH, P_LTGT, NO, NO}, {NO, NO, NO, NO}},
+    {{P_EMU, P_ERATE, P_EGRIT, P_EMIX}, {P_EECHO, P_ETIME, P_ETONE, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
 };
 static uint8_t NSUB[NPAGE];                     /* how many of A B C D a page has */
-static const char *const PAGE_NAME[NPAGE] = {"OSC & SAMPLE", "CHIP OSC", "RESONATOR", "GRAIN ENGINE", "SAMPLE LAB", "ENVELOPES",
-                                             "TRANSIENT", "DESTROY", "VOWEL + SHIFT", "RES MOD FILTER", "OTT MULTIBAND", "DELAY + FLANGER",
-                                             "MULTIBAND REVERB", "SPACE + MOTION", "ASSETS", "VARIATION + MORPH", "BATCH + FIRE TEST",
-                                             "PHYSICS TRIGGER", "LFO 1 + 2", "RTPC", "CHAOS PAD + KEYS"};
+static const char *const PAGE_NAME[NPAGE] = {"ASSETS", "OSC & SAMPLE", "CHIP OSC", "GRAIN ENGINE", "SAMPLE LAB", "ENVELOPES",
+                                             "TRANSIENT", "RESONATOR", "DESTROY", "VOWEL + SHIFT", "RES MOD FILTER", "OTT MULTIBAND",
+                                             "DELAY + FLANGER", "MULTIBAND REVERB", "SPACE + MOTION", "LFO 1 + 2", "RTPC", "CHAOS PAD + KEYS",
+                                             "VARIATION + MORPH", "PHYSICS TRIGGER", "BATCH + FIRE TEST", "SOUND CHIPS"};
 #define NGRP 8
-static const uint8_t GRP_BTN[NGRP] = {BTN_HOME, BTN_ARP, BTN_ENV, BTN_EDIT, BTN_GLO, BTN_FX, BTN_SEQ, BTN_LFO};
-static const uint8_t PAGE_GRP[NPAGE] = {0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7};   /* the button each module is under */
+static const uint8_t GRP_BTN[NGRP] = {BTN_HOME, BTN_ARP, BTN_ENV, BTN_EDIT, BTN_GLO, BTN_FX, BTN_LFO, BTN_SEQ};
+static const uint8_t PAGE_GRP[NPAGE] = {0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 3, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 7};   /* the button each module is under */
 static uint8_t PMOD[NP];                        /* the page of each parameter */
 static uint8_t TGT[NP], NTGT;                   /* the mod targets (LFOs, pad, aftertouch): see NTGT_N */
 /* 13 the CHAOS PAD (MIDI CC16 / 17 / 18) and the aftertouch (the keys, MIDI pressure): mod sources, 0..127 */
@@ -418,8 +438,8 @@ DSP uint8_t ulaw_enc(int32_t v)
 /* ======================================================================== the sample bank */
 typedef struct { uint8_t user, dirty; uint16_t len; } slotinfo_t;
 static slotinfo_t SL[8];
-static const int16_t *volatile smp_ptr = FSMP_0;
-static volatile uint32_t smp_len = sizeof FSMP_0 / 2u;
+static const int16_t *volatile smp_ptr = smp16;
+static volatile uint32_t smp_len = 256u;
 static volatile uint8_t smp_busy;
 static uint8_t smp_view[228];                   /* the active sample as peak columns */
 static int32_t cur_slot = -1;
@@ -445,6 +465,33 @@ static void slot_flush(int32_t i)               /* a recording into its flash sl
     say(slot_save((uint32_t)i, &rec, sizeof rec) ? "SAMPLE SAVE FAILED" : "SAMPLE SAVED TO FLASH");
     SL[i].dirty = 0;
 }
+static void fsmp_unpack(uint32_t i)            /* factory sound i into smp16, exactly as it was made (tools/gen_samples.py:
+                                                   per 128 samples a predictor and a Rice code of what it misses) */
+{
+    const uint8_t *d = FSMP[i];
+    uint32_t n = FSMP_LEN[i], pos = 0, j = 0;
+    int32_t a = 0, b = 0;
+#define FS_BIT() ((uint32_t)(d[pos >> 3] >> (7u - (pos & 7u))) & 1u)
+    while (j < n) {
+        uint32_t order = 0, k = 0, m, c;
+        for (c = 0; c < 2u; c++, pos++) order = order << 1 | FS_BIT();
+        for (c = 0; c < 5u; c++, pos++) k = k << 1 | FS_BIT();
+        for (m = n - j < 128u ? n - j : 128u; m; m--) {
+            uint32_t q = 0, u = 0, nb;
+            int32_t e, x;
+            while (q < 24u && FS_BIT()) { q++; pos++; }
+            if (q < 24u) pos++;                 /* (the 0 that ends the count) */
+            nb = q < 24u ? k : 18u;
+            for (c = 0; c < nb; c++, pos++) u = u << 1 | FS_BIT();
+            if (q < 24u) u |= q << k;
+            e = (int32_t)(u >> 1) ^ -(int32_t)(u & 1u);
+            x = (order == 0u ? 0 : order == 1u ? a : 2 * a - b) + e;
+            b = a; a = x;
+            smp16[j++] = (int16_t)x;
+        }
+    }
+#undef FS_BIT
+}
 static void slot_select(int32_t i)
 {
     uint32_t k;
@@ -455,7 +502,8 @@ static void slot_select(int32_t i)
         smp_ptr = smp16; smp_len = rec.len; SL[i].len = (uint16_t)rec.len;
     } else {
         if (!rec_state_busy()) SL[i].user = 0;
-        smp_ptr = FSMP[i]; smp_len = FSMP_LEN[i];
+        fsmp_unpack((uint32_t)i);
+        smp_ptr = smp16; smp_len = FSMP_LEN[i];
     }
     smp_busy = 0;
     cur_slot = i;
@@ -501,6 +549,10 @@ static struct {
     int32_t vf[3][3], vk, vmix, vli[3];         /* the formants' band-passes (a1 a2 a3, Q16), their damping, the mix; where */
     int32_t sh_fb, smix, gr_dep;
     uint32_t fs_inc, sh_d, gr_inc;
+    uint8_t em, em_n, em_bits;                  /* 22 SOUND CHIPS: which chip (0 off); YM2149 levels; bits */
+    uint32_t em_inc, em_d;                      /* its sample clock (a phase step a sample); the echo's delay */
+    int32_t em_lv[32], em_lad, em_sh, em_mix, em_ev, em_fb, em_lp;   /* YM2149's log DAC; the 2612's ladder; BRR's extra
+                                                   shift / DMG's volume shift; mix, echo level and feedback, the tone (Q15) */
 } K;
 static volatile int32_t v_note = 60, v_gate, v_vel = 25800;
 static volatile uint32_t v_seq, v_pseq;
@@ -519,6 +571,13 @@ static uint32_t exp2_q16(int32_t e)             /* 2^(e / 256), Q16 */
     int32_t n = e >> 8;
     uint32_t r = T_EXP2[e & 255];
     return n >= 0 ? r << (n > 14 ? 14 : n) : r >> (-n > 31 ? 31 : -n);
+}
+static uint32_t emu_rate(int32_t chip, int32_t v8)   /* 22 SOUND CHIPS: RATE (Q8 %) as the chip's sample clock, Hz, on a log scale
+                                                   over what its games used */
+{
+    static const uint16_t LO[6] = {0, 4000, 4000, 8000, 11025, 2048}, HI[6] = {0, 22050, 26000, 32000, 44100, 16384};
+    int32_t c = clampi(chip, 1, 5), oct = ilog2_q8(HI[c]) - ilog2_q8(LO[c]);
+    return (uint32_t)(((uint64_t)LO[c] * exp2_q16(v8 / 100 * oct / 256)) >> 16);
 }
 static int32_t ei(uint32_t p) { return S8[p] >> 8; }   /* the parameter, whole */
 static int32_t e8(uint32_t p) { return S8[p]; }        /* the parameter, Q8 */
@@ -596,7 +655,7 @@ static void reso_coef(void)
 }
 enum { KG_SRC = 1u << PG_SRC, KG_ENV = 1u << PG_ENV, KG_RES = 1u << PG_RES, KG_TRN = 1u << PG_TRN, KG_FLT = 1u << PG_FLT,
        KG_DST = 1u << PG_DST, KG_VOX = 1u << PG_VOX, KG_GRN = 1u << PG_GRN, KG_OTT = 1u << PG_OTT, KG_DLY = 1u << PG_DLY, KG_REV = 1u << PG_REV,
-       KG_CHIP = 1u << PG_CHIP, KG_NOTE = 1u << 24, KG_ALL = 0xFFFFFFFFu };
+       KG_CHIP = 1u << PG_CHIP, KG_EMU = 1u << PG_EMU, KG_NOTE = 1u << 24, KG_ALL = 0xFFFFFFFFu };
 static void k_update(uint32_t chg)              /* the coefficients; the costly groups only when their knobs moved */
 {
     uint32_t str = (uint32_t)ei(P_STR), i, gl, mid, sc, old_ratio = K.tr_ratio;
@@ -751,6 +810,31 @@ static void k_update(uint32_t chg)              /* the coefficients; the costly 
             K.o_rel[b] = alpha_ms_x10((uint32_t)(((uint64_t)st->rel[b] * sc) >> 16) / 16u);
         }
         K.o_rms = alpha_ms_x10(12u);            /* RMS over ~5 ms, updated every 4th sample */
+    }
+    /* 22 SOUND CHIPS */
+    if (chg & KG_EMU) {
+        int32_t g = ei(P_EGRIT), m = ei(P_EMU);
+        uint32_t j, fc;
+        K.em = (uint8_t)(ei(P_EMIX) ? m : 0);
+        K.em_inc = emu_rate(m, e8(P_ERATE)) * 97391u;   /* (2^32 / 44100 a Hz) */
+        K.em_n = (uint8_t)(g < 50 ? 32 : 16);   /* YM2149: 32 steps of its envelope DAC; AY-style 16 from half way */
+        {
+            int32_t st = (150 + g * 9 / 2) * 256 / 602;   /* 1.5 .. 6 dB a step, in 1/256 octave */
+            K.em_lv[0] = 0;
+            for (j = 1; j < K.em_n; j++) K.em_lv[j] = (int32_t)((65535u * exp2_q16(-(int32_t)(K.em_n - 1u - j) * st)) >> 16);
+        }
+        K.em_bits = (uint8_t)(m == 2 ? 9 - g * 3 / 100 : 16 - g * 8 / 100);   /* YM2612: 9 .. 6 bits; SCSP: 16 .. 8 */
+        K.em_lad = g * 512 / 100;               /* YM2612: the ladder's step at zero, up to 4 of its 9-bit steps */
+        K.em_sh = m == 5 ? g * 3 / 101 : g / 40;   /* DMG: wave volume 100 / 50 / 25 %; S-DSP: BRR 0 .. 2 shifts coarser */
+        K.em_mix = e8(P_EMIX) * 327 >> 8;
+        K.em_ev = (m == 3 || m == 4) ? e8(P_EECHO) * 327 >> 8 : 0;
+        K.em_fb = K.em_ev * 45 >> 6;
+        K.em_d = (uint32_t)ei(P_ETIME) * 706u;  /* 16 ms steps, as the S-DSP's echo */
+        fc = (1500u * exp2_q16(e8(P_ETONE) * 957 / 25600)) >> 16;   /* TONE: 1.5 .. 20 kHz */
+        {
+            int32_t w = (int32_t)fc * 4668 / 1000;
+            K.em_lp = (int32_t)((int64_t)w * 32768 / (32768 + w));
+        }
     }
     /* 09 DELAY + FLANGER */
     if (chg & KG_DLY) {
@@ -1009,6 +1093,8 @@ static struct {
 } V;
 enum { ST_A, ST_D, ST_R, ST_OFF };
 static volatile uint32_t tm_play, tm_awake, tm_rf_li, tm_gi, tm_peak, tm_lvl, tm_cpu, tm_rv;
+static int16_t tm_scope[1024];                  /* the output's last 1024 samples (stage_out), for the screen's motion layer */
+static volatile uint32_t tm_sc_w;
 static volatile int32_t tm_mod, tm_gd[3], tm_benv[3], tm_gr, tm_env, tm_stage = ST_OFF, tm_fd, tm_tg, tm_z[6];
 static volatile uint8_t tm_sleep;
 static volatile uint16_t tm_gpos[16];
@@ -1031,6 +1117,7 @@ static void fx_clear(void)
     for (j = 0; j < 4u; j++) for (i = 0; i < RV_N; i++) rv_line[j][i] = 0;
     for (i = 0; i < 128u; i++) rv_ap1[i] = 0;
     for (i = 0; i < 256u; i++) rv_ap2[i] = 0;
+    for (i = 0; i < EM_N; i++) em_buf[i] = 0;
     for (i = 0; i < 3u; i++) { V.og[i] = 4096; V.ogdb[i] = 0; }
     for (i = 0; i < 6u; i++) V.zy1[i] = V.zy2[i] = 0;
     V.t_g = 4096;
@@ -1676,7 +1763,8 @@ DSP_RAM void stage_out(int32_t *out, uint32_t n)   /* no DC (before the limiter:
                                                    the ceiling), gain, soft knee, a peak limiter; mono to L and R */
 {
     int32_t lim = V.lim, lg = V.lg, gain = K.gain, v, pk;
-    uint32_t i, lcnt = V.lcnt, quiet = V.quiet, peak = tm_peak, still = V.stage == ST_OFF && !K.gfrz;
+    uint32_t i, lcnt = V.lcnt, quiet = V.quiet, peak = tm_peak, still = V.stage == ST_OFF && !K.gfrz, sw = tm_sc_w;
+    int16_t *sc = tm_scope;
     if (K.sp_on) {                              /* 12 SPACE: air / wall low-pass, the distance's level */
         int32_t y = V.sp_y, a = K.sp_a, g = K.sp_g;
         for (i = 0; i < n; i++) { y += (int32_t)(((int64_t)(blk_b[i] - y) * a) >> 15); blk_b[i] = (int32_t)(((int64_t)y * g) >> 15); }
@@ -1696,9 +1784,11 @@ DSP_RAM void stage_out(int32_t *out, uint32_t n)   /* no DC (before the limiter:
         peak = (uint32_t)pk > peak ? (uint32_t)pk : (peak * 4031u) >> 12;
         quiet = still && pk <= 2 ? quiet + 1u : 0u;
         blk_b[i] = v;
+        sc[(sw + i) & 1023u] = (int16_t)v;
         out[2u * i] += v;
         out[2u * i + 1u] += v;
     }
+    tm_sc_w = sw + n;
     tm_gr = lim > LIM_CEIL ? lg : 32768;
     V.lim = lim; V.lg = lg; V.lcnt = lcnt; V.quiet = quiet; tm_peak = peak;
 }
@@ -1753,6 +1843,91 @@ static void stage_vox(uint32_t n)
         b[i] = x + (int32_t)(((int64_t)(y - x) * K.smix) >> 15);
     }
 }
+/* 22 SOUND CHIPS (in flash, as 09: off, it costs nothing). The whole chain, printed through a console's sound chip: each
+ * takes the sound at its own sample clock (RATE, no anti-alias filter, as the hardware) and through its own DAC:
+ *   YM2149  the volume register as a DAC (the Atari ST's digi-drums): 32 log steps, 16 with GRIT; 1.5 .. 6 dB apart
+ *   YM2612  the Mega Drive's 8-bit DAC channel, 9 .. 6 bits out, and the ladder's step at zero (crossover grit)
+ *   S-DSP   the SNES: BRR (4-bit ADPCM, 16-sample blocks, filter 1) at 32 kHz or less, Gaussian-like interpolation,
+ *           the echo with its 8-tap FIR and feedback (E TIME in 16 ms steps)
+ *   SCSP    the Saturn: linear PCM 16 .. 8 bits, linear interpolation, its DSP as a short diffuse echo
+ *   DMG     the Game Boy's wave channel: 4-bit samples, the volume shift, and the output capacitor's high-pass
+ * TONE is the console's analog low-pass, MIX against the sound before it */
+static struct { uint32_t ph; int32_t h[4], hp_x, hp_y, lp, fir[8], bprev, bin[16], bout[16]; uint32_t bi, w; uint8_t last; } EMV;
+static int32_t emu_take(int32_t x)              /* one sample at the chip's clock: through its DAC */
+{
+    int32_t y, q;
+    x = clampi(x, -32767, 32767);
+    switch (K.em) {
+    case 1: {                                   /* the nearest log step (a binary search) */
+        int32_t u = x + 32768, lo = 0, hi = K.em_n - 1;
+        while (hi - lo > 1) { int32_t mid = (lo + hi) >> 1; if (K.em_lv[mid] <= u) lo = mid; else hi = mid; }
+        return (u - K.em_lv[lo] < K.em_lv[hi] - u ? K.em_lv[lo] : K.em_lv[hi]) - 32768;
+    }
+    case 2:
+        q = (x >> 8) << 8;                      /* the DAC channel: 8 bits in */
+        y = q >> (16 - K.em_bits) << (16 - K.em_bits);
+        return y + (y < 0 ? -K.em_lad : K.em_lad);
+    case 3: {                                   /* BRR: 16 in, then the block coded and played back, 16 out */
+        uint32_t k;
+        EMV.bin[EMV.bi] = x;
+        y = EMV.bout[EMV.bi];
+        if (++EMV.bi >= 16u) {
+            int32_t m = 0, sh = 0, p = EMV.bprev;
+            for (k = 0; k < 16u; k++) { int32_t r = absi(EMV.bin[k] - (p - (p >> 4))); if (r > m) m = r; p = EMV.bin[k]; }
+            while (sh < 12 && (m >> sh) > 7) sh++;
+            sh = clampi(sh + K.em_sh, 0, 12);
+            p = EMV.bprev;
+            for (k = 0; k < 16u; k++) {
+                int32_t pr = p - (p >> 4), r = EMV.bin[k] - pr, n4 = clampi((r + (sh ? 1 << (sh - 1) : 0)) >> sh, -8, 7);
+                p = clampi(pr + (n4 << sh), -32768, 32767);
+                EMV.bout[k] = p;
+            }
+            EMV.bprev = p; EMV.bi = 0;
+        }
+        return y;
+    }
+    case 4: return x >> (16 - K.em_bits) << (16 - K.em_bits);
+    default: q = (x + 32768) >> 12 >> K.em_sh << K.em_sh; return q * 4096 + (2048 << K.em_sh) - 32768;   /* DMG: 16 / 8 / 4 levels */
+    }
+}
+static void stage_emu(uint32_t n)
+{
+    static const int8_t FIR[8] = {12, 33, 43, 43, 19, -2, -13, -7};   /* the S-DSP's echo filter, a usual setting (/128) */
+    uint32_t i, k;
+    int32_t *b = blk_b;
+    if (K.em != EMV.last) { for (i = 0; i < EM_N; i++) em_buf[i] = 0; for (k = 0; k < 8u; k++) EMV.fir[k] = 0; EMV.last = K.em; }
+    for (i = 0; i < n; i++) {
+        int32_t x = b[i], y, t;
+        uint32_t ph = EMV.ph + K.em_inc;
+        if (ph < EMV.ph) { EMV.h[3] = EMV.h[2]; EMV.h[2] = EMV.h[1]; EMV.h[1] = EMV.h[0]; EMV.h[0] = emu_take(x); }
+        EMV.ph = ph;
+        t = (int32_t)(ph >> 17);                /* (where between the chip's samples: 0 .. 32767) */
+        if (K.em == 3) {                        /* a cubic B-spline over four: smooth and a little dull, as the SNES */
+            int32_t t2 = t * t >> 15, t3 = t2 * t >> 15, u = 32768 - t, u3 = ((u * u >> 15) * u) >> 15;
+            int32_t w0 = u3 / 6, w3 = t3 / 6, w1 = (3 * t3 - 6 * t2 + 4 * 32768) / 6, w2 = 32768 - w0 - w1 - w3;
+            y = (int32_t)(((int64_t)EMV.h[3] * w0 + (int64_t)EMV.h[2] * w1 + (int64_t)EMV.h[1] * w2 + (int64_t)EMV.h[0] * w3) >> 15);
+        } else if (K.em == 4) y = EMV.h[1] + (int32_t)(((int64_t)(EMV.h[0] - EMV.h[1]) * t) >> 15);
+        else y = EMV.h[0];
+        if (K.em == 1 || K.em == 5) {           /* (the unipolar DACs: their DC out; the Game Boy's capacitor, stronger) */
+            int32_t a = K.em == 5 ? 32640 : 32740, hy = y - EMV.hp_x + (int32_t)(((int64_t)EMV.hp_y * a) >> 15);
+            EMV.hp_x = y; EMV.hp_y = hy; y = hy;
+        }
+        if (K.em_ev) {                          /* the echo */
+            int32_t d = em_buf[(EMV.w - K.em_d) & (EM_N - 1u)], e = 0;
+            if (K.em == 3) {
+                for (k = 7; k > 0u; k--) EMV.fir[k] = EMV.fir[k - 1u];
+                EMV.fir[0] = d;
+                for (k = 0; k < 8u; k++) e += EMV.fir[k] * FIR[k];
+                e >>= 7;
+            } else e = (d + em_buf[(EMV.w - K.em_d * 3u / 4u) & (EM_N - 1u)] + em_buf[(EMV.w - K.em_d / 2u) & (EM_N - 1u)]) / 3;
+            em_buf[EMV.w] = sat16(y + (int32_t)(((int64_t)e * K.em_fb) >> 15));
+            EMV.w = (EMV.w + 1u) & (EM_N - 1u);
+            y += (int32_t)(((int64_t)e * K.em_ev) >> 15);
+        }
+        EMV.lp += (int32_t)(((int64_t)(y - EMV.lp) * K.em_lp) >> 15);   /* TONE */
+        b[i] = x + (int32_t)(((int64_t)(EMV.lp - x) * K.em_mix) >> 15);
+    }
+}
 static void dsp_block(int32_t *out, uint32_t n) /* one block of the chain */
 {
     uint32_t i, on = V.stage != ST_OFF || K.gfrz;
@@ -1776,6 +1951,7 @@ static void dsp_block(int32_t *out, uint32_t n) /* one block of the chain */
     RAM_CALL(stage_fx)(n);
     if (!K.rv_wet) V.rv_off = 1;
     if (K.ott && K.opost) RAM_CALL(stage_ott)(n);         /* POST FX: on the tails too */
+    if (K.em) stage_emu(n);                     /* 22 SOUND CHIPS: last, the print */
     if (!K.ott) tm_gd[0] = tm_gd[1] = tm_gd[2] = 0;
     RAM_CALL(stage_out)(out, n);
     if (rec_state == REC_ON)                    /* the recorder: to 22.05 kHz through a [1 2 1] / 4 low-pass, mu-law */
@@ -1839,6 +2015,7 @@ static void all_off(void) { nstk = 0; v_gate = 0; }
 
 /* ======================================================================== actions */
 static uint8_t page, sub, mutant, session_dirty;
+static uint32_t sel_t, help_n;                  /* SEL: when it went down, the help lines shown while held */
 static uint8_t ui_dirty = 0xFF;                 /* 1 header 2 vis 4 knobs 8 footer */
 static uint32_t t_toast, mutant_t;
 static char toast[40];
@@ -1940,6 +2117,8 @@ static void rnd_module(uint32_t m)
             set_unlocked(P_L1TGT, rnd_range(0, NTGT - 1)); set_unlocked(P_L2SHP, rnd_range(0, 6)); set_unlocked(P_L2RATE, rnd_range(5, 50));
             set_unlocked(P_L2MIX, rnd_range(5, 45)); set_unlocked(P_L2TGT, rnd_range(0, NTGT - 1)); break;
     case PG_CHIP: chip_preset((uint32_t)rnd_range(0, 6)); break;
+    case PG_EMU: set_unlocked(P_EMU, rnd_range(1, 5)); set_unlocked(P_ERATE, rnd_range(10, 90)); set_unlocked(P_EGRIT, rnd_range(0, 100));
+            set_unlocked(P_EECHO, rnd_range(0, 99) > 50 ? rnd_range(10, 60) : 0); set_unlocked(P_ETIME, rnd_range(2, 12)); set_unlocked(P_ETONE, rnd_range(30, 100)); break;
     case PG_PAD: set_unlocked(P_XTGT, rnd_range(0, NTGT - 1)); set_unlocked(P_YTGT, rnd_range(0, NTGT - 1));
             set_unlocked(P_XAMT, rnd_range(-100, 100)); set_unlocked(P_YAMT, rnd_range(-100, 100)); break;
     default: set_unlocked(P_VARY, rnd_range(10, 70)); break;   /* MORPH: only the variation */
@@ -1956,7 +2135,7 @@ static void recipe(uint32_t kind)
     uint32_t i;
     for (i = 0; i < NP; i++) {
         uint32_t m = PMOD[i];
-        if (m == PG_LAB || m == PG_VAR || m == PG_BAT || m == PG_PHY || m == PG_PAD || m == PG_RTPC || m == PG_ASSET) continue;
+        if (m == PG_LAB || m == PG_VAR || m == PG_BAT || m == PG_PHY || m == PG_PAD || m == PG_RTPC || m == PG_ASSET || m == PG_EMU) continue;
         if (i == P_SLOT || i == P_THEME || i == P_RECM || i == P_VOL) continue;
         set_unlocked(i, PD[i].def);
     }
@@ -2045,7 +2224,7 @@ static void asset_load(uint32_t k)
     k %= NASSET;
     for (i = 0; i < NP; i++) {
         uint32_t m = PMOD[i];
-        if (m == PG_LAB || m == PG_VAR || m == PG_BAT || m == PG_PAD || m == PG_ASSET) continue;
+        if (m == PG_LAB || m == PG_VAR || m == PG_BAT || m == PG_PAD || m == PG_ASSET || m == PG_EMU) continue;
         if (i == P_SLOT || i == P_THEME || i == P_RECM) continue;
         set_unlocked(i, PD[i].def);
     }
@@ -2155,6 +2334,8 @@ static void asset_load(uint32_t k)
     }
     RS(P_VOL, ASSET_VOL[k]);
 }
+static const uint8_t HA_ORDER[NPAGE] = {PG_SRC, PG_CHIP, PG_RES, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY,
+                                         PG_REV, PG_SPC, PG_ASSET, PG_VAR, PG_BAT, PG_PHY, PG_LFO, PG_RTPC, PG_PAD, PG_EMU};
 static void happy_accident(void)
 {
     uint32_t m, i;
@@ -2163,8 +2344,9 @@ static void happy_accident(void)
     for (i = 0; i < NP; i++) was[i] = P[i];
     morph_on = 0;
     if (P[P_RECIPE]) recipe((uint32_t)P[P_RECIPE]);
-    else for (m = 0; m < NPAGE; m++) {
-        if (m == PG_PAD || m == PG_LAB || m == PG_PHY || m == PG_CHIP || m == PG_VAR || m == PG_BAT || m == PG_RTPC || m == PG_SPC || m == PG_ASSET ||
+    else for (i = 0; i < NPAGE; i++) {
+        m = HA_ORDER[i];                        /* (a fixed order: the same accident from the same state, release after release) */
+        if (m == PG_PAD || m == PG_LAB || m == PG_PHY || m == PG_CHIP || m == PG_VAR || m == PG_BAT || m == PG_RTPC || m == PG_SPC || m == PG_ASSET || m == PG_EMU ||
             (m == PG_LFO && rnd_range(0, 99) < 50)) continue;
         if (m == PG_RES && rnd_range(0, 99) < 65) { set_unlocked(P_ZMIX, 0); continue; }   /* the extra modules: sometimes */
         if (m == PG_DST && rnd_range(0, 99) < 60) { set_unlocked(P_XMIX, 0); continue; }
@@ -2229,6 +2411,7 @@ static void morph_set(int32_t v)                /* the MORPH knob: the panel sho
     }
     morph_on = 1;
 }
+static uint32_t var_store_b(void) { return !(has_ab & 1u) ? 0u : !(has_ab & 2u) ? 1u : P[P_MORPH] > 50; }
 static void morph_store(uint32_t which)
 {
     uint32_t i;
@@ -2276,9 +2459,9 @@ static const uint8_t BCNT[4] = {4, 8, 12, 16};
 static void batch_start(void)
 {
     if (batch_on) { batch_on = 0; vary_mute = 0; all_off(); say("BATCH STOPPED"); ui_dirty |= 2; return; }
-    if (P[P_BMODE] && has_ab != 3u) { say("A>B: STORE A AND B FIRST"); return; }
-    if (!P[P_BMODE] && !P[P_VARY]) say("BATCH (VARY 0: ALL THE SAME)");
-    else say("BATCH: RECORD IT IN REAPER");
+    if (P[P_BMODE] && has_ab != 3u) { say("MORPH: STORE A AND B"); return; }
+    if (!P[P_BMODE] && !P[P_VARY]) say("BATCH: VARY 0, ALL SAME");
+    else say("BATCH: RECORD IN A DAW");
     batch_n = BCNT[P[P_BCNT] & 3]; batch_i = 0; batch_t0 = fm1_ms + 300u; batch_on = 1; batch_ph = 0;
     lvl_clear();
     vary_mute = P[P_BMODE] == 1;
@@ -2340,7 +2523,7 @@ static void fire_start(void)
 {
     if (ft_on) { ft_on = 0; note_off((int32_t)last_note); lvl_hit(0); lvl_live = 0; say("FIRE TEST STOPPED"); ui_dirty |= 2; return; }
     if (batch_on) batch_start();
-    if (!P[P_VARY]) say("FIRE TEST (VARY 0: ALL THE SAME)"); else say("FIRE TEST");
+    if (!P[P_VARY]) say("FIRE: VARY 0, ALL SAME"); else say("FIRE TEST");
     ft_on = 1; ft_t = fm1_ms + 200u; ft_off = 0; ft_prev = 0; ft_bag = 0; ft_hits = 0; lvl_clear();
     ui_dirty |= 2;
 }
@@ -2476,11 +2659,13 @@ static void phys_poll(void)
 /* 05 SAMPLE LAB: the active slot worked on in place (no CPU while playing): REVERSE, CROP to 01's loop, FADE IN / OUT
  * over AMOUNT, HALF SPD (an octave down, twice as long), DOUBLE, NORMALIZE; REVERT: the slot as it is in flash */
 static void slot_select(int32_t i);
+static void slot_factory(void);
 static void lab_apply(void)
 {
     uint32_t tool = (uint32_t)P[P_STOOL], n = smp_len, i, k;
     char t[32] = "LAB: ";
     if (rec_state != REC_IDLE) { say("LAB: BUSY RECORDING"); return; }
+    if (tool == 8u) { slot_factory(); return; }  /* FACTORY: the slot's factory sound back (it was SEL + PLAY) */
     if (tool == 7u) {                           /* REVERT */
         SL[cur_slot].dirty = 0;
         slot_select(cur_slot);
@@ -2490,7 +2675,6 @@ static void lab_apply(void)
     }
     if (n > SMP_MAX) n = SMP_MAX;
     smp_busy = 1;
-    if (smp_ptr != smp16) { const int16_t *f = smp_ptr; for (i = 0; i < n; i++) smp16[i] = f[i]; }   /* (a factory sound: a copy) */
     switch (tool) {
     case 0: for (i = 0; i < n / 2u; i++) { int16_t a = smp16[i]; smp16[i] = smp16[n - 1u - i]; smp16[n - 1u - i] = a; } break;
     case 1: {                                   /* CROP: what 01's loop marks */
@@ -2525,7 +2709,7 @@ static void lab_apply(void)
     smp_busy = 0;
     lp_pb = 0;
     smp_overview();
-    cat(t, E_STOOL[tool & 7u]); cat(t, " DONE");
+    cat(t, E_STOOL[tool % 9u]); cat(t, " DONE");
     say(t);
     ui_dirty |= 2 | 4 | 8;
 }
@@ -2566,7 +2750,7 @@ static void evolve_step(void)
     push_undo();
     for (k = 0; k < 3u; k++)
         for (tries = 0; tries < 16u; tries++) {
-            uint32_t p = (uint32_t)rnd_range(0, NP - 1), m = PMOD[p];
+            uint32_t p = (uint32_t)rnd_range(0, NP_V13 - 1), m = PMOD[p];
             int32_t r, d;
             if (!CONT[p] || lock_get(p) || p == P_SLOT || p == P_VOL || m >= PG_SPC || m == PG_LFO || m == PG_LAB) continue;
             r = PD[p].hi - PD[p].lo;
@@ -2575,6 +2759,42 @@ static void evolve_step(void)
             break;
         }
     ui_dirty |= 4;
+}
+static void asset_take(uint32_t k)              /* an asset loaded (with an undo step) and played */
+{
+    char t[24] = "ASSET: ";
+    k %= NASSET;
+    push_undo();
+    morph_on = 0;
+    phys_stop();
+    asset_load(k);
+    P[P_ASSET] = (int16_t)k;
+    touched();
+    asset_cur = (uint8_t)k; asset_sum = patch_sum();
+    cat(t, E_ASSET[k]); say(t);
+    if (P[P_PMODE]) phys_start(60, 32767, 999u); else audition_ms(asset_hold_ms(k));
+}
+static void stop_all(void)                      /* SEL + PLAY: everything that plays on its own stops, every note */
+{
+    if (batch_on) batch_start();
+    if (ft_on) fire_start();
+    phys_stop();
+    rt_on = 0;
+    sp_off = 0;
+    aud_t = 0;
+    all_off();
+    say("ALL STOPPED");
+    ui_dirty |= 2 | 8;
+}
+static void module_random(void)                 /* SEL + OCT+: this page's module at random (ASSETS: an asset at random) */
+{
+    if (page == PG_ASSET) { asset_take((uint32_t)rnd_range(0, NASSET - 1)); return; }
+    if (page == PG_LAB || page == PG_BAT) { say("NOTHING TO RANDOMIZE HERE"); return; }
+    push_undo();
+    rnd_module(page);
+    touched();
+    say(page == PG_LFO ? "RND LFOs" : page == PG_PAD ? "RND PAD TARGETS" : "RANDOMIZED MODULE");
+    audition();
 }
 static void page_action(void)
 {
@@ -2605,19 +2825,8 @@ static void page_action(void)
         sp_off = fm1_ms + (P[P_SPASS] ? (uint32_t)P[P_SPASS] * 100u : 1000u);
         return;
     }
-    if (page == PG_ASSET) {                     /* load the asset, play it */
-        char t[24] = "ASSET: ";
-        uint32_t k = (uint32_t)P[P_ASSET] % NASSET;
-        push_undo();
-        morph_on = 0;
-        phys_stop();
-        asset_load(k);
-        touched();
-        asset_cur = (uint8_t)k; asset_sum = patch_sum();
-        cat(t, E_ASSET[k]); say(t);
-        if (P[P_PMODE]) phys_start(60, 32767, 999u); else audition_ms(asset_hold_ms(k));
-        return;
-    }
+    if (page == PG_ASSET) { asset_take((uint32_t)P[P_ASSET] % NASSET); return; }   /* load the asset, play it */
+    if (page == PG_VAR && sub == 1u) { morph_store(var_store_b()); return; }   /* B: STORE A, then B (both kept: the side MORPH is nearer) */
     if (page == PG_VAR) { P[P_VSEED] = (int16_t)rnd_range(1, 999); say("NEW SEED"); ui_dirty |= 2 | 4; audition(); return; }
     if (page == PG_CHIP) {                      /* a new sound of the PRESET's kind */
         char t[24] = "NEW ";
@@ -2638,7 +2847,7 @@ static void page_action(void)
 static void rec_commit(void)                    /* the recording, trimmed and normalized, into the active slot (16-bit) */
 {
     uint32_t n = rec_n, i, pk = 1, g;
-    char t[32] = "RECORDED SLOT x (SAVE KEEPS)";
+    char t[32] = "SLOT x RECORDED";
     while (n > 256u && absi(T_ULAW[rec.d[n - 1u]]) < 200) n--;
     if (n < 512u) { say("REC: NOTHING HEARD"); rec_state = REC_IDLE; return; }
     for (i = 0; i < n; i++) { uint32_t v = (uint32_t)absi(T_ULAW[rec.d[i]]); if (v > pk) pk = v; }
@@ -2671,7 +2880,7 @@ static void rec_commit(void)                    /* the recording, trimmed and no
     lp_pb = 0;
     smp_overview();
     rec_state = REC_IDLE;
-    t[14] = (char)('1' + cur_slot);
+    t[5] = (char)('1' + cur_slot);
     say(P[P_RECM] == 1 ? "OVERDUBBED (SAVE KEEPS)" : t);
     if (P[P_RECM] == 2) {                       /* BOUNCE: the sound is the sample now; the chain back to dry */
         static const uint8_t DRY[] = {P_ZMIX, P_TATK, P_TSUS, P_TOUT, P_XMIX, P_ODEPTH, P_DMIX, P_FMIX, P_RMIX, P_L1MIX, P_L2MIX,
@@ -2686,11 +2895,12 @@ static void rec_commit(void)                    /* the recording, trimmed and no
     }
     ui_dirty |= 2 | 4;
 }
-static void slot_factory(void)                  /* SEL + PLAY: the factory sound back */
+static void slot_factory(void)                  /* LAB TOOL FACTORY: the factory sound back */
 {
     if (!SL[cur_slot].user) { say("ALREADY FACTORY"); return; }
     smp_busy = 1;
-    smp_ptr = FSMP[cur_slot]; smp_len = FSMP_LEN[cur_slot];
+    fsmp_unpack((uint32_t)cur_slot);
+    smp_ptr = smp16; smp_len = FSMP_LEN[cur_slot];
     smp_busy = 0;
     rec.len = 0;
     slot_save((uint32_t)cur_slot, &rec, sizeof rec);
@@ -2726,6 +2936,7 @@ static const theme_t THEMES[NTHEME] = {
 #define EV_MUT RGB(140, 145, 165)
 #define EV_INK RGB(0, 0, 0)
 #define TER_BASE 12                             /* Terminus 8x16: the baseline row */
+static const uint16_t EV_KC[4] = {EV_LIM, EV_GRN, EV_PUR, EV_TXT};   /* (the knobs' colours, EVA-01) */
 static uint32_t hot_k = 4u, hot_t;              /* the knob turned last, when (EVA: its cell lights up a moment) */
 #define C_TXT RGB(232, 236, 245)
 #define C_MUTE RGB(140, 145, 165)
@@ -2829,6 +3040,9 @@ static void fmt_param(uint32_t p, int32_t v, char *s)
     case F_XSR: if (!v) cat(s, "OFF"); else fmt_hz(s, (uint32_t)((44100u * exp2_q16(-(v * 31)) + 32768u) >> 16)); break;
     case F_XRHZ: fmt_hz(s, (20u * exp2_q16(v * 32)) >> 16); break;
     case F_BSPC: if (!v) cat(s, "AUTO"); else fmt_ms(s, (uint32_t)v * 500u); break;
+    case F_ERATE: if (!P[P_EMU]) cat(s, "--"); else fmt_hz(s, emu_rate(P[P_EMU], v * 256)); break;
+    case F_ETIME: fmt_num(s, v * 16, 0); cat(s, "ms"); break;
+    case F_ETONE: fmt_hz(s, (1500u * exp2_q16(v * 957 / 100)) >> 16); break;
     default: fmt_num(s, v, 0); break;
     }
 }
@@ -2884,6 +3098,7 @@ static int page_on(uint32_t m)                  /* is the module doing something
     case PG_VAR: return P[P_VARY] || P[P_VKEYS] || morph_on;
     case PG_BAT: return batch_on || ft_on;
     case PG_PHY: return P[P_PMODE] != 0;
+    case PG_EMU: return P[P_EMU] && P[P_EMIX];
     case PG_LAB: return SL[cur_slot].dirty != 0;
     case PG_ASSET: return asset_cur != 255u;
     case PG_LFO: return P[P_L1MIX] || P[P_L2MIX];
@@ -3006,12 +3221,557 @@ static int32_t wave_shape(uint32_t w, uint32_t ph, int32_t m)   /* the oscillato
     default: return isin(ph) >> 1;
     }
 }
+/* ======================================================================== the motion layer
+ * Each page has an object drawn in thin lines (grains, a struck body, a ball through a shaper, a room as a tunnel...)
+ * that moves with the sound, the knobs and the notes, and keeps breathing when it is quiet. Each frame reads the output
+ * (stage_out keeps its last 1024 samples): a 256-point FFT into 24 log bands (60 Hz .. 11 kHz), the level, the onsets,
+ * and the last second of both. The object is drawn first and the page's words over it. It all runs in the main loop;
+ * the audio only writes its samples. It has its own random numbers, so the patch's never change. */
+static uint8_t fx_band[24], fx_lv;              /* the spectrum (0..255 a band), the level (0..255) */
+static int16_t fx_s[256];                       /* the last 256 samples (every 2nd: 22 kHz), for the figures */
+static int32_t fx_flux;
+static uint32_t fx_ang, fx_onset, fx_rng = 0x51F15EEDu, fx_pg = 255u, fx_n, fx_was_on;
+static uint8_t fx_hist[6][24], fx_hlv[16];       /* the spectrum's last 6 snapshots (~8 a second), the level's last 16 */
+typedef struct { int16_t x, y, vx, vy; uint8_t life, a; } fx_part_t;
+static fx_part_t fx_pt[24];                     /* grains, wave fronts: whatever the page throws */
+static int16_t fx_tx[32], fx_ty[32];            /* a trail: the last 32 places (the finger, the LFOs' pen) */
+static uint32_t fx_tn;
+static uint16_t fx_glast[16];                   /* (the grains seen: a new one each time a slot changes) */
+static const uint8_t FX_EDGE[25] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 21, 25, 31, 38, 47, 57, 70, 85, 105, 128};
+static uint32_t fx_rand(void) { uint32_t x = fx_rng; x ^= x << 13; x ^= x >> 17; x ^= x << 5; return fx_rng = x; }
+static uint16_t mix565(uint16_t a, uint16_t b, int32_t t)   /* a .. b, t 0..256 */
+{
+    int32_t ra = a >> 11, ga = a >> 5 & 63, ba = a & 31, rb = b >> 11, gb = b >> 5 & 63, bb = b & 31;
+    return (uint16_t)((ra + ((rb - ra) * t >> 8)) << 11 | (ga + ((gb - ga) * t >> 8)) << 5 | (ba + ((bb - ba) * t >> 8)));
+}
+static void fx_fft(int32_t *re, int32_t *im)    /* 256 points, in place, halved each stage (no overflow) */
+{
+    uint32_t i, j, len, k;
+    for (i = 0; i < 256u; i++) {                /* bit reversed order */
+        j = (i >> 7 & 1u) | (i >> 5 & 2u) | (i >> 3 & 4u) | (i >> 1 & 8u) | (i << 1 & 16u) | (i << 3 & 32u) | (i << 5 & 64u) | (i << 7 & 128u);
+        if (j > i) { int32_t t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+    }
+    for (len = 2; len <= 256u; len <<= 1) {
+        uint32_t half = len >> 1, step = 256u / len;
+        for (i = 0; i < 256u; i += len)
+            for (k = 0; k < half; k++) {
+                uint32_t ph = k * step << 24;
+                int32_t wr = isin(ph + 0x40000000u), wi = -isin(ph);
+                int32_t *ar = &re[i + k], *ai = &im[i + k], *br = &re[i + k + half], *bi = &im[i + k + half];
+                int32_t tr = (*br * wr - *bi * wi) >> 15, ti = (*br * wi + *bi * wr) >> 15;
+                *br = (*ar - tr) >> 1; *bi = (*ai - ti) >> 1;
+                *ar = (*ar + tr) >> 1; *ai = (*ai + ti) >> 1;
+            }
+    }
+}
+static void fx_listen(void)                     /* the spectrum, the level, an onset */
+{
+    static int32_t re[256], im[256];
+    uint32_t w = tm_sc_w, i, k, live = tm_peak > 16u;
+    int32_t flux = 0;
+    for (i = 0; i < 256u; i++) {
+        int32_t v = live ? tm_scope[(w - 512u + 2u * i) & 1023u] : 0;
+        fx_s[i] = (int16_t)v;
+        re[i] = v * (int32_t)T_HANN[i] >> 16; im[i] = 0;
+    }
+    fx_fft(re, im);
+    for (k = 0; k < 24u; k++) {
+        int32_t m = 0, v, o = fx_band[k];
+        for (i = FX_EDGE[k]; i < FX_EDGE[k + 1u]; i++) {
+            int32_t a = absi(re[i]), b = absi(im[i]), mm = a > b ? a + (b >> 1) : b + (a >> 1);
+            if (mm > m) m = mm;
+        }
+        v = m ? clampi((ilog2_q8((uint32_t)m * 64u) - 5 * 256) * 255 / (11 * 256), 0, 255) : 0;
+        if (v > o) flux += v - o;
+        fx_band[k] = (uint8_t)(v > o ? o + ((v - o) * 3 >> 2) : o - ((o - v + 5) / 6));
+    }
+    fx_lv = (uint8_t)clampi(meter_px(tm_peak, 255), 0, 255);
+    if (!(fx_n % 3u)) {                         /* (a snapshot every 3rd frame: the layers of the contours, the echoes' levels) */
+        uint32_t h;                             /* (moved back one by hand: the firmware has no memmove) */
+        for (h = 5; h > 0; h--) memcpy(fx_hist[h], fx_hist[h - 1], 24);
+        memcpy(fx_hist[0], fx_band, 24);
+        for (h = 15; h > 0; h--) fx_hlv[h] = fx_hlv[h - 1];
+        fx_hlv[0] = fx_lv;
+    }
+    fx_flux = flux;
+    if (flux > 420 || (tm_awake && !fx_was_on)) fx_onset++;
+    fx_was_on = tm_awake;
+}
+/* ---- the kit: thin lines, a level each (0 the background .. 128 the line's colour .. 255 its accent), a small 3D
+ * view (turned about the vertical, tilted toward the eye: the far edges dimmer) */
+static uint16_t vk_bg, vk_lo, vk_hi;
+static uint16_t vk_c(uint16_t c, int32_t lv) { return mix565(vk_bg, c, clampi(lv, 0, 256)); }
+static uint16_t vk_lv(int32_t lv) { lv = clampi(lv, 0, 255); return lv < 128 ? mix565(vk_bg, vk_lo, lv * 2) : mix565(vk_lo, vk_hi, (lv - 128) * 2); }
+static void fx_vline(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t lv) { if (lv > 0) cv_line(x0, y0, x1, y1, vk_lv(lv)); }
+static int32_t vk_x0, vk_y0, vk_yc = 32767, vk_ys, vk_tc = 32767, vk_ts;
+static void vk_view(int32_t cx, int32_t cy, uint32_t yaw, uint32_t tilt)
+{
+    vk_x0 = cx; vk_y0 = cy; vk_yc = isin(yaw + 0x40000000u); vk_ys = isin(yaw); vk_tc = isin(tilt + 0x40000000u); vk_ts = isin(tilt);
+}
+static int32_t vk_pt(int32_t x, int32_t y, int32_t z, int32_t *sx, int32_t *sy)   /* to the screen; returns the depth (+: near) */
+{
+    int32_t X = (x * vk_yc - z * vk_ys) >> 15, Z = (x * vk_ys + z * vk_yc) >> 15;
+    *sx = vk_x0 + X; *sy = vk_y0 - ((y * vk_tc - Z * vk_ts) >> 15);
+    return (Z * vk_tc + y * vk_ts) >> 15;
+}
+static void vk_l3(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz, uint16_t c, uint16_t cb)
+{
+    int32_t x0, y0, x1, y1, d = vk_pt(ax, ay, az, &x0, &y0) + vk_pt(bx, by, bz, &x1, &y1);
+    cv_line(x0, y0, x1, y1, d >= 0 ? c : cb);
+}
+static void vk_ring3(int32_t y, int32_t r, int32_t n, uint32_t rot, int32_t wob, uint16_t c, uint16_t cb)
+{   /* a ring lying flat at height y, n sides (2: a bar, 4: a square, 24: round), turned by rot; wob: its edge shaken */
+    int32_t k, px = 0, pz = 0;
+    uint32_t st = 0xFFFFFFFFu / (uint32_t)n;
+    for (k = 0; k <= n; k++) {
+        uint32_t a = rot + st * (uint32_t)(k % n);
+        int32_t rr = r + (wob ? isin(a * 3u + fx_ang * 9u) * wob >> 15 : 0), x = rr * isin(a + 0x40000000u) >> 15, z = rr * isin(a) >> 15;
+        if (k) vk_l3(px, y, pz, x, y, z, c, cb);
+        px = x; pz = z;
+    }
+}
+static void vk_ell(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint32_t a0, uint32_t span, int32_t n, uint16_t c)
+{   /* an ellipse (span 0) or an arc of one, from a0, in n pieces */
+    int32_t k, px = 0, py = 0;
+    uint32_t st = (span ? span : 0xFFFFFFFFu) / (uint32_t)n;
+    for (k = 0; k <= n; k++) {
+        uint32_t a = a0 + st * (uint32_t)(span ? k : k % n);
+        int32_t x = cx + (rx * isin(a + 0x40000000u) >> 15), y = cy + (ry * isin(a) >> 15);
+        if (k) cv_line(px, py, x, y, c);
+        px = x; py = y;
+    }
+}
+static void vk_circ(int32_t x, int32_t y, int32_t r, uint16_t c) { if (r < 1) cv_pset(x, y, c); else vk_ell(x, y, r, r, 0, 0, r < 5 ? 8 : r < 16 ? 16 : 28, c); }
+static void vk_dash(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t c)   /* a dotted line: a pixel in three */
+{
+    int32_t n = absi(x1 - x0) > absi(y1 - y0) ? absi(x1 - x0) : absi(y1 - y0), i;
+    for (i = 0; i <= n; i += 3) cv_pset(x0 + (n ? (x1 - x0) * i / n : 0), y0 + (n ? (y1 - y0) * i / n : 0), c);
+}
+static void vk_crop(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)   /* a frame by its corners only */
+{
+    cv_rect(x, y, 5, 1, c); cv_rect(x, y, 1, 5, c); cv_rect(x + w - 5, y, 5, 1, c); cv_rect(x + w - 1, y, 1, 5, c);
+    cv_rect(x, y + h - 1, 5, 1, c); cv_rect(x, y + h - 5, 1, 5, c); cv_rect(x + w - 5, y + h - 1, 5, 1, c); cv_rect(x + w - 1, y + h - 5, 1, 5, c);
+}
+static void vk_smp(uint16_t c, int32_t x0, int32_t w, int32_t y0, int32_t h)   /* the sample as its outline (top and bottom), a
+                                                   stroke every 4th column inside */
+{
+    int32_t i, mid = y0 + h / 2, pa = 0;
+    uint16_t d = mix565(vk_bg, c, 70);
+    for (i = 0; i < w; i += 2) {
+        int32_t a = smp_view[i * 228 / w] * h / 2 / 128;
+        if (!(i & 3) && a > 1) cv_rect(x0 + i, mid - a + 1, 1, 2 * a - 1, d);
+        if (i) { cv_line(x0 + i - 2, mid - pa, x0 + i, mid - a, c); cv_line(x0 + i - 2, mid + pa, x0 + i, mid + a, c); }
+        pa = a;
+    }
+}
+static void fx_contours(int32_t cx, int32_t cy, int32_t r0, int32_t amp, uint32_t ang, int32_t layers)
+{   /* the spectrum as closed contours, one a snapshot: the newest outside and bright, the older ones inside, dimmer
+       (a topography of the last second); the x radius 15/8 of the y */
+    int32_t h, k;
+    for (h = layers - 1; h >= 0; h--) {
+        int32_t px = 0, py = 0, r = r0 - h * 4, lv = 255 - h * 200 / layers;
+        for (k = 0; k <= 48; k++) {
+            int32_t kk = k % 48, b = fx_hist[h][kk < 24 ? kk : 47 - kk], rr = r + b * (amp - h * amp / (layers + 2)) / 255, x, y;
+            uint32_t a = ang + (uint32_t)kk * (0xFFFFFFFFu / 48u) - (uint32_t)h * (1u << 25);
+            x = cx + (rr * 15 * isin(a + 0x40000000u) >> 18); y = cy + (rr * isin(a) >> 15);
+            if (k) fx_vline(px, py, x, y, lv);
+            px = x; py = y;
+        }
+    }
+}
+static void fx_slabs(int32_t vx, int32_t vy, int32_t n, uint32_t turn, int32_t fall)   /* the echoes as slabs going back to a
+                                                   vanishing point: the nearest the sound now, each further one smaller,
+                                                   turned a bit more, as loud as the level was that many snapshots ago */
+{
+    int32_t k;
+    for (k = n - 1; k >= 0; k--) {
+        int32_t sc = 256 - k * 200 / (n + 1), cx = vx + (40 * sc >> 8), cy = vy + (18 * sc >> 8), hw = 13 * sc >> 8, hh = 26 * sc >> 8;
+        int32_t lv = fx_hlv[k < 16 ? k : 15] + 40, i, c = isin(turn * (uint32_t)k + 0x40000000u), si = isin(turn * (uint32_t)k), px[4], py[4];
+        static const int8_t SX[4] = {-1, 1, 1, -1}, SY[4] = {-1, -1, 1, 1};
+        for (i = 0; i < k; i++) lv = lv * fall >> 8;
+        for (i = 0; i < 4; i++) { int32_t u = SX[i] * hw, v = SY[i] * hh; px[i] = cx + ((u * c - v * si) >> 15); py[i] = cy + ((u * si + v * c) >> 15); }
+        for (i = 0; i < 4; i++) fx_vline(px[i], py[i], px[(i + 1) & 3], py[(i + 1) & 3], lv);
+    }
+    vk_dash(vx, vy, vx + 52, vy + 24, vk_lv(70));   /* (the axis they sit on) */
+}
+static void fx_spawn(int32_t x, int32_t y, int32_t vx, int32_t vy, uint32_t life)
+{
+    uint32_t i, best = 0;
+    for (i = 0; i < 24u; i++) if (fx_pt[i].life < fx_pt[best].life) best = i;
+    fx_pt[best].x = (int16_t)x; fx_pt[best].y = (int16_t)y; fx_pt[best].vx = (int16_t)vx; fx_pt[best].vy = (int16_t)vy;
+    fx_pt[best].life = (uint8_t)life; fx_pt[best].a = (uint8_t)life;
+}
+static void fx_trail(int32_t x, int32_t y) { fx_tx[fx_tn & 31u] = (int16_t)x; fx_ty[fx_tn & 31u] = (int16_t)y; fx_tn++; }
+static void fx_trail_draw(uint16_t c)           /* the trail, the oldest faintest */
+{
+    uint32_t i, n = fx_tn < 32u ? fx_tn : 32u;
+    for (i = 1; i < n; i++) {
+        uint32_t a = (fx_tn - n + i - 1u) & 31u, b = (fx_tn - n + i) & 31u;
+        cv_line(fx_tx[a], fx_ty[a], fx_tx[b], fx_ty[b], vk_c(c, 40 + (int32_t)i * 216 / (int32_t)n));
+    }
+}
+static const int8_t VK_CUBE[8][3] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}};
+static const int8_t VK_OCTA[8][3] = {{0, -1, 0}, {1, 0, 0}, {0, 1, 0}, {-1, 0, 0}, {0, 0, -1}, {1, 0, 0}, {0, 0, 1}, {-1, 0, 0}};
+static const uint8_t VK_EDGE[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+static void vk_morph(int32_t s, int32_t m, uint16_t c, uint16_t cb)   /* a cube (m 0) .. an octahedron (m 256), size s */
+{
+    int32_t e, v[8][3], i, j;
+    for (i = 0; i < 8; i++) for (j = 0; j < 3; j++) v[i][j] = s * (VK_CUBE[i][j] * (256 - m) + VK_OCTA[i][j] * m * 3 / 2) >> 8;
+    for (e = 0; e < 12; e++) { const int32_t *a = v[VK_EDGE[e][0]], *b = v[VK_EDGE[e][1]]; vk_l3(a[0], a[1], a[2], b[0], b[1], b[2], c, cb); }
+}
+static void vk_tool(int32_t cx, int32_t cy, int32_t tool, uint16_t c)   /* SAMPLE LAB's tool, as a sign */
+{
+    int32_t k;
+    switch (tool) {
+    case 0: for (k = 0; k < 2; k++) { cv_line(cx + 2 + k * 8, cy - 7, cx - 5 + k * 8, cy, c); cv_line(cx - 5 + k * 8, cy, cx + 2 + k * 8, cy + 7, c); } break;   /* << */
+    case 1: cv_line(cx - 8, cy - 8, cx - 8, cy + 8, c); cv_line(cx - 8, cy - 8, cx - 4, cy - 8, c); cv_line(cx - 8, cy + 8, cx - 4, cy + 8, c);   /* [ ] */
+            cv_line(cx + 8, cy - 8, cx + 8, cy + 8, c); cv_line(cx + 8, cy - 8, cx + 4, cy - 8, c); cv_line(cx + 8, cy + 8, cx + 4, cy + 8, c); break;
+    case 2: cv_line(cx - 10, cy + 6, cx + 10, cy - 6, c); cv_line(cx - 10, cy + 6, cx + 10, cy + 6, c); cv_line(cx + 10, cy - 6, cx + 10, cy + 6, c); break;
+    case 3: cv_line(cx - 10, cy - 6, cx + 10, cy + 6, c); cv_line(cx - 10, cy + 6, cx + 10, cy + 6, c); cv_line(cx - 10, cy - 6, cx - 10, cy + 6, c); break;
+    case 4: case 5: {                           /* a spring: stretched (half speed) or squeezed */
+        int32_t n = tool == 4 ? 3 : 7, w = 22, px = cx - w / 2, py = cy;
+        for (k = 1; k <= n * 2; k++) { int32_t x = cx - w / 2 + k * w / (n * 2), y = cy + (k & 1 ? -6 : 6); if (k == n * 2) y = cy; cv_line(px, py, x, y, c); px = x; py = y; }
+        break;
+    }
+    case 6: cv_line(cx - 10, cy - 8, cx + 10, cy - 8, c); for (k = -6; k <= 6; k += 6) { cv_line(cx + k, cy + 8, cx + k, cy - 5, c); cv_line(cx + k - 2, cy - 3, cx + k, cy - 5, c); cv_line(cx + k + 2, cy - 3, cx + k, cy - 5, c); } break;
+    case 7: vk_ell(cx, cy, 8, 8, 0x40000000u, 0xC0000000u, 18, c); cv_line(cx + 8, cy, cx + 5, cy - 4, c); cv_line(cx + 8, cy, cx + 11, cy - 4, c); break;   /* back */
+    default: cv_line(cx - 4, cy - 10, cx + 4, cy - 10, c); cv_line(cx - 4, cy - 10, cx - 4, cy + 10, c); cv_line(cx + 4, cy - 10, cx + 4, cy + 10, c);   /* the slab */
+             cv_line(cx - 4, cy + 10, cx + 4, cy + 10, c); cv_line(cx + 4, cy - 10, cx + 7, cy - 13, c); cv_line(cx - 4, cy - 10, cx - 1, cy - 13, c); cv_line(cx - 1, cy - 13, cx + 7, cy - 13, c); cv_line(cx + 7, cy - 13, cx + 7, cy + 7, c); break;
+    }
+}
+static uint8_t fx_rip[4];                       /* ripples: their age (0: none) */
+static void fx_ripples(int32_t x, int32_t y, int32_t hit, uint16_t c)
+{
+    uint32_t i;
+    if (hit) for (i = 0; i < 4u; i++) if (!fx_rip[i]) { fx_rip[i] = 1; break; }
+    for (i = 0; i < 4u; i++) if (fx_rip[i]) {
+        int32_t a = fx_rip[i];
+        vk_circ(x, y, a, vk_c(c, 256 - a * 6));
+        fx_rip[i] = (uint8_t)(a + 2 > 40 ? 0 : a + 2);
+    }
+}
+static int32_t vk_shape(int32_t x, int32_t rc, int32_t kind)   /* DESTROY's shaper on a coordinate: rc the edge */
+{
+    switch (kind) {
+    case 0: return x * 2 * rc / (rc + absi(x) + 1);
+    case 1: return clampi(x, -rc, rc);
+    case 2: while (x > rc || x < -rc) x = x > 0 ? 2 * rc - x : -2 * rc - x; return x;
+    default: return absi(x) - rc / 2;           /* (RECTIFY: on the height only, the rest as SOFT) */
+    }
+}
+static void fx_frame(const theme_t *th)         /* the page's object: one frame, under the page's words */
+{
+    uint32_t t = fm1_ms, br = (uint32_t)(isin(t * 0x00030000u) + 32768) >> 8;   /* (a slow breath, 0..255: ~2.4 s) */
+    int32_t lv = fx_lv, live = tm_peak > 16u, k, sp = mutant ? 4 : 1;   /* (HAPPY ACCIDENT: everything spins faster) */
+    uint16_t c1 = EVA ? EV_GRN : th->cyan, c2 = th->acc, c3 = th->mut;
+    uint32_t ons = fx_onset;
+    static uint32_t on_seen;
+    int32_t hit = ons != on_seen;
+    on_seen = ons;
+    vk_bg = EVA ? EV_BG : RGB(5, 5, 7); vk_lo = c1; vk_hi = c2;
+    if (page != fx_pg) { memset(fx_pt, 0, sizeof fx_pt); memset(fx_rip, 0, sizeof fx_rip); fx_tn = 0; fx_pg = page; }
+    fx_n++;
+    fx_ang += (uint32_t)sp * (0x00400000u + ((uint32_t)lv << 16));   /* (louder: faster) */
+    switch (page) {
+    case PG_ASSET:                              /* a small spectrometer at the right of the status line */
+        for (k = 0; k < 18; k++) {
+            int32_t h = live ? fx_band[k + 3] * 12 / 255 : (int32_t)((uint32_t)(isin(t * (1u << 18) + (uint32_t)k * 0x0A000000u) + 32768) >> 13), j;
+            for (j = 0; j <= h; j += 2) cv_rect(182 + k * 3, 13 - j, 2, 1, vk_c(c3, 110 + j * 12));
+        }
+        break;
+    case PG_CHIP:                               /* the sound as 8-bit blocks, on the right; at rest a square wave walks */
+    {
+        int32_t m = 2600;
+        for (k = 0; k < 256; k++) if (absi(fx_s[k]) > m) m = absi(fx_s[k]);
+        for (k = 0; k < 28; k++) {
+            int32_t v = live ? fx_s[k * 8] * 12 / m : ((((int32_t)(t >> 6) + k) & 7) < 4 ? 8 : -8);
+            v = clampi(v, -12, 12) & ~3;
+            cv_rect(118 + k * 4, 76 - v, 3, 3, vk_c(c3, 150 + absi(v) * 8));
+        }
+        break;
+    }
+    case PG_GRN: {                              /* the grains: a ring each, born where it reads, rising and shrinking */
+        int32_t r = 2 + P[P_GSIZE] / 24;
+        for (k = 0; k < 16; k++) {
+            uint16_t gp = tm_gpos[k];
+            if (gp && gp != fx_glast[k] && P[P_GMODE] && P[P_MODE]) fx_spawn(6 + (int32_t)gp * 228 / 32768, 30 + (int32_t)(fx_rand() % 70u), r, tm_grev[k], 36);
+            fx_glast[k] = gp;
+        }
+        for (k = 0; k < 24; k++) {
+            fx_part_t *p = &fx_pt[k];
+            if (!p->life) continue;
+            vk_circ(p->x, p->y, 1 + p->vx * p->life / 36, vk_c(p->vy ? C_TXT : c1, 60 + p->life * 6));
+            if (!(fx_n & 1u)) p->y--;
+            p->life--;
+        }
+        if (!live || !P[P_GMODE]) {             /* at rest: three rings breathing at POS */
+            int32_t x = 6 + P[P_GPOS] * 228 / 100;
+            for (k = 0; k < 3; k++) vk_circ(x, 60 + (isin(fx_ang * (uint32_t)(k + 1) + (uint32_t)k * 0x55555555u) * 24 >> 15), 3 + k * 2 + (int32_t)(br >> 6), vk_c(c1, 90 + k * 30));
+        }
+        break;
+    }
+    case PG_LAB: {                              /* the slot wound in a ring, turning; the tool as a sign in the middle */
+        int32_t cx = 120, cy = 53, r = 28, len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1, tool = P[P_STOOL] % 9;
+        uint32_t ang = t << 19;            /* (a turn in 8 s) */
+        for (k = 0; k < 76; k++) {
+            int32_t a = smp_view[k * 3] * 10 / 128 + 1, cs = isin(ang + (uint32_t)k * (0xFFFFFFFFu / 76u) + 0x40000000u), sn = isin(ang + (uint32_t)k * (0xFFFFFFFFu / 76u));
+            int32_t in = 0;
+            if (tool == 1) in = k * len / 76 >= lp_s && k * len / 76 <= lp_e;
+            else if (tool == 2) in = k * 100 / 76 <= P[P_SAMT];
+            else if (tool == 3) in = k * 100 / 76 >= 100 - P[P_SAMT];
+            cv_line(cx + ((r - a) * cs >> 15), cy + ((r - a) * sn >> 15), cx + ((r + a) * cs >> 15), cy + ((r + a) * sn >> 15), in ? c2 : vk_c(c1, 120 + a * 12));
+        }
+        vk_circ(cx, cy, r - 14, vk_c(c3, 90));
+        vk_tool(cx, cy, tool, SL[cur_slot].dirty ? th->haz : c2);
+        if (tm_awake) {                         /* where it plays */
+            uint32_t q = ang + tm_play * 131072u;
+            vk_circ(cx + ((r + 14) * isin(q + 0x40000000u) >> 15), cy + ((r + 14) * isin(q) >> 15), 2, C_TXT);
+        }
+        break;
+    }
+    case PG_TRN: fx_ripples(12, 26, hit, c1); break;   /* (each hit a ripple from the attack) */
+    case PG_RES: {                              /* the body struck, seen from above at an angle: a ring a mode, stacked as the
+                                                   material is built (a bell, a glass, planks, strings, a drum, a tube);
+                                                   each ring shakes as its mode rings */
+        static const int8_t SIDES[7] = {6, 24, 4, 2, 24, 24, 24}, R0[7] = {44, 16, 40, 50, 44, 46, 18}, DR[7] = {-6, 5, -4, 0, -7, 0, 0}, SP[7] = {10, 11, 9, 11, 11, 3, 13};
+        int32_t mat = P[P_ZMAT] % 7, on = P[P_ZMIX] != 0, gap = SP[mat] * (128 + P[P_ZSPRD] * 2) >> 8;
+        vk_view(120, 84, fx_ang / 3u, 0x12000000u);
+        for (k = 0; k < 6; k++) {
+            int32_t z = clampi(tm_z[k] * 8 / 6000, 0, 8), a = on ? 110 + (int32_t)ZAMP[mat][k] * 100 / 32768 + z * 6 : 60;
+            vk_ring3(k * gap, R0[mat] + DR[mat] * k, SIDES[mat], (uint32_t)k * 0x0A000000u, on ? z : 0, vk_c(z > 1 ? c2 : c1, a), vk_c(c1, a / 3));
+        }
+        break;
+    }
+    case PG_DST: {                              /* a ball through the shaper: HARD squares it, FOLD folds it, BITS snap its
+                                                   points to a grid, RATE holds them; it swells with the sound */
+        int32_t drv = (int32_t)T_DB2LIN[clampi(P[P_XDRV] * 2 + 288, 0, 480)] >> 4, rc = 30, rr = clampi(rc * drv / 256 * (256 + lv / 2) / 256, 8, 46);
+        int32_t step = 1 << clampi((16 - P[P_XBITS]) / 3, 0, 4), hold = 1 + P[P_XSR] / 12, shp = P[P_XSHP], on = P[P_XMIX] != 0, la, lo2, px = 0, py = 0;
+        uint16_t cf = vk_c(on ? c2 : C_MUTE, 230), cb = vk_c(on ? c1 : C_MUTE, 90);
+        vk_view(178, 58, fx_ang, 0x10000000u);
+        for (la = -2; la <= 2; la++)            /* rings of latitude, then the meridians */
+            for (lo2 = 0; lo2 <= 16; lo2++) {
+                uint32_t a = (uint32_t)(lo2 / hold * hold % 16) * 0x10000000u, b = (uint32_t)la * 0x13000000u;
+                int32_t cr = isin(b + 0x40000000u), x = rr * cr >> 15, y = rr * isin(b) >> 15, z, sx, sy, d;
+                z = x * isin(a) >> 15; x = x * isin(a + 0x40000000u) >> 15;
+                x = vk_shape(x, rc, shp == 3 ? 0 : shp); y = vk_shape(y, rc, shp); z = vk_shape(z, rc, shp == 3 ? 0 : shp);
+                d = vk_pt(x, y, z, &sx, &sy);
+                sx = sx / step * step; sy = sy / step * step;
+                if (lo2) cv_line(px, py, sx, sy, d >= 0 ? cf : cb);
+                px = sx; py = sy;
+            }
+        for (lo2 = 0; lo2 < 8; lo2++)
+            for (la = -4; la <= 4; la++) {
+                uint32_t a = (uint32_t)lo2 * 0x20000000u, b = (uint32_t)(la / hold * hold) * 0x0F000000u;
+                int32_t x = rr * isin(b + 0x40000000u) >> 15, y = rr * isin(b) >> 15, z, sx, sy, d;
+                z = x * isin(a) >> 15; x = x * isin(a + 0x40000000u) >> 15;
+                x = vk_shape(x, rc, shp == 3 ? 0 : shp); y = vk_shape(y, rc, shp); z = vk_shape(z, rc, shp == 3 ? 0 : shp);
+                d = vk_pt(x, y, z, &sx, &sy);
+                sx = sx / step * step; sy = sy / step * step;
+                if (la > -4) cv_line(px, py, sx, sy, d >= 0 ? cf : cb);
+                px = sx; py = sy;
+            }
+        break;
+    }
+    case PG_VOX:                                /* the vowel as a topography of the last second (SHIFT turns it) */
+        if (!sub) fx_contours(120, 56, 12 + P[P_VOWEL] / 8 + (int32_t)(br >> 6), 26, fx_ang + (uint32_t)(P[P_SMIX] ? P[P_SHIFT] : 0) * (t << 14), 5);
+        break;
+    case PG_FLT: {                              /* the spectrum's last second as a family of curves going back, under the
+                                                   filter's response (what it cuts, as it cuts it) */
+        int32_t h;
+        for (h = 5; h >= 0; h--) {
+            int32_t px = 0, py = 0, lvh = 255 - h * 36;
+            for (k = 0; k < 24; k++) {
+                int32_t x = 6 + h * 6 + k * (216 - h * 6) / 23, y = 100 - h * 9 - fx_hist[h][k] * (40 - h * 3) / 255;
+                if (k) fx_vline(px, py, x, y, lvh);
+                px = x; py = y;
+            }
+        }
+        break;
+    }
+    case PG_DLY: fx_slabs(118, 14, 3 + P[P_DFB] / 12, 0x01800000u + (uint32_t)P[P_DTIME] * 0x00060000u, 150 + P[P_DFB]); break;
+    case PG_REV: {                              /* the room as a tunnel: SIZE spaces its frames, DECAY how far they stay lit;
+                                                   the top edges HIGH's decay, the floor LOW's; the sound goes in frame by frame */
+        int32_t n = 9, s = 170 + P[P_RSIZE] * 60 / 100, w = 92 + (int32_t)(br >> 5), dk = 150 + P[P_RDEC] * 100 / 63, a = 255, pw = 0, ph = 0;
+        for (k = 0; k < n; k++) {
+            int32_t h = w * 38 / 100, l = (a * (90 + fx_hlv[k]) >> 8) + 20, lt = l * clampi(P[P_RHIGH], 20, 200) / 100, lb = l * clampi(P[P_RLOW], 20, 200) / 100;
+            uint16_t cs = vk_c(c1, l), ct = vk_c(c2, lt), cb = vk_c(c1, lb);
+            cv_line(120 - w, 54 - h, 120 + w, 54 - h, ct); cv_line(120 - w, 54 + h, 120 + w, 54 + h, cb);
+            cv_line(120 - w, 54 - h, 120 - w, 54 + h, cs); cv_line(120 + w, 54 - h, 120 + w, 54 + h, cs);
+            if (k) { uint16_t cd = vk_c(c1, l / 3); cv_line(120 - pw, 54 - ph, 120 - w, 54 - h, cd); cv_line(120 + pw, 54 - ph, 120 + w, 54 - h, cd);
+                     cv_line(120 - pw, 54 + ph, 120 - w, 54 + h, cd); cv_line(120 + pw, 54 + ph, 120 + w, 54 + h, cd); }
+            pw = w; ph = h;
+            w = w * s >> 8; a = a * dk >> 8;
+        }
+        break;
+    }
+    case PG_SPC: {                              /* wave fronts from the source: ahead of it they bunch (the Doppler) */
+        int32_t lx = 60, ly = 100, r = 22 + E[P_SDIST] * 62 / 100, sx = P[P_SPASS] ? lx + clampi(tm_px, -1024, 1024) * 54 / 1024 : lx;
+        if ((live || P[P_SPASS]) && !(fx_n % 6u)) fx_spawn(sx, ly - r, 0, 0, 30);
+        for (k = 0; k < 24; k++) {
+            fx_part_t *p = &fx_pt[k];
+            int32_t rr = 31 - p->life;   /* (30 px at most: the words on the right stay clear) */
+            if (!p->life) continue;
+            vk_ell(p->x, p->y, rr, rr, 0, 0, 20, vk_c(c1, p->life * 7));
+            p->life--;
+        }
+        break;
+    }
+    case PG_LFO: {                              /* a harmonograph: LFO 1 left-right, LFO 2 up-down, the pen's last places */
+        int32_t a1 = P[P_L1MIX] ? tm_lfo[0] : isin(t * 0x00110000u), a2 = P[P_L2MIX] ? tm_lfo[1] : isin(t * 0x000B0000u);
+        fx_trail(56 + a1 * 44 / 32768, 56 - a2 * 44 / 32768);
+        cv_rect(56, 10, 1, 92, vk_c(c3, 60)); cv_rect(10, 56, 92, 1, vk_c(c3, 60));
+        vk_crop(8, 8, 97, 97, vk_c(c3, 120));
+        fx_trail_draw(P[P_L1MIX] || P[P_L2MIX] ? c2 : C_MUTE);
+        vk_circ(fx_tx[(fx_tn - 1u) & 31u], fx_ty[(fx_tn - 1u) & 31u], 3, C_TXT);
+        break;
+    }
+    case PG_PAD:                                /* the finger's last places */
+        if (pad_on || pad_held) fx_trail(10 + pad_x * 100 / 127, 104 - pad_y * 100 / 127);
+        else if (fx_tn) fx_trail(fx_tx[(fx_tn - 1u) & 31u], fx_ty[(fx_tn - 1u) & 31u]);
+        fx_trail_draw(c2);
+        break;
+    case PG_VAR:                                /* A: the seed as a constellation; B: A (a cube) turning into B */
+        if (sub) {
+            int32_t m = clampi(E[P_MORPH], 0, 100);
+            vk_view(28, 37, fx_ang, 0x12000000u); vk_morph(11, 0, has_ab & 1u ? c2 : C_DK, vk_c(c2, 60));
+            vk_view(212, 37, fx_ang, 0x12000000u); vk_morph(11, 256, has_ab & 2u ? c1 : C_DK, vk_c(c1, 60));
+            vk_view(54 + m * 132 / 100, 37, fx_ang * 2u, 0x12000000u);
+            vk_morph(9 + lv / 40, m * 256 / 100, morph_on ? c3 : C_MUTE, vk_c(c3, 60));
+        } else {
+            uint32_t sd = (uint32_t)P[P_VSEED] * 2654435761u + 1u;
+            int32_t px = 0, py = 0;
+            for (k = 0; k < 12; k++) {
+                int32_t x, y;
+                sd ^= sd << 13; sd ^= sd >> 17; sd ^= sd << 5;
+                x = 62 + (int32_t)(sd % 96u) + (isin(fx_ang + (uint32_t)k * 0x15000000u) * 2 >> 15); y = 20 + (int32_t)((sd >> 9) % 26u);
+                if (k) vk_dash(px, py, x, y, vk_c(c3, 140));
+                vk_circ(x, y, hit && (k & 3) == (int32_t)(ons & 3u) ? 3 : 1, vk_c(c2, 120 + (int32_t)((br * (uint32_t)(k + 3)) & 127u)));
+                px = x; py = y;
+            }
+        }
+        break;
+    case PG_BAT: {                              /* each new hit a ripple from its bar */
+        static uint32_t seen;
+        uint32_t nh = lvl_n < 16u ? lvl_n : 16u;
+        fx_ripples(14 + (int32_t)(nh ? nh - 1u : 0u) * 14, 40, lvl_n != seen, ft_on ? c1 : c2);
+        seen = lvl_n;
+        break;
+    }
+    case PG_PHY: break;                         /* (its ball is drawn with the hits, page code) */
+    default: break;
+    }
+}
+/* ======================================================================== the hero value, the solids
+ * A knob just turned: its value takes the screen a moment, big, in thin drawn numerals, in the knob's colour, over the
+ * page dimmed (the number is the picture). Numerals drawn as strokes on a 6 x 10 grid (corners cut), not a font. */
+static const uint8_t HN_PTS[] = {   /* per glyph: strokes of points (x,y); 0xFF ends a stroke, 0xFE the glyph */
+    /* 0 */ 1,0, 5,0, 6,1, 6,9, 5,10, 1,10, 0,9, 0,1, 1,0, 0xFF, 0xFE,
+    /* 1 */ 1,2, 3,0, 3,10, 0xFF, 0xFE,
+    /* 2 */ 0,1, 1,0, 5,0, 6,1, 6,4, 0,10, 6,10, 0xFF, 0xFE,
+    /* 3 */ 0,1, 1,0, 5,0, 6,1, 6,4, 5,5, 2,5, 0xFF, 5,5, 6,6, 6,9, 5,10, 1,10, 0,9, 0xFF, 0xFE,
+    /* 4 */ 5,10, 5,0, 0,7, 6,7, 0xFF, 0xFE,
+    /* 5 */ 6,0, 0,0, 0,5, 5,5, 6,6, 6,9, 5,10, 1,10, 0,9, 0xFF, 0xFE,
+    /* 6 */ 5,0, 1,0, 0,1, 0,9, 1,10, 5,10, 6,9, 6,6, 5,5, 0,5, 0xFF, 0xFE,
+    /* 7 */ 0,0, 6,0, 2,10, 0xFF, 0xFE,
+    /* 8 */ 1,0, 5,0, 6,1, 6,4, 5,5, 1,5, 0,4, 0,1, 1,0, 0xFF, 1,5, 0,6, 0,9, 1,10, 5,10, 6,9, 6,6, 5,5, 0xFF, 0xFE,
+    /* 9 */ 6,5, 1,5, 0,4, 0,1, 1,0, 5,0, 6,1, 6,9, 5,10, 1,10, 0xFF, 0xFE,
+    /* - */ 1,5, 5,5, 0xFF, 0xFE,
+    /* + */ 1,5, 5,5, 0xFF, 3,3, 3,7, 0xFF, 0xFE,
+    /* . */ 1,9, 1,10, 2,10, 2,9, 1,9, 0xFF, 0xFE};
+static int32_t hn_glyph(char c) { return c >= '0' && c <= '9' ? c - '0' : c == '-' ? 10 : c == '+' ? 11 : c == '.' ? 12 : -1; }
+static int32_t hn_adv(char c, int32_t u) { return c == '.' ? u * 4 : u * 9; }
+static int32_t hn_width(const char *t, int32_t u) { int32_t w = 0; while (*t) w += hn_adv(*t++, u); return w; }
+static void hn_draw(int32_t x, int32_t y, const char *t, int32_t u, uint16_t c)   /* u: pixels a grid step (x4 Q2) */
+{
+    for (; *t; t++) {
+        int32_t g = hn_glyph(*t), i = 0, px = -1, py = -1;
+        while (g > 0) { if (HN_PTS[i++] == 0xFEu) g--; }
+        if (g == 0) for (; HN_PTS[i] != 0xFEu; i++) {
+            if (HN_PTS[i] == 0xFFu) { px = -1; continue; }
+            {
+                int32_t qx = x + HN_PTS[i] * u / 4, qy = y + HN_PTS[i + 1] * u / 4;
+                if (px >= 0) { cv_line(px, py, qx, qy, c); cv_line(px + 1, py, qx + 1, qy, c); }   /* (two pixels: crisp on the FM-1) */
+                px = qx; py = qy; i++;
+            }
+        }
+        x += hn_adv(*t, u) / 4;
+    }
+}
+static void vis_dim(int32_t keep)               /* the canvas toward black: keep/256 of each colour */
+{
+    uint32_t i, n = (uint32_t)cv_w * cv_h;
+    for (i = 0; i < n; i++) {
+        uint16_t v = swap16(cv_px[i]);
+        int32_t r = (v >> 11) * keep >> 8, g = (v >> 5 & 63) * keep >> 8, b = (v & 31) * keep >> 8;
+        cv_px[i] = swap16((uint16_t)(r << 11 | g << 5 | b));
+    }
+}
+static void hero_value(const theme_t *th)       /* the knob turned last: its name, its value big (1.2 s) */
+{
+    uint32_t p;
+    char t[24], num[12], unit[12];
+    int32_t i = 0, j = 0, u = 18, w, x;
+    uint16_t c;
+    if (hot_k >= 4u || fm1_ms - hot_t >= 1200u) return;
+    p = PAGE_P[page][sub][hot_k];
+    if (p >= NP) return;
+    c = EVA ? EV_KC[hot_k] : hot_k == 0u ? th->acc : hot_k == 1u ? th->cyan : hot_k == 2u ? th->mut : C_TXT;
+    if (lock_get(p)) c = EVA ? EV_ORG : th->haz;
+    fmt_param(p, P[p], t);
+    while (t[i] && hn_glyph(t[i]) >= 0 && i < 11) { num[i] = t[i]; i++; }
+    num[i] = 0;
+    while (t[i] && j < 11) unit[j++] = t[i++];
+    unit[j] = 0;
+    vis_dim(56);                                /* (the plot a shadow under it) */
+    cv_rect(2, 0, 236, 17, EVA ? EV_BG : RGB(5, 5, 7));   /* (the name alone on the top line) */
+    cv_text_fit(8, 1, 224, PD[p].name, c, 1);
+    if (!num[0] || (hn_glyph(num[0]) > 9 && !num[1]) || unit[0] == ' ') {   /* a word (a list, a target): big letters */
+        cv_text_fit(8, 44, 224, t, c, 1);
+        return;
+    }
+    while (u > 8 && hn_width(num, u) / 4 + text_w(&FONT_S, unit) + 4 > 220) u--;
+    w = hn_width(num, u) / 4 + (unit[0] ? text_w(&FONT_S, unit) + 4 : 0);
+    x = (240 - w) / 2;
+    hn_draw(x, 30, num, u, c);
+    if (unit[0]) cv_text(x + hn_width(num, u) / 4 + 2, 30 + 10 * u / 4 - 16 + 2, &FONT_S, unit, c);
+}
+static void solid(int32_t kind, int32_t cx, int32_t base, int32_t h, uint16_t c, uint16_t back)   /* wireframe: 0 cylinder,
+                                                   1 prism, 2 pyramid; h tall, standing on base, the hidden edges dim */
+{
+    int32_t rx = 16, ry = 5, k, top = base - h;
+    if (h < 2) h = 2;
+    if (kind == 0) {
+        int32_t px = 0, py = 0, qx = 0, qy = 0;
+        for (k = 0; k <= 24; k++) {
+            uint32_t a = (uint32_t)k * (0xFFFFFFFFu / 24u);
+            int32_t x = cx + (rx * isin(a + 0x40000000u) >> 15), y = (ry * isin(a) >> 15);
+            if (k) { cv_line(px, top + py, x, top + y, c); cv_line(qx, base + qy, x, base + y, y < 0 || py < 0 ? back : c); }
+            px = x; py = y; qx = x; qy = y;
+        }
+        cv_line(cx - rx, top, cx - rx, base, c); cv_line(cx + rx, top, cx + rx, base, c);
+    } else if (kind == 1) {
+        int32_t dx = 7, dy = 5, w = 12;
+        cv_frame(cx - w - dx / 2, top + dy, 2 * w, h - dy + 1, c);
+        cv_line(cx - w - dx / 2, top + dy, cx - w + dx / 2, top, c); cv_line(cx + w - dx / 2, top + dy, cx + w + dx / 2, top, c);
+        cv_line(cx - w + dx / 2, top, cx + w + dx / 2, top, c);
+        cv_line(cx + w + dx / 2, top, cx + w + dx / 2, base - dy, c); cv_line(cx + w - dx / 2, base, cx + w + dx / 2, base - dy, c);
+        cv_line(cx - w + dx / 2, top, cx - w + dx / 2, base - dy, back); cv_line(cx - w + dx / 2, base - dy, cx + w + dx / 2, base - dy, back);
+        cv_line(cx - w - dx / 2, base, cx - w + dx / 2, base - dy, back);
+    } else {
+        int32_t w = 15, dy = 5;
+        cv_line(cx - w, base, cx + w - 6, base, c); cv_line(cx + w - 6, base, cx + w, base - dy, c);
+        cv_line(cx - w, base, cx - w + 6, base - dy, back); cv_line(cx - w + 6, base - dy, cx + w, base - dy, back);
+        cv_line(cx, top, cx - w, base, c); cv_line(cx, top, cx + w - 6, base, c); cv_line(cx, top, cx + w, base - dy, c);
+        cv_line(cx, top, cx - w + 6, base - dy, back);
+    }
+}
 static void draw_vis(void)
 {
     const theme_t *th = &TH;
     char s[40], t[16];
     int32_t i, k;
     vis_crt(th);
+    fx_listen(); fx_frame(th);                  /* the page's object, under its words */
     switch (page) {
     case PG_SRC: {                              /* the oscillator | the sample, the blend underneath */
         int32_t md = P[P_MODE], px = 0, py = 0, on_o = md != 1, on_s = md != 0;
@@ -3019,10 +3779,10 @@ static void draw_vis(void)
         if (sub == 2u) {                        /* C: the loop on the whole sample (START > LOOP > STOP) */
             int32_t len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1, xs = 6 + lp_s * 228 / len, xe = 6 + lp_e * 228 / len;
             int32_t xx = 6 + (lp_s - lp_xf) * 228 / len, lm = P[P_SLOOP];
-            vis_smp(lm ? th->cyan : C_MUTE, 6, 228, 22, 60);
+            vk_smp(lm ? th->cyan : C_MUTE, 6, 228, 22, 60);
             if (lm) {
                 cv_rect(xs, 18, 1, 68, th->acc); cv_rect(xe, 18, 1, 68, th->acc);
-                cv_rect(xs, 18, xe - xs, 3, th->acc); cv_rect(xs, 83, xe - xs, 3, th->acc);
+                cv_rect(xs, 18, xe - xs, 1, th->acc); cv_rect(xs, 85, xe - xs, 1, th->acc);
                 if (lp_xf) cv_line(xx, 83, xs, 18, th->mut);
                 if (lm == 2) {
                     cv_text_fit(6, 88, xs - 6 > 30 ? xs - 6 : 30, "START", C_MUTE, 1);
@@ -3047,28 +3807,36 @@ static void draw_vis(void)
                 else if (k == 1) { fmt_num(t, P[P_LPIT], 1); cat(s, t); cat(s, "st"); if (dt) { cat(s, " +"); fmt_num(t, dt, 0); cat(s, t); cat(s, "c"); } }
                 else { cat(s, "-"); fmt_num(t, dt, 0); cat(s, t); cat(s, "c"); }
                 cv_text_fit(8, y, 94, s, on ? C_TXT : C_DK, 0);
-                cv_rect(106, y + 2, 124, 12, RGB(16, 16, 20));
-                if (on) cv_rect(106, y + 2, w, 12, k ? th->cyan : th->acc);
+                {                               /* a ring a voice, in dashes turning (the layers: faster as they detune) */
+                    int32_t rr = 12 + k * 15;
+                    uint32_t q;
+                    uint16_t rc = on ? vk_c(k ? th->cyan : th->acc, 80 + w) : C_DK;
+                    for (q = 0; q < 12u; q++) vk_ell(170, 56, rr, rr * 3 / 4, fx_ang * (uint32_t)(1 + k * (dt / 8 + 1)) / 2u + q * 0x15555555u, 0x0E000000u, 3, rc);
+                }
             }
             if (nv && on_s && (P[P_GMODE] || P[P_GFRZ] || P[P_STR] < 98 || P[P_STR] > 102))
                 cv_text_fit(8, 96, 226, "SAMPLE: LAYERS AT 1.00x ONLY", th->haz, 1);
             break;
         }
-        for (i = 0; i <= 108; i++) {
-            int32_t y = 58 - wave_shape((uint32_t)P[P_WAVE], (uint32_t)i * 39768216u, P[P_COLOR] * 327) * 34 / 32768;
-            if (i) cv_line(6 + px, py, 6 + i, y, co);
-            px = i; py = y;
+        for (i = 0; i <= 108; i++) {            /* the cycle wound around a ring, turning (the same 109 points as
+                                                   ever: the noise wave takes its dice from the patch's) */
+            uint32_t q = (uint32_t)i * 39768216u + (fm1_ms << 19);
+            int32_t rr = 30 + wave_shape((uint32_t)P[P_WAVE], (uint32_t)i * 39768216u, P[P_COLOR] * 327) * 15 / 32768;
+            int32_t x = 60 + (rr * isin(q + 0x40000000u) >> 15), y = 58 + (rr * isin(q) >> 15);
+            if (i) cv_line(px, py, x, y, co);
+            px = x; py = y;
         }
-        cv_rect(119, 16, 1, 84, C_DK);
-        vis_smp(cs, 124, 110, 24, 68);
+        vk_circ(60, 58, 30, vk_c(co, 60));
+        vk_dash(119, 18, 119, 98, C_DK);
+        vk_smp(cs, 124, 110, 24, 68);
         if (on_s && tm_awake && !P[P_GMODE]) cv_rect(124 + (int32_t)tm_play * 110 / 32768, 18, 1, 80, C_TXT);
         cv_text_fit(8, 0, 108, E_WAVE[P[P_WAVE]], co, 0);
         slot_name(t, (uint32_t)P[P_SLOT]);
         s[0] = (char)('1' + P[P_SLOT]); s[1] = ' '; s[2] = 0; cat(s, t);
         cv_text_fit(124, 0, 110, s, cs, 0);
-        cv_rect(6, 102, 228, 6, C_DK);
-        if (md == 2) { k = P[P_BLEND] * 228 / 100; cv_rect(6, 102, 228 - k, 6, th->acc); cv_rect(234 - k, 102, k, 6, th->cyan); }
-        else cv_rect(md ? 120 : 6, 102, 114, 6, md ? th->cyan : th->acc);
+        cv_rect(6, 105, 228, 1, C_DK);          /* the blend: a line, where it splits */
+        if (md == 2) { k = 234 - P[P_BLEND] * 228 / 100; cv_rect(6, 104, k - 6, 2, th->acc); cv_rect(k, 104, 234 - k, 2, th->cyan); vk_circ(k, 105, 3, C_TXT); }
+        else cv_rect(md ? 120 : 6, 104, 114, 2, md ? th->cyan : th->acc);
         if (rec_state) {
             s[0] = 0; cat(s, rec_state == REC_ARMED ? "ARMED" : rec_state == REC_USB ? "USB " : "REC ");
             if (rec_state != REC_ARMED) { fmt_dec(t, (int32_t)(rec_n * 100u / 22050u), 100u, 1u, 0); cat(s, t); cat(s, "s"); }
@@ -3094,13 +3862,20 @@ static void draw_vis(void)
     } else {                                    /* ADSR and where the voice is on it */
         int32_t a = 6 + P[P_ATT] * 50 / 63, d = a + 6 + P[P_DEC] * 50 / 63, r0 = 170, r1 = r0 + 6 + P[P_REL] * 56 / 63;
         int32_t top = 22, bot = 104, sy = bot - P[P_SUS] * (bot - top) / 100, ey;
-        cv_line(6, bot, a, top, th->acc); cv_line(a, top, d, sy, th->acc); cv_line(d, sy, r0, sy, th->acc); cv_line(r0, sy, r1, bot, th->acc);
+        {                                       /* the stage the voice is in: bright; the corners: small rings */
+            int32_t st = !tm_awake ? -1 : tm_stage == ST_A ? 0 : tm_stage == ST_R ? 3 : tm_env <= P[P_SUS] * 328 + 400 ? 2 : 1;
+            uint16_t cd = vk_c(th->acc, 150);
+            cv_line(6, bot, a, top, st == 0 ? C_TXT : cd); cv_line(a, top, d, sy, st == 1 ? C_TXT : cd);
+            cv_line(d, sy, r0, sy, st == 2 ? C_TXT : cd); cv_line(r0, sy, r1, bot, st == 3 ? C_TXT : cd);
+            vk_circ(a, top, 2, th->acc); vk_circ(d, sy, 2, th->acc); vk_circ(r0, sy, 2, th->acc);
+            vk_dash(6, bot + 2, 232, bot + 2, C_DK);
+        }
         cv_text(8, 0, &FONT_S, "ADSR", th->acc);
         fmt_param(P_GLIDE, P[P_GLIDE], t); s[0] = 0; cat(s, "GLIDE "); cat(s, t); cv_text_fit(110, 0, 124, s, C_MUTE, 2);
         if (tm_awake) {
             ey = bot - tm_env * (bot - top) / 32768;
             k = tm_stage == ST_A ? a : tm_stage == ST_D ? d + (r0 - d) / 2 : r0 + (r1 - r0) / 2;
-            cv_rect(k - 3, ey - 3, 7, 7, th->cyan);
+            vk_circ(k, ey, 3 + tm_env * 6 / 32768, th->cyan); cv_pset(k, ey, C_TXT);
         }
         break;
     }
@@ -3114,7 +3889,7 @@ static void draw_vis(void)
                  : mode == 4 ? -(dd < 400 ? (400 - dd) * 60 / 400 : 0) : 0;
             if (mode && mode != 4) resp += bump;
             y = clampi(mid - resp, 18, 106);
-            cv_rect(6 + x, y, 4, 106 - y, mode ? RGB(14, 40, 30) : RGB(26, 26, 30));
+            if (!(i & 1)) vk_dash(6 + x, y + 3, 6 + x, 106, mode ? vk_c(th->cyan, 80) : C_DK);
             if (i) cv_line(6 + px, py, 6 + x, y, mode ? th->cyan : C_MUTE);
             px = x; py = y;
         }
@@ -3123,15 +3898,12 @@ static void draw_vis(void)
         fmt_hz(s, T_HZ[clampi(li, 0, 1023)]); cv_text_fit(150, 0, 84, s, th->cyan, 2);
         break;
     }
-    case PG_GRN:                                /* the cloud on the sample */
-        vis_smp(RGB(60, 40, 90), 6, 228, 18, 88);
+    case PG_GRN:                                /* the grains (rings: the motion layer) over the sample's outline, POS,
+                                                   the spray's edges */
+        vk_smp(vk_c(th->mut, 120), 6, 228, 18, 88);
         k = 6 + P[P_GPOS] * 228 / 100; i = P[P_GSPRAY] * 228 / 100;
-        cv_rect(k - i / 2 < 6 ? 6 : k - i / 2, 18, i ? i : 1, 88, RGB(40, 28, 64));
+        if (i) { int32_t a = k - i / 2 < 6 ? 6 : k - i / 2, b = k + i / 2 > 234 ? 234 : k + i / 2; vk_dash(a, 18, a, 106, th->mut); vk_dash(b, 18, b, 106, th->mut); }
         cv_rect(k, 16, 1, 92, th->acc);
-        for (i = 0; i < 16; i++) {
-            uint32_t gp = tm_gpos[i];
-            if (gp) cv_rect(6 + (int32_t)gp * 228 / 32768 - 2, 22 + (i * 19) % 80, 4, 4, tm_grev[i] ? C_TXT : th->cyan);
-        }
         cv_text(8, 0, &FONT_S, P[P_GFRZ] ? "FREEZE" : P[P_GMODE] ? "GRAIN ON" : "GRAIN OFF", P[P_GFRZ] ? th->cyan : th->acc);
         if (P[P_MODE] == 0) cv_text_fit(110, 0, 124, "(SOURCE: OSC)", C_MUTE, 2);
         break;
@@ -3143,18 +3915,24 @@ static void draw_vis(void)
         cv_text_fit(8, 0, 110, s, on ? th->acc : C_MUTE, 0);
         fmt_hz(s, T_HZ[T_OXLO_LI[P[P_OXLO]]]); cat(s, "|"); fmt_hz(t, T_HZ[T_OXHI_LI[P[P_OXHI]]]); cat(s, t);
         cv_text_fit(110, 0, 124, s, th->cyan, 2);
-        for (k = 0; k < 3; k++) {
-            int32_t y = 22 + (2 - k) * 29, gd = on ? tm_gd[k] : 0, w = clampi(gd * 90 / (24 * 256), -90, 90);
-            int32_t lv = clampi((tm_benv[k] + 60 * 256) * 180 / (60 * 256), 0, 180);
+        for (k = 0; k < 3; k++) {               /* a solid a band (LOW a cylinder, MID a prism, HIGH a pyramid): as tall
+                                                   as the band is loud; the gain the compressor gives under it */
+            static const char *const BN[3] = {"LOW", "MID", "HIGH"};
+            int32_t cx = 46 + k * 74, gd = on ? tm_gd[k] : 0, lv = clampi((tm_benv[k] + 60 * 256) * 56 / (60 * 256), 2, 56);
             int32_t muted = P[P_OSOLO] && P[P_OSOLO] != k + 1;
-            cv_text(8, y + 2, &FONT_S, B[k], muted ? C_DK : C_TXT);
-            cv_rect(26, y, 180, 22, RGB(16, 16, 20));
-            if (on) cv_rect(26, y, lv, 22, RGB(30, 30, 38));
-            if (!muted) { if (w >= 0) cv_rect(116, y + 4, w, 14, th->cyan); else cv_rect(116 + w, y + 4, -w, 14, th->acc); }
-            cv_rect(116, y - 1, 1, 24, C_TXT);
+            uint16_t c = muted ? C_DK : k == 0 ? th->cyan : k == 1 ? th->acc : C_TXT;
+            solid(k, cx, 78, lv + 4, c, mix565(RGB(0, 0, 0), c, 90));
+            if (absi(gd) >= 256) {              /* an arrow: up the gain it gives, down the gain it takes */
+                int32_t al = clampi(absi(gd) / 128, 6, 22), ay = 74 - lv / 2, d = gd > 0 ? -1 : 1;
+                cv_line(cx + 24, ay, cx + 24, ay + d * al, c);
+                cv_line(cx + 21, ay + d * (al - 3), cx + 24, ay + d * al, c); cv_line(cx + 27, ay + d * (al - 3), cx + 24, ay + d * al, c);
+            }
+            cv_text_fit(cx - 34, 82, 68, BN[k], c, 1);
             if (absi(gd) >= 10 * 256) fmt_num(s, gd / 256, 1); else fmt_dec(s, gd * 10 / 256, 10u, 1u, 1);
-            cv_text_fit(206, y + 2, 32, muted ? "SOLO" : s, C_MUTE, 2);
+            cat(s, "dB");
+            cv_text_fit(cx - 34, 96, 68, muted ? "SOLO" : s, muted ? C_DK : C_MUTE, 1);
         }
+        (void)B;
         break;
     }
     case PG_DLY: {                              /* the repeats over 2 s, the flanger's comb */
@@ -3163,7 +3941,7 @@ static void draw_vis(void)
         fmt_ms(t, (uint32_t)tms); cv_text_fit(150, 0, 84, t, th->cyan, 2);
         for (x = tms, k = 0; x <= 2000 && k < 40 && h > 1; x += tms, k++) {
             int32_t px = 8 + x * 224 / 2000;
-            cv_rect(px - 1, 70 - h, 3, h, th->cyan);
+            cv_rect(px, 70 - h, 1, h, th->cyan); vk_circ(px, 70 - h, 2, th->cyan);
             h = h * P[P_DFB] / 100;
         }
         cv_rect(8, 70, 224, 1, C_DK);
@@ -3178,19 +3956,16 @@ static void draw_vis(void)
         break;
     }
     case PG_REV: {                              /* LOW / MID / HIGH decay, the tail */
-        static const char *const B[3] = {"LOW", "MID", "HIGH"};
         uint32_t mid = T_RDEC_MS[P[P_RDEC]], tt[3];
         tt[0] = mid * (uint32_t)P[P_RLOW] / 100u; tt[1] = mid; tt[2] = mid * (uint32_t)P[P_RHIGH] / 100u;
         cv_text(8, 0, &FONT_S, "FDN x4 // 3-BAND", th->acc);
-        for (k = 0; k < 3; k++) {
-            int32_t y = 22 + k * 24, w = clampi((ilog2_q8(tt[k]) - ilog2_q8(100u)) * 150 / (ilog2_q8(40000u) - ilog2_q8(100u)), 2, 150);
-            cv_text(8, y + 1, &FONT_S, B[k], C_TXT);
-            cv_rect(52, y + 3, 150, 14, RGB(16, 16, 20));
-            cv_rect(52, y + 3, w, 14, k == 1 ? th->acc : th->cyan);
-            fmt_ms(s, tt[k]); cv_text_fit(204, y + 1, 32, s, C_MUTE, 2);
+        for (k = 0; k < 3; k++) {               /* (the room: the motion layer) each band's decay */
+            static const char *const BS[3] = {"LO ", "MID ", "HI "};
+            s[0] = 0; cat(s, BS[k]); fmt_ms(t, tt[k]); cat(s, t);
+            cv_text_fit(4 + k * 78, 92, 76, s, k == 1 ? C_TXT : k ? th->acc : th->cyan, 1);
         }
         k = meter_px(tm_rv, 220);
-        cv_rect(8, 98, 224, 6, C_DK); cv_rect(8, 98, k, 6, th->cyan);
+        cv_rect(8, 110, 224, 1, C_DK); cv_rect(8, 110, k, 1, th->cyan);
         break;
     }
     case PG_LFO: {                              /* the two LFOs, their targets */
@@ -3199,21 +3974,21 @@ static void draw_vis(void)
             int32_t y0 = 6 + (int32_t)l * 52, shp = P[l ? P_L2SHP : P_L1SHP], mix = P[l ? P_L2MIX : P_L1MIX], px = 0, py = 0;
             uint32_t tg = TGT[P[l ? P_L2TGT : P_L1TGT]];
             uint16_t c = mix ? (l ? th->cyan : th->acc) : C_DK;
-            for (i = 0; i <= 96; i++) {
-                uint32_t ph = (uint32_t)i * 44739243u;
+            for (i = 0; i <= 24; i++) {         /* its shape, small, beside its target (the pen: the motion layer) */
+                uint32_t ph = (uint32_t)i * 178956970u;
                 int32_t t2 = (int32_t)(ph >> 16), v;
                 v = shp == 0 ? isin(ph) : shp == 1 ? (t2 < 32768 ? t2 * 2 : (65535 - t2) * 2) - 32768 : shp == 2 ? t2 - 32768
-                  : shp == 3 ? 32767 - t2 : shp == 4 ? (t2 < 32768 ? 30000 : -30000) : ((i / 12) * 7919 % 60000) - 30000;
-                v = y0 + 26 - v * 18 / 32768;
-                if (i) cv_line(8 + px, py, 8 + i, v, c);
+                  : shp == 3 ? 32767 - t2 : shp == 4 ? (t2 < 32768 ? 30000 : -30000) : ((i / 3) * 7919 % 60000) - 30000;
+                v = y0 + 16 - v * 6 / 32768;
+                if (i) cv_line(112 + px, py, 112 + i, v, c);
                 px = i; py = v;
             }
-            cv_rect(8 + 96 * (int32_t)(tm_lfo[l] + 32768) / 65536, y0 + 4, 2, 44, mix ? C_TXT : C_DK);
+            cv_rect(112 + 24 * (int32_t)(tm_lfo[l] + 32768) / 65536, y0 + 8, 1, 17, mix ? C_TXT : C_DK);
             s[0] = 'L'; s[1] = (char)('1' + l); s[2] = ' '; s[3] = 0; cat(s, PD[tg].name);
-            cv_text_fit(112, y0 + 4, 122, s, c, 0);
+            cv_text_fit(140, y0 + 4, 94, s, c, 0);
             fmt_param(tg, E[tg], t);
             s[0] = 0; cat(s, "= "); cat(s, t);
-            cv_text_fit(112, y0 + 24, 122, s, mix ? C_TXT : C_DK, 0);
+            cv_text_fit(140, y0 + 24, 94, s, mix ? C_TXT : C_DK, 0);
         }
         break;
     }
@@ -3227,13 +4002,12 @@ static void draw_vis(void)
             int32_t rq = 1024 + (((int32_t)ZRAT[mat][i] - 1024) * (int32_t)spr >> 8), f = f0 * rq / 1024, x, h, z;
             if (f > 16000) break;
             x = 10 + (ilog2_q8((uint32_t)(f < 30 ? 30 : f)) - ilog2_q8(30u)) * 216 / (ilog2_q8(16000u) - ilog2_q8(30u));
-            h = (int32_t)ZAMP[mat][i] * 70 / 32768;
-            z = clampi(tm_z[i] * 70 / 6000, 0, 80);
-            cv_rect(x - 4, 102 - h, 9, h, on ? RGB(30, 30, 44) : RGB(22, 22, 26));
-            if (on && z) cv_rect(x - 3, 102 - z, 7, z, th->cyan);
-            cv_rect(x, 102 - h, 1, h, on ? th->acc : C_DK);
+            h = (int32_t)ZAMP[mat][i] * 6 / 32768 + 1;   /* (the body: the motion layer) each mode a tick on a log axis */
+            z = clampi(tm_z[i] * 8 / 6000, 0, 8);
+            cv_rect(x, 110 - h, 1, h, on ? th->acc : C_DK);
+            if (on && z) cv_rect(x - 1, 108 - h - z, 3, 2, th->cyan);
         }
-        cv_rect(6, 103, 228, 1, C_DK);
+        cv_rect(6, 110, 228, 1, C_DK);
         break;
     }
     case PG_TRN: {                              /* a hit's envelope, and the same shaped; the gain now */
@@ -3249,15 +4023,14 @@ static void draw_vis(void)
             px = i; py = y0; qy = y1;
         }
         gl = clampi(tm_tg * 40 / (24 * 256), -40, 40);
-        cv_rect(196, 20, 24, 84, RGB(16, 16, 20)); cv_rect(194, 62, 28, 1, C_TXT);
-        if (gl >= 0) cv_rect(198, 62 - gl, 20, gl, th->acc); else cv_rect(198, 62, 20, -gl, th->cyan);
+        vk_ell(208, 70, 22, 22, 0x80000000u, 0x80000000u, 16, C_DK);   /* a gauge: the gain now, its needle */
+        { uint32_t q = 0xC0000000u + (uint32_t)(gl * 0x01000000); cv_line(208, 70, 208 + (20 * isin(q + 0x40000000u) >> 15), 70 + (20 * isin(q) >> 15), gl >= 0 ? th->acc : th->cyan); }
+        vk_circ(208, 70, 2, C_TXT);
         fmt_dec(s, tm_tg * 10 / 256, 10u, 1u, 1); cv_text_fit(166, 0, 70, s, C_MUTE, 2);
         break;
     }
     case PG_DST: {                              /* the shaper's curve | a cycle through bits and rate */
-        int32_t px = 0, py = 0, drv = (int32_t)T_DB2LIN[clampi(P[P_XDRV] * 2 + 288, 0, 480)] >> 4, sh = 16 - P[P_XBITS];
-        uint32_t sri = exp2_q16(-(P[P_XSR] * 31)), acc = 0;
-        int32_t hold = 0, on = P[P_XMIX] != 0;
+        int32_t px = 0, py = 0, drv = (int32_t)T_DB2LIN[clampi(P[P_XDRV] * 2 + 288, 0, 480)] >> 4, on = P[P_XMIX] != 0;
         cv_text_fit(8, 0, 110, E_XSHP[P[P_XSHP]], on ? th->acc : C_MUTE, 0);
         for (i = 0; i <= 100; i++) {
             int32_t x = (i - 50) * 655, y = (x * drv) >> 8, u;
@@ -3272,15 +4045,7 @@ static void draw_vis(void)
             px = i; py = y;
         }
         cv_rect(8, 60, 101, 1, C_DK); cv_rect(58, 20, 1, 80, C_DK);
-        px = 0; py = 0;
-        for (i = 0; i <= 110; i++) {           /* a 1 kHz sine (44 samples a cycle), through BITS and RATE */
-            int32_t y = isin((uint32_t)i * 39045157u) * 30000 >> 15;
-            if (sh > 0) y = ((y + (1 << (sh - 1))) >> sh) << sh;
-            if (sri < 65535u) { acc += sri * 2u / 5u; if (acc >= 65536u || i == 0) { acc &= 65535u; hold = y; } y = hold; }
-            y = 60 - y * 36 / 32768;
-            if (i) cv_line(122 + px, py, 122 + i, y, on ? th->cyan : C_DK);
-            px = i; py = y;
-        }
+        vk_crop(6, 18, 105, 85, C_MUTE);        /* (the ball through it: the motion layer) */
         s[0] = 0; fmt_param(P_XBITS, P[P_XBITS], t); cat(s, t); cat(s, " "); fmt_param(P_XSR, P[P_XSR], t); cat(s, t);
         cv_text_fit(122, 0, 112, s, th->cyan, 2);
         if (P[P_XRMIX]) { fmt_param(P_XRING, P[P_XRING], t); s[0] = 0; cat(s, "RING "); cat(s, t); cv_text_fit(122, 96, 112, s, th->mut, 2); }
@@ -3349,14 +4114,10 @@ static void draw_vis(void)
         break;
     }
     case PG_LAB: {                              /* the slot, what the TOOL will do to it */
-        static const char *const D[8] = {"PLAYS BACKWARDS", "KEEPS 01 C'S LOOP REGION", "FADES IN OVER AMOUNT", "FADES OUT OVER AMOUNT",
-                                         "TWICE AS LONG, -12st", "HALF AS LONG, +12st", "PEAK TO FULL LEVEL", "BACK TO THE SAVED SLOT"};
-        int32_t tool = P[P_STOOL] & 7, len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1, w = P[P_SAMT] * 228 / 100;
-        vis_smp(th->cyan, 6, 228, 20, 68);
-        if (tool == 1) { int32_t xs = 6 + lp_s * 228 / len, xe = 6 + lp_e * 228 / len; cv_frame(xs, 20, xe - xs > 2 ? xe - xs : 2, 68, th->acc); }
-        if (tool == 2) { cv_line(6, 88, 6 + w, 20, th->mut); cv_rect(6 + w, 20, 1, 68, th->mut); }
-        if (tool == 3) { cv_line(234 - w, 20, 234, 88, th->mut); cv_rect(234 - w, 20, 1, 68, th->mut); }
-        if (tool == 0) for (k = 0; k < 3; k++) { cv_line(30 + k * 12, 54, 38 + k * 12, 46, th->mut); cv_line(30 + k * 12, 54, 38 + k * 12, 62, th->mut); }
+        static const char *const D[9] = {"PLAYS BACKWARDS", "KEEPS THE LOOP REGION", "FADES IN OVER AMOUNT", "FADES OUT OVER AMOUNT",
+                                         "TWICE AS LONG, -12st", "HALF AS LONG, +12st", "PEAK TO FULL LEVEL", "BACK TO THE SAVED SLOT",
+                                         "THE FACTORY SOUND BACK"};
+        int32_t tool = P[P_STOOL] % 9, len = (int32_t)smp_len > 0 ? (int32_t)smp_len : 1;   /* (the ring, the sign: the motion layer) */
         slot_name(t, (uint32_t)P[P_SLOT]); s[0] = (char)('1' + P[P_SLOT]); s[1] = ' '; s[2] = 0; cat(s, t);
         cv_text_fit(8, 0, 120, s, SL[cur_slot].dirty ? th->haz : th->acc, 0);
         fmt_dec(t, len * 100 / 22050, 100u, 2u, 0); cat(t, "s"); cv_text_fit(150, 0, 84, t, C_MUTE, 2);
@@ -3372,13 +4133,24 @@ static void draw_vis(void)
         fmt_num(t, P[P_PHITS], 0); s[0] = 0; cat(s, t); cat(s, P[P_PMODE] == 5 ? " EVERY " : " IN "); fmt_param(P_PTIME, P[P_PTIME], t); cat(s, t);
         cv_text_fit(120, 0, 114, s, on ? th->cyan : C_MUTE, 2);
         cv_rect(8, 97, 224, 1, C_DK);
-        for (q = 0; q < ph_n; q++) {
-            int32_t x = 8 + (int32_t)ph_t[q] * 220 / (int32_t)(ph_len ? ph_len : 1u), h = 6 + ph_l[q] * 66 / 255;
-            cv_rect(x, 97 - h, 4, h, !on ? C_DK : ph_on && q < ph_i ? th->cyan : th->acc);
-            if (on && ph_p[q]) cv_rect(x, clampi(97 - h - 3 - ph_p[q], 17, 95), 4, 2, th->mut);   /* (its pitch, up or down) */
+        for (q = 0; q < ph_n; q++) {            /* each hit a stem and a head, as loud as it is; played: the other colour */
+            int32_t x = 10 + (int32_t)ph_t[q] * 220 / (int32_t)(ph_len ? ph_len : 1u), h = 6 + ph_l[q] * 54 / 255;
+            uint16_t c = !on ? C_DK : ph_on && q < ph_i ? th->cyan : th->acc;
+            vk_dash(x, 96, x, 97 - h, c); vk_circ(x, 97 - h, 2 + ph_l[q] / 100, c);
+            if (on && ph_p[q]) cv_rect(x - 2, clampi(97 - h - 7 - ph_p[q], 17, 95), 5, 1, th->mut);   /* (its pitch, up or down) */
         }
-        if (ph_on) { uint32_t e = fm1_ms - ph_t0; if (e < ph_len) cv_rect(8 + (int32_t)(e * 220u / ph_len), 18, 1, 80, C_TXT); }
-        if (!on) cv_text_fit(8, 44, 226, "A KEY PLAYS ONE HIT", C_MUTE, 1);
+        if (ph_on) {                            /* the ball, hopping from hit to hit; where the pattern is */
+            uint32_t e = fm1_ms - ph_t0, L = ph_len ? ph_len : 1u;
+            if (e < ph_len) {
+                cv_rect(10 + (int32_t)(e * 220u / L), 18, 1, 78, C_DK);
+                if (ph_i > 0u && ph_i < ph_n) {
+                    int32_t ta = ph_t[ph_i - 1u], tb = ph_t[ph_i], f = clampi(((int32_t)e - ta) * 256 / (tb - ta > 0 ? tb - ta : 1), 0, 256);
+                    int32_t xa = 10 + ta * 220 / (int32_t)L, xb = 10 + tb * 220 / (int32_t)L, hg = 12 + ph_l[ph_i] * 50 / 255;
+                    vk_circ(xa + (xb - xa) * f / 256, 91 - hg * 4 * f / 256 * (256 - f) / 256, 4, C_TXT);
+                }
+            }
+        }
+        if (!on) cv_text_fit(8, 18, 226, "A KEY PLAYS ONE HIT", C_MUTE, 1);
         break;
     }
     case PG_ASSET: {                            /* the 18 assets, three to a row; the one chosen, the one loaded */
@@ -3407,13 +4179,14 @@ static void draw_vis(void)
             if (has_ab == 3u) { fmt_num(t, (int32_t)nd, 0); s[0] = 0; cat(s, t); cat(s, " PARAMS DIFFER"); }
             else { s[0] = 0; cat(s, has_ab ? "ONE MORE TO STORE" : "STORE A AND B TO MORPH"); }
             cv_text_fit(8, 0, 226, s, has_ab == 3u ? C_TXT : C_MUTE, 1);
-            cv_rect(8, 22, 40, 30, has_ab & 1u ? th->acc : C_DK); cv_text(24, 29, &FONT_S, "A", has_ab & 1u ? RGB(10, 10, 12) : C_MUTE);
-            cv_rect(192, 22, 40, 30, has_ab & 2u ? th->cyan : C_DK); cv_text(208, 29, &FONT_S, "B", has_ab & 2u ? RGB(10, 10, 12) : C_MUTE);
-            cv_rect(54, 36, 132, 2, C_DK);
-            cv_rect(54, 36, x - 54, 2, morph_on ? th->mut : C_MUTE);
-            cv_rect(x - 2, 29, 5, 16, morph_on ? C_TXT : C_MUTE);
-            cv_text_fit(8, 60, 226, "SEL + OCT-   STORE A", has_ab & 1u ? C_MUTE : th->acc, 1);
-            cv_text_fit(8, 76, 226, "SEL + OCT+   STORE B", has_ab & 2u ? C_MUTE : th->cyan, 1);
+            cv_text(2, 46, &FONT_S, "A", has_ab & 1u ? th->acc : C_MUTE);   /* (A a cube, B an octahedron, the mix
+                                                   between: the motion layer) */
+            cv_text(230, 46, &FONT_S, "B", has_ab & 2u ? th->cyan : C_MUTE);
+            vk_dash(54, 37, 186, 37, C_DK);
+            cv_rect(54, 37, x - 54, 1, morph_on ? th->mut : C_MUTE);
+            cv_text_fit(8, 60, 226, has_ab == 3u ? "SEL: STORE THE NEARER ONE" : has_ab ? "SEL: STORE B" : "SEL: STORE A, THEN B",
+                        has_ab == 3u ? C_MUTE : has_ab ? th->cyan : th->acc, 1);
+            cv_text_fit(8, 76, 226, "TURN MORPH: A TO B", has_ab == 3u ? th->mut : C_MUTE, 1);
             if (morph_on) cv_text_fit(8, 94, 226, "MORPH ON: KNOBS SHOW THE MIX", th->mut, 1);
             break;
         }
@@ -3424,7 +4197,8 @@ static void draw_vis(void)
         cv_text_fit(110, 22, 124, s, P[P_VARY] ? C_TXT : C_MUTE, 2);
         for (q = 0; q < 27u; q++) {             /* the keys: their variations (the one last played lit) */
             int32_t x = 8 + (int32_t)(q % 14u) * 16, y = 54 + (int32_t)(q / 14u) * 18;
-            cv_rect(x, y, 14, 14, (q + 1u) == last && P[P_VKEYS] ? th->mut : P[P_VKEYS] ? th->box : C_DK);
+            if ((q + 1u) == last && P[P_VKEYS]) cv_rect(x, y, 14, 14, th->mut);
+            else cv_frame(x, y, 14, 14, P[P_VKEYS] ? vk_c(th->mut, 110) : C_DK);
         }
         cv_text_fit(8, 94, 226, P[P_VKEYS] ? "EACH KEY: A VARIATION" : "KEYS PLAY NOTES", P[P_VKEYS] ? th->mut : C_MUTE, 1);
         break;
@@ -3440,8 +4214,13 @@ static void draw_vis(void)
         for (q = 0; q < nh; q++) {              /* the oldest left; each bar its peak, the variation under it */
             uint32_t ix = (lvl_n - nh + q) & 15u, h = lvl_h[ix];
             int32_t bh = clampi(((int32_t)sn_lg2(h > 1u ? h : 1u) - fs + 1531) * 38 / 1531, 1, 38);   /* -36 .. 0 dBFS */
-            cv_rect(8 + (int32_t)q * 14, 58 - bh, 12, bh > 1 ? bh : 1, ft_on ? th->cyan : th->acc);
-            if (lvl_v[ix]) { fmt_num(t, lvl_v[ix], 0); cv_text_fit(8 + (int32_t)q * 14, 60, 13, t, C_MUTE, 0); }
+            cv_rect(14 + (int32_t)q * 14, 58 - bh, 1, bh, ft_on ? th->cyan : th->acc);   /* (a stem, a cap) */
+            cv_rect(10 + (int32_t)q * 14, 58 - bh, 9, 1, ft_on ? th->cyan : th->acc);
+            if (lvl_v[ix]) {                    /* (10 and up: the small font, two digits in the bar's 13 px) */
+                fmt_num(t, lvl_v[ix], 0);
+                if (lvl_v[ix] < 10u) cv_text_fit(8 + (int32_t)q * 14, 60, 13, t, C_MUTE, 0);
+                else cv_text(8 + (int32_t)q * 14 + (13 - text_w(&FONT_A, t)) / 2, 60 + TER_BASE - FONT_A_BASE, &FONT_A, t, C_MUTE);
+            }
         }
         if (nh >= 2u && mn > 0u) {              /* the spread: loudest over quietest, in dB */
             int32_t db10 = (int32_t)((sn_lg2(mx) - sn_lg2(mn)) * 60206u / 256u / 1000u);
@@ -3521,8 +4300,9 @@ static void draw_vis(void)
             sx = lx + clampi(tm_px, -1024, 1024) * 54 / 1024;
         }
         if (o) cv_rect(lx - 34, ly - r / 2 - 1, 69, 2 + o / 25, th->haz);   /* (the wall between) */
-        cv_rect(lx - 4, ly - 4, 9, 9, C_TXT);  /* (the listener) */
-        cv_rect(sx - 4, sy - 4, 9, 9, K.sp_on ? th->cyan : C_MUTE);
+        vk_circ(lx, ly, 4, C_TXT); cv_line(lx, ly - 4, lx, ly - 7, C_TXT);   /* (the listener, looking up; the source and its
+                                                   wave fronts: the motion layer) */
+        vk_circ(sx, sy, 4, K.sp_on ? th->cyan : C_MUTE); cv_pset(sx, sy, K.sp_on ? th->cyan : C_MUTE);
         db10 = tm_sg > 0 ? -(int32_t)((sn_lg2(32768u) - sn_lg2((uint32_t)tm_sg)) * 60206u / 256u / 1000u) : -999;
         fmt_dec(t, db10, 10u, 1u, 1); s[0] = 0; cat(s, t); cat(s, "dB");
         cv_text_fit(124, 2, 110, "LEVEL", C_MUTE, 0); cv_text_fit(124, 2, 110, s, K.sp_on ? C_TXT : C_MUTE, 2);
@@ -3533,8 +4313,8 @@ static void draw_vis(void)
         if (P[P_SPASS]) {
             fmt_param(P_SDOPP, P[P_SDOPP], t);
             cv_text_fit(124, 62, 110, "DOPPLER", th->acc, 0); cv_text_fit(124, 62, 110, t, th->acc, 2);
-            cv_rect(124, 88, 110, 4, C_DK);     /* (the pass, where it is) */
-            cv_rect(124, 88, (clampi(tm_px, -1024, 1024) + 1024) * 110 / 2048, 4, th->cyan);
+            cv_rect(124, 90, 110, 1, C_DK);     /* (the pass, where it is) */
+            vk_circ(124 + (clampi(tm_px, -1024, 1024) + 1024) * 110 / 2048, 90, 3, th->cyan);
         }
         break;
     }
@@ -3559,17 +4339,18 @@ static void draw_vis(void)
     }
     case PG_PAD: {                              /* the XY field, where the finger is; the routings; the keys */
         int32_t on = pad_on || pad_held, px = 10 + pad_x * 100 / 127, py = 104 - pad_y * 100 / 127;
-        cv_rect(8, 2, 104, 104, C_DK);
-        cv_rect(10, 4, 100, 100, RGB(10, 10, 12));
-        for (i = 1; i < 4; i++) { cv_rect(10 + i * 25, 4, 1, 100, C_DK); cv_rect(10, 4 + i * 25, 100, 1, C_DK); }
-        cv_rect(px - 1, 4, 2, 100, on ? th->acc : C_DK);
-        cv_rect(10, py - 1, 100, 2, on ? th->cyan : C_DK);
+        vk_crop(8, 2, 104, 104, C_MUTE);        /* the field by its corners, a dot each quarter; the finger's last
+                                                   places (the motion layer), its cross; SPRING: the pull back */
+        for (i = 1; i < 4; i++) for (k = 1; k < 4; k++) cv_rect(9 + i * 25, 3 + k * 25, 2, 2, C_DK);
+        cv_line(px, 4, px, 104, on ? vk_c(th->acc, 110) : C_DK);
+        cv_line(10, py, 110, py, on ? vk_c(th->cyan, 110) : C_DK);
+        if (on && P[P_PADM] == 0) vk_dash(60, 54, px, py, th->mut);
         {                                       /* the GESTURE's path, where its replay is */
             uint32_t q, gn = g_n;
-            for (q = 0; q < gn; q++) cv_rect(10 + g_x[q] * 100 / 127, 103 - g_y[q] * 99 / 127, 2, 2, P[P_GEST] ? th->mut : C_MUTE);
-            if (g_act && g_pos < gn) cv_rect(8 + g_x[g_pos] * 100 / 127, 101 - g_y[g_pos] * 99 / 127, 6, 6, th->mut);
+            for (q = 0; q < gn; q++) cv_pset(10 + g_x[q] * 100 / 127, 103 - g_y[q] * 99 / 127, P[P_GEST] ? th->mut : C_MUTE);
+            if (g_act && g_pos < gn) vk_circ(10 + g_x[g_pos] * 100 / 127, 103 - g_y[g_pos] * 99 / 127, 4, th->mut);
         }
-        cv_rect(px - 4, py - 4, 9, 9, on ? C_TXT : C_MUTE);
+        vk_circ(px, py, on ? 5 : 3, on ? C_TXT : C_MUTE);
         for (k = 0; k < 2; k++) {
             uint32_t a = k ? P_YAMT : P_XAMT;
             s[0] = 0; cat(s, k ? "Y " : "X "); fmt_param(a - 1u, P[a - 1u], t); cat(s, t);
@@ -3590,7 +4371,63 @@ static void draw_vis(void)
         cv_rect(146, 89, k * 88 / 127, 6, P[P_ATAMT] ? th->haz : C_MUTE);
         break;
     }
+    case PG_EMU: {                              /* the chip as a part on a board, its pins busy with the sound; the sound as
+                                                   it comes out of its DAC (steps, the DAC's levels as a ruler); the five */
+        static const char *const DEP[6] = {"", "LOG DAC", "9-BIT DAC", "BRR 4-BIT", "LINEAR PCM", "4-BIT WAVE"};
+        int32_t m = P[P_EMU], on = m && P[P_EMIX], qfp = m >= 3, np = qfp ? 8 : m == 1 ? 10 : 8, mx = 2600, px = 0, py = 0;
+        uint16_t cb = on ? th->acc : C_MUTE, cl = on ? th->cyan : C_DK;
+        uint32_t q;
+        cv_text(8, 0, &FONT_S, E_EMU[m], m ? th->acc : C_MUTE);
+        cv_text(14 + text_w(&FONT_S, E_EMU[m]), 5 - FONT_A_CAP, &FONT_A, EMU_HOST[m], C_MUTE);
+        if (m) { fmt_hz(t, emu_rate(m, P[P_ERATE] * 256)); cv_text_fit(160, 0, 74, t, th->cyan, 2); }
+        if (!m) {                               /* an empty socket */
+            for (k = 0; k < 8; k++) { cv_rect(26, 24 + k * 7, 5, 2, C_DK); cv_rect(65, 24 + k * 7, 5, 2, C_DK); }
+            vk_dash(32, 20, 64, 20, C_MUTE); vk_dash(32, 76, 64, 76, C_MUTE); vk_dash(32, 20, 32, 76, C_MUTE); vk_dash(64, 20, 64, 76, C_MUTE);
+        } else if (qfp) {                       /* a square part, pins on four sides, pin 1 marked */
+            cv_frame(24, 22, 48, 48, cb);
+            for (k = 0; k < np; k++) {
+                int32_t o = 26 + k * 6, lit = on && fx_lv > 20 && ((k + (int32_t)(fm1_ms >> 6)) % 5) == 0;
+                uint16_t c = lit ? C_TXT : cl;
+                cv_rect(o, 18, 2, 4, c); cv_rect(o, 70, 2, 4, c); cv_rect(20, o - 2, 4, 2, lit ? cl : c); cv_rect(72, o - 2, 4, 2, c);
+            }
+            vk_circ(30, 28, 2, cb);
+            cv_text(48 - text_w(&FONT_A, E_EMU[m]) / 2, 42 - FONT_A_CAP, &FONT_A, E_EMU[m], cb);
+        } else {                                /* a DIP: two rows of pins, the notch */
+            cv_frame(22, 18, 52, 62, cb);
+            vk_ell(48, 18, 5, 5, 0, 0x80000000u, 8, cb);
+            for (k = 0; k < np; k++) {
+                int32_t y = 22 + k * 54 / (np - 1), lit = on && fx_lv > 20 && ((k + (int32_t)(fm1_ms >> 6)) % 4) == 0;
+                cv_rect(16, y, 6, 2, lit ? C_TXT : cl); cv_rect(74, y, 6, 2, lit ? C_TXT : cl);
+            }
+            cv_text(48 - text_w(&FONT_A, E_EMU[m]) / 2, 45 - FONT_A_CAP, &FONT_A, E_EMU[m], cb);
+        }
+        s[0] = 0; cat(s, DEP[m]);
+        if (m == 2 || m == 4) { fmt_num(t, K.em_bits, 0); s[0] = 0; cat(s, t); cat(s, m == 2 ? "-BIT LADDER" : "-BIT PCM"); }
+        if (m == 1) { fmt_num(t, K.em_n, 0); s[0] = 0; cat(s, t); cat(s, " LOG STEPS"); }
+        if (m == 5) { fmt_num(t, 16 >> K.em_sh, 0); s[0] = 0; cat(s, t); cat(s, " LEVELS"); }
+        if (m) cv_text(48 - text_w(&FONT_A, s) / 2, 86 - FONT_A_CAP, &FONT_A, s, on ? C_TXT : C_MUTE);
+        vk_crop(104, 18, 130, 72, C_MUTE);      /* the output, as stepped as the chip leaves it */
+        for (i = 0; i < 256; i++) if (absi(fx_s[i]) > mx) mx = absi(fx_s[i]);
+        if (m == 1) for (q = 0; q < K.em_n; q++) cv_rect(106, 86 - K.em_lv[q] * 66 / 65535, q & 3u ? 2 : 4, 1, th->mut);   /* (its log steps: a ruler) */
+        if (m == 5) for (q = 0; q < 16u; q += 1u << K.em_sh) cv_rect(106, 86 - (int32_t)q * 66 / 15, 3, 1, th->mut);
+        if (m == 3) { int32_t bl = (int32_t)(16u * 22050u / (emu_rate(3, P[P_ERATE] * 256) + 1u)); for (k = 110; k < 232 && bl > 3; k += bl) vk_dash(k, 22, k, 86, C_DK); }   /* (BRR blocks) */
+        for (i = 0; i < 120; i++) {
+            int32_t x = 112 + i, y = 54 - fx_s[136 + i] * 30 / mx;
+            if (m == 5) { if (!(i & 1)) cv_rect(x, y & ~1, 2, 2, cl); }   /* (the Game Boy: chunky LCD pixels) */
+            else if (i && (m == 1 || m == 2)) { cv_line(px, py, x, py, cl); cv_line(x, py, x, y, cl); }
+            else if (i) cv_line(px, py, x, y, cl);
+            px = x; py = y;
+        }
+        if (K.em_ev && on) { fmt_num(t, P[P_ETIME] * 16, 0); s[0] = 0; cat(s, "ECHO "); cat(s, t); cat(s, "ms"); cv_text_fit(108, 72, 122, s, th->mut, 2); }
+        for (k = 1; k <= 5; k++) {              /* the five, as cartridge labels */
+            int32_t x = 4 + (k - 1) * 47, w = text_w(&FONT_A, E_EMU[k]);
+            if (k == m) { cv_rect(x, 96, 45, 13, th->acc); cv_text(x + 23 - w / 2, 99 - FONT_A_CAP, &FONT_A, E_EMU[k], RGB(0, 0, 0)); }
+            else { cv_frame(x, 96, 45, 13, C_DK); cv_text(x + 23 - w / 2, 99 - FONT_A_CAP, &FONT_A, E_EMU[k], C_MUTE); }
+        }
+        break;
     }
+    }
+    hero_value(th);                             /* (a knob just turned: its value, big) */
     cv_blit(0, 40);
 }
 static uint32_t knob_ph(int32_t norm) { return ((uint32_t)norm + 225u) * 11930465u; }   /* degrees -> phase */
@@ -3614,7 +4451,6 @@ static void glyph_undo(int32_t x, int32_t y, uint16_t c)   /* an arrow turning b
 /* EVA-01's knob row: four cells, each its knob's colour (K1 lime, K2 green, K3 purple, K4 bone). The knob turned last
  * fills its cell for a moment, black on colour. Top left the knob (an arc of dots; a list: its positions), top right
  * K1..K4 and a bar (orange: locked, else who modulates it), the name, the value big (numbers) or medium (words) */
-static const uint16_t EV_KC[4] = {EV_LIM, EV_GRN, EV_PUR, EV_TXT};
 static int eva_numlike(uint32_t p, const char *s)   /* a number with a unit: digits big, the unit small */
 {
     uint32_t n = 0;
@@ -3821,7 +4657,7 @@ static const char *sel_hint(void)               /* what a tap on SEL does on thi
     case PG_SRC: return rec_state == REC_IDLE ? "REC ARM" : rec_state == REC_ARMED ? "CANCEL" : "REC STOP";
     case PG_CHIP: return "NEW SFX";
     case PG_SPC: return P[P_SPASS] ? "PLAY PASS" : "PLAY";
-    case PG_VAR: return "NEW SEED";
+    case PG_VAR: return sub == 1u ? (var_store_b() ? "STORE B" : "STORE A") : "NEW SEED";
     case PG_BAT: return batch_on || ft_on ? "STOP" : sub == 1u ? "FIRE" : "BATCH";
     case PG_RTPC: return rt_on ? "STOP" : "SWEEP";
     case PG_LAB: return "APPLY";
@@ -3902,7 +4738,7 @@ _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session must fit the settin
 _Static_assert(NPAGE <= 24, "a page's change flag (1 << PMOD) must stay below KG_NOTE");
 #define SESSION_VER (0x0D071000u + NP)
 _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session: one settings sector");
-_Static_assert(P_ASSET == NP - 1, "a new parameter goes after P_ASSET, and session_load learns the old layout");
+_Static_assert(P_ETONE == NP - 1, "a new parameter goes last, and session_load learns the old layout");
 static void session_save(void)
 {
     session_t ss;
@@ -3920,15 +4756,18 @@ static void session_save(void)
 /* the v1.0 / v1.1 session: the same parameters without P_ASSET (added last, so every index holds) */
 #define NP_V11 P_ASSET
 typedef struct { uint32_t ver; int16_t p[NP_V11]; uint32_t lk[NLOCKW]; int16_t a[NP_V11], b[NP_V11]; uint8_t ab, mon, gn, gx[GEST_MAX], gy[GEST_MAX]; } session_v11_t;
+/* the v1.2 / v1.3 session: without SOUND CHIPS (added last) */
+typedef struct { uint32_t ver; int16_t p[NP_V13]; uint32_t lk[NLOCKW]; int16_t a[NP_V13], b[NP_V13]; uint8_t ab, mon, gn, gx[GEST_MAX], gy[GEST_MAX]; } session_v13_t;
 static void session_load(void)
 {
-    static union { session_t n; session_v11_t o; } u;    /* (static: 2.5 KB off the stack) */
+    static union { session_t n; session_v11_t o; session_v13_t m; } u;   /* (static: 2.5 KB off the stack) */
     uint32_t i, np = NP;
     const int16_t *pp, *pa, *pb;
     const uint32_t *lk;
     const uint8_t *tail;
     for (i = 0; i < NP; i++) P[i] = PD[i].def;
     if (!settings_load(&u.n, sizeof u.n) && u.n.ver == SESSION_VER) { pp = u.n.p; pa = u.n.a; pb = u.n.b; lk = u.n.lk; tail = &u.n.ab; }
+    else if (!settings_load(&u.m, sizeof u.m) && u.m.ver == 0x0D071000u + NP_V13) { np = NP_V13; pp = u.m.p; pa = u.m.a; pb = u.m.b; lk = u.m.lk; tail = &u.m.ab; }
     else if (!settings_load(&u.o, sizeof u.o) && u.o.ver == 0x0D071000u + NP_V11) { np = NP_V11; pp = u.o.p; pa = u.o.a; pb = u.o.b; lk = u.o.lk; tail = &u.o.ab; }
     else return;
     for (i = 0; i < np; i++) {
@@ -4140,7 +4979,7 @@ static void turn(uint32_t knob, int32_t e, int sel_held)
     if (p == P_THEME) { P[p] = (int16_t)((P[p] + (e > 0 ? 1u : NTHEME - 1u)) % NTHEME); ui_dirty = 0xFF; return; }
     if (p == P_MORPH) {
         morph_set(P[p] + e * step);
-        if (has_ab != 3u) say(has_ab ? "STORE B: SEL + OCT+" : "STORE A / B: SEL + OCT- / OCT+");
+        if (has_ab != 3u) say(has_ab ? "STORE B FIRST: SEL" : "STORE A AND B: SEL");
         touched();
         return;
     }
@@ -4157,18 +4996,18 @@ static void app_init(void)                      /* the session, the tables, the 
     sense_setup();
     for (i = 0; i < NP; i++) {                  /* the page of each parameter, the LFO targets */
         uint32_t m, s, k;
-        for (m = NPAGE; m-- > 0;) for (s = 0; s < 4u; s++) for (k = 0; k < 4u; k++) if (PAGE_P[m][s][k] == i) PMOD[i] = (uint8_t)m;   /* (its first page) */
+        for (m = NPAGE; m-- > 0;) if (m != PG_ASSET) for (s = 0; s < 4u; s++) for (k = 0; k < 4u; k++) if (PAGE_P[m][s][k] == i) PMOD[i] = (uint8_t)m;   /* (its module: ASSETS only repeats some) */
         {                                       /* not a mod target: what no modulation could move (lists of actions, the
                                                    seed, the batch, the meters) */
             static const uint8_t NT[] = {P_SLOT, P_THEME, P_RECM, P_VSEED, P_VKEYS, P_VLOCK, P_HAAMT, P_EVOLVE, P_BMODE, P_BCNT, P_BSPC,
                                          P_BGATE, P_TRATE, P_TPOOL, P_TORDER, P_LMATCH, P_LTGT, P_QSWP, P_QCRV, P_SPASS,
                                          P_MATK, P_MDEC, P_PMODE, P_PHITS, P_PTIME, P_PFALL, P_PPIT, P_PJIT, P_STOOL, P_SAMT, P_RECIPE, P_ASSET};
-            int no = PD[i].fmt == F_TGT || PMOD[i] == PG_PAD;
+            int no = PD[i].fmt == F_TGT || PMOD[i] == PG_PAD || PMOD[i] == PG_EMU;
             for (s = 0; s < sizeof NT; s++) if (NT[s] == i) no = 1;
             if (!no) TGT[NTGT++] = (uint8_t)i;
         }
         NOMORPH[i] = i == P_SLOT || i == P_THEME || i == P_ASSET || PD[i].fmt == F_TGT || PMOD[i] == PG_PAD ||
-                     PMOD[i] == PG_VAR || PMOD[i] == PG_BAT || PMOD[i] == PG_LAB;
+                     PMOD[i] == PG_VAR || PMOD[i] == PG_BAT || PMOD[i] == PG_LAB || PMOD[i] == PG_EMU;
         CONT[i] = PD[i].fmt != F_ENUM && PD[i].fmt != F_SLOT && PD[i].fmt != F_TGT && PD[i].hi - PD[i].lo >= 10;
         E[i] = P[i];
         S8[i] = P[i] * 256;
@@ -4201,7 +5040,7 @@ static void app_main(void)
         if (rec_state == REC_DONE) rec_commit();
         /* buttons */
         b = fm1_input_edges(&rel);
-        if (b & (1u << BTN_SEL)) { sel_down = 1; sel_used = 0; }
+        if (b & (1u << BTN_SEL)) { sel_down = 1; sel_used = 0; sel_t = fm1_ms; help_n = 0; }
         for (k = 0; k < NGRP; k++)
             if (b & (1u << GRP_BTN[k])) {           /* its modules in turn, each one's knob sets in turn */
                 if (PAGE_GRP[page] != k) { uint32_t q = 0; while (PAGE_GRP[q] != k) q++; page = (uint8_t)q; sub = 0; }
@@ -4209,24 +5048,47 @@ static void app_main(void)
                 else { uint32_t q = page + 1u; if (q >= NPAGE || PAGE_GRP[q] != k) while (q > 0u && PAGE_GRP[q - 1u] == k) q--; page = (uint8_t)q; sub = 0; }
                 ui_dirty = 0xFF;
             }
-        if (b & (1u << BTN_PLAY)) { if (sel) { slot_factory(); sel_used = 1; } else note_on(60, 32767); }
+        /* one rule on every page: a button alone does its job; with SEL held, its second job (the same everywhere):
+           PLAY note / STOP ALL, REC HAPPY ACCIDENT / UNDO, SAVE session / unlock all, OCT- octave / RESET the module,
+           OCT+ octave / RANDOMIZE the module; a tap on SEL alone is the page's own action (the footer says which) */
+        if (b & (1u << BTN_PLAY)) { if (sel) { stop_all(); sel_used = 1; } else note_on(60, 32767); }
         if (rel & (1u << BTN_PLAY)) note_off(60);
         if (b & (1u << BTN_REC)) { if (sel) { undo(); sel_used = 1; } else happy_accident(); }
         if (b & (1u << BTN_SAVE)) { if (sel) { for (i = 0; i < NLOCKW; i++) locks[i] = 0; say("ALL LOCKS CLEARED"); ui_dirty |= 4; sel_used = 1; } else session_save(); }
         if (b & (1u << BTN_OCT_DOWN)) {
-            if (sel) { if (page == PG_VAR && sub == 1u) morph_store(0); else reset_module(page); sel_used = 1; }
+            if (sel) { reset_module(page); sel_used = 1; }
             else if (oct_shift > -3) { oct_shift--; ui_dirty |= 8; }
         }
         if (b & (1u << BTN_OCT_UP)) {
-            if (sel && page == PG_VAR && sub == 1u) { morph_store(1); sel_used = 1; }
-            else if (sel) { P[P_THEME] = (int16_t)((P[P_THEME] + 1) % NTHEME); ui_dirty = 0xFF; sel_used = 1; say(E_THEME[P[P_THEME]]); }
+            if (sel) { module_random(); sel_used = 1; }
             else if (oct_shift < 3) { oct_shift++; ui_dirty |= 8; }
         }
-        if (rel & (1u << BTN_SEL)) { if (sel_down && !sel_used) page_action(); sel_down = 0; }
-        /* encoders */
-        if ((e = fm1_enc_take(ENC_SELECT)) != 0) { page = (uint8_t)((page + (e > 0 ? 1u : NPAGE - 1u)) % NPAGE); sub = 0; ui_dirty = 0xFF; }
-        if ((e = fm1_enc_take(ENC_ALGORITHM)) != 0) { P[P_WAVE] = (int16_t)clampi(P[P_WAVE] + e, 0, NWAVE - 1); touched(); }
-        if ((e = fm1_enc_take(ENC_PRESETS)) != 0) { P[P_SLOT] = (int16_t)clampi(P[P_SLOT] + e, 0, 7); touched(); }
+        if (rel & (1u << BTN_SEL)) {
+            if (sel_down && !sel_used && fm1_ms - sel_t < 700u) page_action();   /* (a tap; held longer it was a look at the help) */
+            if (help_n) { toast[0] = 0; ui_dirty |= 8; }
+            sel_down = 0; help_n = 0;
+        }
+        if (sel && sel_down && !sel_used && fm1_ms - sel_t >= 700u + help_n * 900u) {   /* SEL held: its second jobs, in turn */
+            static const char *const HELP[9] = {"SEL+K1..K4: LOCK", "SEL+REC: UNDO", "SEL+PLAY: STOP ALL", "SEL+OCT-: RESET MODULE",
+                                                "SEL+OCT+: RANDOMIZE", "SEL+SAVE: UNLOCK ALL", "SEL+SELECT: KNOB SET",
+                                                "SEL+ALGORITHM: THEME", "SEL+PRESETS: ASSET"};
+            say(HELP[help_n % 9u]); help_n++;
+        }
+        /* encoders: alone, as printed (SELECT the page, ALGORITHM the wave, PRESETS the sample); with SEL held, a step
+           further: SELECT the knob set (A B C D), ALGORITHM the look (theme), PRESETS the asset (loaded and played) */
+        if ((e = fm1_enc_take(ENC_SELECT)) != 0) {
+            if (sel) { sub = (uint8_t)((sub + (e > 0 ? 1u : NSUB[page] - 1u)) % NSUB[page]); sel_used = 1; }
+            else { page = (uint8_t)((page + (e > 0 ? 1u : NPAGE - 1u)) % NPAGE); sub = 0; }
+            ui_dirty = 0xFF;
+        }
+        if ((e = fm1_enc_take(ENC_ALGORITHM)) != 0) {
+            if (sel) { P[P_THEME] = (int16_t)((P[P_THEME] + (e > 0 ? 1u : NTHEME - 1u)) % NTHEME); ui_dirty = 0xFF; sel_used = 1; say(E_THEME[P[P_THEME]]); }
+            else { P[P_WAVE] = (int16_t)clampi(P[P_WAVE] + e, 0, NWAVE - 1); touched(); }
+        }
+        if ((e = fm1_enc_take(ENC_PRESETS)) != 0) {
+            if (sel) { asset_take((uint32_t)(P[P_ASSET] + (e > 0 ? 1 : NASSET - 1))); sel_used = 1; }
+            else { P[P_SLOT] = (int16_t)clampi(P[P_SLOT] + e, 0, 7); touched(); }
+        }
         {
             static const uint8_t KN[4] = {ENC_KNOB1, ENC_KNOB2, ENC_KNOB3, ENC_KNOB4};
             for (k = 0; k < 4u; k++) if ((e = fm1_enc_take(KN[k])) != 0) { turn(k, e, sel); if (sel) sel_used = 1; }
@@ -4271,9 +5133,10 @@ static void app_main(void)
         /* the screen */
         if (map_bits() != map_drawn) ui_dirty |= 1;
         if (ui_dirty & 1) { draw_header(); ui_dirty &= (uint8_t)~1u; }
-        if ((ui_dirty & 2) || ((tm_awake || tm_peak || rec_state || (page == PG_LFO && (P[P_L1MIX] || P[P_L2MIX])) ||
-                                (page == PG_PAD && (pad_on || pad_held || at_keys || at_midi)))   /* (something moves) */
-                               && fm1_ms - t_vis > 50u)) { draw_vis(); ui_dirty &= (uint8_t)~2u; t_vis = fm1_ms; }
+        if ((ui_dirty & 2) || fm1_ms - t_vis > ((tm_awake || tm_peak || rec_state || (page == PG_LFO && (P[P_L1MIX] || P[P_L2MIX])) ||
+                                                  (page == PG_PAD && (pad_on || pad_held || at_keys || at_midi))) ? 40u : 66u)) {
+            draw_vis(); ui_dirty &= (uint8_t)~2u; t_vis = fm1_ms;   /* (25 frames a second while something sounds or moves, 15 at rest) */
+        }
         if ((ui_dirty & 4) || (mod_any() && fm1_ms - t_knob > 80u)) { draw_knobs(); ui_dirty &= (uint8_t)~4u; t_knob = fm1_ms; }
         {                                       /* the meter: the peak since the last frame, a hold of 1 s */
             uint32_t pk = tm_peak;
