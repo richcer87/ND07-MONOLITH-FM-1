@@ -93,4 +93,8 @@
 18300 shot
 18450 btn 11
 18700 shot
-18850 end
+18850 btn 11
+19100 shot
+19250 btn 11
+19500 shot
+19650 end
