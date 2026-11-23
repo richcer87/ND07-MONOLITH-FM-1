@@ -3750,7 +3750,7 @@ static void draw_vis(void)
             uint16_t c = muted ? C_DK : k == 0 ? th->cyan : k == 1 ? th->acc : C_TXT;
             solid(k, cx, 78, lv + 4, c, mix565(RGB(0, 0, 0), c, 90));
             if (absi(gd) >= 256) {              /* an arrow: up the gain it gives, down the gain it takes */
-                int32_t al = clampi(absi(gd) / 256, 2, 22), ay = 74 - lv / 2, d = gd > 0 ? -1 : 1;
+                int32_t al = clampi(absi(gd) / 128, 6, 22), ay = 74 - lv / 2, d = gd > 0 ? -1 : 1;
                 cv_line(cx + 24, ay, cx + 24, ay + d * al, c);
                 cv_line(cx + 21, ay + d * (al - 3), cx + 24, ay + d * al, c); cv_line(cx + 27, ay + d * (al - 3), cx + 24, ay + d * al, c);
             }
@@ -3783,12 +3783,12 @@ static void draw_vis(void)
         break;
     }
     case PG_REV: {                              /* LOW / MID / HIGH decay, the tail */
-        static const char *const B[3] = {"LOW", "MID", "HIGH"};
         uint32_t mid = T_RDEC_MS[P[P_RDEC]], tt[3];
         tt[0] = mid * (uint32_t)P[P_RLOW] / 100u; tt[1] = mid; tt[2] = mid * (uint32_t)P[P_RHIGH] / 100u;
         cv_text(8, 0, &FONT_S, "FDN x4 // 3-BAND", th->acc);
         for (k = 0; k < 3; k++) {               /* (the room: the motion layer) each band's decay */
-            s[0] = 0; cat(s, B[k]); cat(s, " "); fmt_ms(t, tt[k]); cat(s, t);
+            static const char *const BS[3] = {"LO ", "MID ", "HI "};
+            s[0] = 0; cat(s, BS[k]); fmt_ms(t, tt[k]); cat(s, t);
             cv_text_fit(4 + k * 78, 92, 76, s, k == 1 ? C_TXT : k ? th->acc : th->cyan, 1);
         }
         k = meter_px(tm_rv, 220);
