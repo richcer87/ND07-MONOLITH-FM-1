@@ -110,6 +110,14 @@ respirando despacio.
 | PHYSICS | una pelota por golpe que cae y rebota |
 | BATCH | una cascada (waterfall) del espectro que se aleja |
 
+- **Capas de historia, nítidas** (la idea de los plugins de Kentaro, que dibujan el pasado del sonido como copias
+  más tenues en vez de difuminarlo; las formas son nuestras):
+  - VOWEL + SHIFT y RES MOD FILTER: una **topografía** del espectro: 5 contornos cerrados, uno por instantánea (unas 8
+    por segundo); el más nuevo afuera y brillante, los viejos adentro y tenues; SHIFT la hace girar.
+  - DELAY: los ecos como **losas** que se alejan hacia un punto de fuga sobre su eje: tantas como deja FDBK, cada una
+    más chica, un poco más girada (TIME) y tan fuerte como sonaba hace ese tiempo.
+  - ENVELOPES: un **dial** con marcas: la salida enrollada alrededor como un anillo dentado, la envolvente como el
+    arco de adentro.
 - **El valor protagonista** (idea tomada del lenguaje de las pantallas del OP-1, con formas propias): al girar una
   perilla, su valor ocupa la pantalla 1.2 s, grande, con numerales de trazo fino dibujados (no una fuente), en el color
   de esa perilla (naranja si tiene lock); la gráfica queda como sombra debajo y el nombre arriba.

@@ -3063,6 +3063,11 @@ static int32_t fx_px = -1, fx_py, fx_flux;
 static uint32_t fx_ang;
 static uint32_t fx_onset, fx_rng = 0x51F15EEDu, fx_pg = 255u, fx_n, fx_was_on;
 static uint16_t fx_lut[64];
+static uint8_t fx_hist[6][24], fx_hlv[16];       /* the spectrum's last 6 snapshots (~8 a second), the level's last 16 */
+static uint32_t fx_hn;                          /* (snapshots taken) */
+typedef struct { int16_t x0, y0, x1, y1; uint8_t lv; } fx_vl_t;
+static fx_vl_t fx_vl[640];                      /* this frame's crisp lines (pixels), drawn last, only where it is empty */
+static uint32_t fx_vn;
 static uint8_t fx_head[240u * 112u / 8u];      /* this frame's figure as crisp 1-pixel lines (on top of its trails) */
 static uint8_t fx_head_on = 1;                  /* (0: the next deposits are trails only) */
 static int32_t fx_cx0, fx_cy0, fx_cx1 = 480, fx_cy1 = 224;   /* the page's stage, Q2: figures stay inside it */
@@ -3118,6 +3123,14 @@ static void fx_listen(void)                     /* the spectrum, the level, an o
         fx_band[k] = (uint8_t)(v > o ? o + ((v - o) * 3 >> 2) : o - ((o - v + 5) / 6));
     }
     fx_lv = (uint8_t)clampi(meter_px(tm_peak, 255), 0, 255);
+    if (!(fx_n % 3u)) {                         /* (a snapshot every 3rd frame: the layers of the contours, the echoes' levels) */
+        uint32_t h;                             /* (moved back one by hand: the firmware has no memmove) */
+        for (h = 5; h > 0; h--) memcpy(fx_hist[h], fx_hist[h - 1], 24);
+        memcpy(fx_hist[0], fx_band, 24);
+        for (h = 15; h > 0; h--) fx_hlv[h] = fx_hlv[h - 1];
+        fx_hlv[0] = fx_lv;
+        fx_hn++;
+    }
     fx_flux = flux;
     if (flux > 420 || (tm_awake && !fx_was_on)) fx_onset++;
     fx_was_on = tm_awake;
@@ -3211,6 +3224,17 @@ static void fx_composite(void)                  /* after the page's plot: the tr
             if (v >= 8u) o[x] = fx_lut[v >> 2];
         }
     }
+    for (i = 0; i < fx_vn; i++) {               /* the crisp lines: bg .. lo .. hi by their level, never on the plot */
+        const fx_vl_t *l = &fx_vl[i];
+        int32_t x0 = l->x0, y0 = l->y0, dx = absi(l->x1 - x0), dy = -absi(l->y1 - y0), sx = x0 < l->x1 ? 1 : -1, sy = y0 < l->y1 ? 1 : -1, er = dx + dy, n2 = 0;
+        uint16_t c = swap16(l->lv < 128u ? mix565(bg, lo, l->lv * 2) : mix565(lo, hi, (l->lv - 128) * 2));
+        for (;;) {
+            if ((uint32_t)(x0 - 2) < 236u && (uint32_t)(y0 - 2) < 108u && !(full[y0][x0 >> 3] >> (x0 & 7) & 1u)) cv_px[y0 * cv_w + x0] = c;
+            if ((x0 == l->x1 && y0 == l->y1) || ++n2 > 600) break;
+            { int32_t e2 = 2 * er; if (e2 >= dy) { er += dy; x0 += sx; } if (e2 <= dx) { er += dx; y0 += sy; } }
+        }
+    }
+    (void)head;
 }
 static void fx_spawn(int32_t x, int32_t y, int32_t vx, int32_t vy, uint32_t life)   /* Q4 cells, Q4 per frame */
 {
@@ -3270,6 +3294,66 @@ static void fx_pen(int32_t x, int32_t y, int32_t a)   /* a line from where the p
     if (fx_px >= 0) fx_line(fx_px, fx_py, x, y, a);
     fx_px = x; fx_py = y;
 }
+static void fx_vline(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t lv)   /* a crisp line, lv 0..255 (bright) */
+{
+    if (fx_vn >= 640u || lv <= 0) return;
+    fx_vl[fx_vn].x0 = (int16_t)x0; fx_vl[fx_vn].y0 = (int16_t)y0; fx_vl[fx_vn].x1 = (int16_t)x1; fx_vl[fx_vn].y1 = (int16_t)y1;
+    fx_vl[fx_vn].lv = (uint8_t)(lv > 255 ? 255 : lv); fx_vn++;
+}
+static void fx_contours(int32_t cx, int32_t cy, int32_t r0, int32_t amp, uint32_t ang, int32_t layers)
+{   /* the spectrum as closed contours, one a snapshot: the newest outside and bright, the older ones inside, dimmer
+       (a topography of the last second); pixels, the x radius 15/8 of the y */
+    int32_t h, k;
+    for (h = layers - 1; h >= 0; h--) {
+        int32_t px = 0, py = 0, fx0 = 0, fy0 = 0, r = r0 - h * 4, lv = 255 - h * 200 / layers;
+        for (k = 0; k <= 48; k++) {
+            int32_t kk = k % 48, b = fx_hist[h][kk < 24 ? kk : 47 - kk], rr = r + b * (amp - h * amp / (layers + 2)) / 255, x, y;
+            uint32_t a = ang + (uint32_t)kk * (0xFFFFFFFFu / 48u) - (uint32_t)h * (1u << 25);
+            x = cx + (rr * 15 * isin(a + 0x40000000u) >> 18); y = cy + (rr * isin(a) >> 15);
+            if (k) fx_vline(px, py, x, y, lv); else { fx0 = x; fy0 = y; }
+            px = x; py = y;
+        }
+        (void)fx0; (void)fy0;
+    }
+}
+static void fx_slabs(int32_t vx, int32_t vy, int32_t n, uint32_t turn, int32_t fall)   /* the echoes as slabs going back to a
+                                                   vanishing point: the nearest the sound now, each further one smaller,
+                                                   turned a bit more, as loud as the level was that many snapshots ago */
+{
+    int32_t k;
+    for (k = n - 1; k >= 0; k--) {
+        int32_t sc = 256 - k * 200 / (n + 1), cx = vx + (40 * sc >> 8), cy = vy + (18 * sc >> 8), hw = 13 * sc >> 8, hh = 26 * sc >> 8;
+        int32_t lv = fx_hlv[k < 16 ? k : 15] + 40, i, c = isin(turn * (uint32_t)k + 0x40000000u), si = isin(turn * (uint32_t)k), px[4], py[4];
+        static const int8_t SX[4] = {-1, 1, 1, -1}, SY[4] = {-1, -1, 1, 1};
+        for (i = 0; i < k; i++) lv = lv * fall >> 8;
+        for (i = 0; i < 4; i++) { int32_t u = SX[i] * hw, v = SY[i] * hh; px[i] = cx + ((u * c - v * si) >> 15); py[i] = cy + ((u * si + v * c) >> 15); }
+        for (i = 0; i < 4; i++) fx_vline(px[i], py[i], px[(i + 1) & 3], py[(i + 1) & 3], lv);
+    }
+    fx_vline(vx, vy, vx + 52, vy + 24, 60);     /* (the axis they sit on) */
+}
+static void fx_dial(int32_t cx, int32_t cy, int32_t r, int32_t env)   /* a dial: ticks, the output wound around it as a jagged
+                                                   ring (louder: further out), the envelope as an arc going round */
+{
+    int32_t k, m = 2500, px = 0, py = 0, a0x = 0, a0y = 0;
+    for (k = 0; k < 256; k++) if (absi(fx_s[k]) > m) m = absi(fx_s[k]);
+    for (k = 0; k < 24; k++) {
+        uint32_t a = (uint32_t)k * (0xFFFFFFFFu / 24u);
+        int32_t c = isin(a + 0x40000000u), si = isin(a), l = k % 6 ? 3 : 6;
+        fx_vline(cx + ((r - l) * 15 * c >> 18), cy + ((r - l) * si >> 15), cx + (r * 15 * c >> 18), cy + (r * si >> 15), k % 6 ? 70 : 140);
+    }
+    for (k = 0; k <= 64; k++) {                 /* the output: 64 points, each the sample's size outward */
+        uint32_t a = (uint32_t)(k & 63) * (0xFFFFFFFFu / 64u) - 0x40000000u;
+        int32_t v = absi(fx_s[(k & 63) * 4]) * 10 / m * fx_lv / 255, rr = r + 4 + v, x = cx + (rr * 15 * isin(a + 0x40000000u) >> 18), y = cy + (rr * isin(a) >> 15);
+        if (k) fx_vline(px, py, x, y, 130 + v * 12);
+        px = x; py = y;
+    }
+    for (k = 0; k <= env * 48 / 32768; k++) {   /* the envelope: an arc inside, clockwise from the top */
+        uint32_t a = (uint32_t)k * (0xFFFFFFFFu / 48u) - 0x40000000u;
+        int32_t x = cx + ((r - 9) * 15 * isin(a + 0x40000000u) >> 18), y = cy + ((r - 9) * isin(a) >> 15);
+        if (k) fx_vline(a0x, a0y, x, y, 255);
+        a0x = x; a0y = y;
+    }
+}
 static void fx_frame(const theme_t *th)         /* the page's figure: one frame */
 {
     uint32_t t = fm1_ms, br = (uint32_t)(isin(t * 0x00030000u) + 32768) >> 8;   /* (a slow breath, 0..255: ~2.4 s) */
@@ -3280,7 +3364,7 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     int32_t hit = on != on_seen;
     on_seen = on;
     if (page != fx_pg) { memset(fx_g, 0, sizeof fx_g); memset(fx_pt, 0, sizeof fx_pt); fx_px = -1; fx_pg = page; }
-    memset(fx_head, 0, sizeof fx_head); fx_head_on = 1;
+    memset(fx_head, 0, sizeof fx_head); fx_head_on = 1; fx_vn = 0;
     fx_cx0 = 0; fx_cy0 = 0; fx_cx1 = FXW * 4; fx_cy1 = FXH * 4;
     fx_n++;
     switch (page) {
@@ -3345,13 +3429,10 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
         }
         lo = th->mut; hi = th->cyan; break;
     }
-    case PG_ENV: {                              /* a radar: the envelope swept around, petals */
-        int32_t x, y, r = 20 + (tm_awake ? tm_env * 84 / 32768 : (int32_t)(br >> 4));
-        fx_feedback(0, 256, 0, 0, 236, FXW / 2, FXH / 2);
-        fx_polar(cx, cy, r, fx_ang += 0x05000000u, &x, &y);
-        fx_pen(x, y, tm_awake ? 160 : 50);
+    case PG_ENV:                                /* a dial: the output wound around it, the envelope as the arc inside */
+        fx_feedback(0, 256, 0, 0, 120, FXW / 2, FXH / 2);
+        fx_dial(120, 58, 34 + (int32_t)(br >> 6), tm_awake ? tm_env : 0);
         break;
-    }
     case PG_TRN:                                /* each hit a ripple, going out */
         fx_feedback(0, 268, 0, 0, 228, FXW / 2, FXH / 2);
         if (hit) fx_ring(cx, cy, 10 + lv / 16, 200);
@@ -3375,15 +3456,16 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     case PG_VOX: {                              /* a spiral: SHIFT turns it (up: out, down: in), the vowel its shape */
         int32_t sh = P[P_SMIX] ? P[P_SHIFT] : 0, z = 256 + (sh > 0 ? 6 : sh < 0 ? -6 : 0);
         fx_feedback((uint32_t)(int32_t)(sh * 0x00080000), z, 0, 0, 200, FXW / 2, FXH / 2);
-        fx_head_on = 0;                         /* (the response is the plot: the spiral as trails only) */
-        fx_corona(cx, cy, 16 + P[P_VOWEL] / 6, 44, fx_ang += 0x00600000u, live ? 22 : 0);
-        if (!live) fx_ring(cx, cy, 30 + (int32_t)(br >> 4), 12);
+        fx_head_on = 0;                         /* (the response is the plot: the field as trails only) */
+        (void)z;
+        fx_contours(120, 56, 12 + P[P_VOWEL] / 8 + (int32_t)(br >> 6), 26, fx_ang += (uint32_t)(int32_t)(0x00600000 + sh * 0x00020000), 5);
         break;
     }
     case PG_FLT: {                              /* the corona, ringed where the filter cuts */
         int32_t li = P[P_RFMODE] ? (int32_t)tm_rf_li : T_RF_LI[P[P_RFFREQ]], r = 20 + (li - LI_55) * 80 / (LI_MAX - LI_55);
         fx_feedback(0x00400000u, 258, 0, 0, 200, FXW / 2, FXH / 2 - 8);
-        fx_corona(cx, cy - 32, 14, 50, fx_ang += 0x00800000u, live ? 24 : 0);   /* (above the response's fill) */
+        fx_head_on = 0;
+        fx_contours(120, 34, 8 + (int32_t)(br >> 6), 22, fx_ang += 0x00800000u, 5);   /* (above the response's fill) */
         fx_ring(cx, cy - 32, r, 10 + P[P_RFRES] / 5);
         break;
     }
@@ -3396,9 +3478,10 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
         }
         break;
     case PG_DLY:                                /* a tunnel: the sound drawn, the echoes going in, turned by the time */
-        fx_feedback((uint32_t)P[P_DTIME] * 0x00100000u, 236 - P[P_DFB] / 6, 0, 0, 200 + P[P_DFB] / 3, FXW / 2, FXH / 2);
-        if (live) fx_portrait(cx, cy, 96, fx_ang += 0x00400000u, 4, 26, 0);
-        else fx_ring(cx, cy, 80, 10 + (int32_t)(br >> 4));
+        fx_feedback((uint32_t)P[P_DTIME] * 0x00100000u, 236 - P[P_DFB] / 6, 0, 0, 190, FXW / 2, FXH / 2);
+        fx_head_on = 0;
+        if (live) fx_portrait(cx, cy, 96, fx_ang += 0x00400000u, 4, 14, 0);
+        fx_slabs(118, 14, 3 + P[P_DFB] / 12, 0x01800000u + (uint32_t)P[P_DTIME] * 0x00060000u, 150 + P[P_DFB]);   /* (the repeats: slabs, each turned a little more: TIME) */
         break;
     case PG_REV:                                /* a nebula: dust where the bands are, slowly spreading */
         fx_feedback(0x00100000u, 259, 0, 0, 236 + clampi(P[P_RDEC] / 6, 0, 16), FXW / 2, FXH / 2);
