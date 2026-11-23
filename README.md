@@ -107,8 +107,8 @@ HUDs, geometría de alambre, láminas científicas), no como copia.
 - **El valor protagonista** (idea del lenguaje del OP-1, con formas propias): al girar una perilla, su valor ocupa la
   pantalla 1.2 s, grande, con numerales de trazo fino dibujados, en el color de esa perilla (naranja si tiene lock).
 - Costo: la pantalla se redibuja a 25 cuadros por segundo mientras algo suena y a 15 en reposo, fuera del audio. Las
-  líneas nítidas cuestan menos que el campo con estelas de antes: el firmware quedó ~4 KB más chico y usa 26 KB menos
-  de RAM.
+  líneas nítidas cuestan menos que el campo con estelas de antes: el firmware ocupa casi lo mismo de flash (+0.6 KB) y
+  usa 26 KB menos de RAM.
 
 ## Nuevo en v1.2: 15 ASSETS, puntos de partida para sound design
 
