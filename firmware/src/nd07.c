@@ -3374,6 +3374,7 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     case PG_VOX: {                              /* a spiral: SHIFT turns it (up: out, down: in), the vowel its shape */
         int32_t sh = P[P_SMIX] ? P[P_SHIFT] : 0, z = 256 + (sh > 0 ? 6 : sh < 0 ? -6 : 0);
         fx_feedback((uint32_t)(int32_t)(sh * 0x00080000), z, 0, 0, 200, FXW / 2, FXH / 2);
+        fx_head_on = 0;                         /* (the response is the plot: the spiral as trails only) */
         fx_corona(cx, cy, 16 + P[P_VOWEL] / 6, 44, fx_ang += 0x00600000u, live ? 22 : 0);
         if (!live) fx_ring(cx, cy, 30 + (int32_t)(br >> 4), 12);
         break;
@@ -3385,11 +3386,12 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
         fx_ring(cx, cy - 32, r, 10 + P[P_RFRES] / 5);
         break;
     }
-    case PG_OTT:                                /* three rings, each band breathing */
+    case PG_OTT:                                /* three rings, each band breathing (between the bars: trails only) */
         fx_feedback(0, 258, 0, 0, 218, FXW / 2, FXH / 2);
+        fx_head_on = 0;
         for (k = 0; k < 3; k++) {
             int32_t lvk = live ? clampi((tm_benv[k] + 60 * 256) * 255 / (60 * 256), 0, 255) : (int32_t)br / 4;
-            fx_ring(cx, cy, 16 + k * 26 + lvk / 24, 10 + lvk / 5);
+            fx_ring(cx, cy, 16 + k * 26 + lvk / 24, 4 + lvk / 12);   /* (faint: the bars are the plot) */
         }
         break;
     case PG_DLY:                                /* a tunnel: the sound drawn, the echoes going in, turned by the time */
@@ -3416,10 +3418,11 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     }
     case PG_LFO: {                              /* a harmonograph: LFO 1 left-right, LFO 2 up-down */
         int32_t a1 = P[P_L1MIX] ? tm_lfo[0] : isin(t * 0x00110000u), a2 = P[P_L2MIX] ? tm_lfo[1] : isin(t * 0x000B0000u);
-        fx_feedback(0x00100000u, 256, 0, 0, 240, FXW / 2, FXH / 2);
+        fx_feedback(0x00100000u, 256, 0, 0, 240, 29, FXH / 2);
+        fx_cx0 = 4 * 2; fx_cx1 = 112 * 2;       /* (in the LFOs' plot; the targets on the right stay clear) */
         {   /* (the pen has weight: a square wave draws a rounded path) */
-            static int32_t hx = 240 * 16, hy = 112 * 16;
-            hx += ((cx + a1 * 210 / 32768) * 16 - hx) / 4; hy += ((cy + a2 * 92 / 32768) * 16 - hy) / 4;
+            static int32_t hx = 116 * 16, hy = 112 * 16;
+            hx += ((116 + a1 * 100 / 32768) * 16 - hx) / 4; hy += ((cy + a2 * 92 / 32768) * 16 - hy) / 4;
             fx_pen(hx >> 4, hy >> 4, P[P_L1MIX] || P[P_L2MIX] ? 150 : 50);
         }
         break;
@@ -3440,11 +3443,11 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
         int32_t px = 0, py = 0;
         fx_feedback(0, 256, 0, 0, 200, FXW / 2, FXH / 2);
         if (sub) { fx_head_on = 0; break; }
-        fx_cy0 = 30 * 2; fx_cy1 = 84 * 2;       /* (between the seed's line and the keys) */
+        fx_cx0 = 56 * 2; fx_cx1 = 164 * 2; fx_cy0 = 16 * 2; fx_cy1 = 50 * 2;   /* (between the seed and VARY, above the keys) */
         for (k = 0; k < 12; k++) {
             int32_t x, y;
             sd ^= sd << 13; sd ^= sd >> 17; sd ^= sd << 5;
-            x = 24 + (int32_t)(sd % 432u); y = 64 + (int32_t)((sd >> 9) % 100u);
+            x = fx_cx0 + 8 + (int32_t)(sd % (uint32_t)(fx_cx1 - fx_cx0 - 16)); y = fx_cy0 + 6 + (int32_t)((sd >> 9) % (uint32_t)(fx_cy1 - fx_cy0 - 12));
             fx_dot(x, y, 70 + (int32_t)((br * (uint32_t)(k + 3)) & 63u));
             fx_head_on = 0; if (k) fx_line(px, py, x, y, 10); fx_head_on = 1;
             px = x; py = y;
@@ -3455,13 +3458,15 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     }
     case PG_PHY:                                /* the hits: a ball each, falling, bouncing */
         fx_feedback(0, 256, 0, 0, 210, FXW / 2, FXH / 2);
-        if (hit) fx_spawn((int32_t)(20 + fx_rand() % 80u) * 16, 6 * 16, (int32_t)(fx_rand() & 31u) - 16, 0, 90);
+        fx_cy0 = 16 * 2;                        /* (under the trigger's name) */
+        if (hit) fx_spawn((int32_t)(20 + fx_rand() % 80u) * 16, 9 * 16, (int32_t)(fx_rand() & 31u) - 16, 0, 90);
         fx_particles(5, 180, 255);
-        if (!live && !(fx_n % 40u)) fx_spawn((int32_t)(30 + fx_rand() % 60u) * 16, 6 * 16, (int32_t)(fx_rand() & 15u) - 8, 0, 60);
+        if (!live && !(fx_n % 40u)) fx_spawn((int32_t)(30 + fx_rand() % 60u) * 16, 9 * 16, (int32_t)(fx_rand() & 15u) - 8, 0, 60);
         break;
     case PG_BAT:                                /* a waterfall: the spectrum as ridges, going back */
         fx_feedback(0, 252, 0, -96, 232, FXW / 2, 6);
         fx_cy0 = 16 * 2; fx_cy1 = 78 * 2;
+        fx_head_on = 0;                         /* (around the bars: trails only) */
         if (!(fx_n & 1u)) fx_ridge(fx_cy1 - 4, 80, live ? 100 : 10);
         lo = th->mut; break;
     default: break;
@@ -3907,7 +3912,11 @@ static void draw_vis(void)
             uint32_t ix = (lvl_n - nh + q) & 15u, h = lvl_h[ix];
             int32_t bh = clampi(((int32_t)sn_lg2(h > 1u ? h : 1u) - fs + 1531) * 38 / 1531, 1, 38);   /* -36 .. 0 dBFS */
             cv_rect(8 + (int32_t)q * 14, 58 - bh, 12, bh > 1 ? bh : 1, ft_on ? th->cyan : th->acc);
-            if (lvl_v[ix]) { fmt_num(t, lvl_v[ix], 0); cv_text_fit(8 + (int32_t)q * 14, 60, 13, t, C_MUTE, 0); }
+            if (lvl_v[ix]) {                    /* (10 and up: the small font, two digits in the bar's 13 px) */
+                fmt_num(t, lvl_v[ix], 0);
+                if (lvl_v[ix] < 10u) cv_text_fit(8 + (int32_t)q * 14, 60, 13, t, C_MUTE, 0);
+                else cv_text(8 + (int32_t)q * 14 + (13 - text_w(&FONT_A, t)) / 2, 60 + TER_BASE - FONT_A_BASE, &FONT_A, t, C_MUTE);
+            }
         }
         if (nh >= 2u && mn > 0u) {              /* the spread: loudest over quietest, in dB */
             int32_t db10 = (int32_t)((sn_lg2(mx) - sn_lg2(mn)) * 60206u / 256u / 1000u);
