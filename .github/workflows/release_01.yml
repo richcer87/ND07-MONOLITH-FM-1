@@ -67,6 +67,21 @@ jobs:
           path: build/nd07*.fwsc
           if-no-files-found: error
 
+      - name: The install page and this build (GitHub Pages; main only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          python3 tools/make_install_page.py --check
+          mkdir -p _site/fw
+          cp -r web/. _site/
+          cp build/nd07.fwsc _site/fw/nd07.fwsc
+          printf '{"commit":"%s","date":"%s","product":"FM-1_47070"}\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%d\ %H:%M)" > _site/fw/build.json
+          ls -l _site _site/fw
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: _site
+
       - name: Attest the packages (tags only)
         if: github.ref_type == 'tag'
         uses: actions/attest-build-provenance@v2
@@ -82,3 +97,21 @@ jobs:
             build/nd07-[0-9]*.fwsc
             build/SHA256SUMS
           generate_release_notes: true
+
+  # the install page with the latest build of main: https://<user>.github.io/<repo>/install.html
+  # (once: Settings -> Pages -> Build and deployment -> Source: GitHub Actions. Until then this job fails alone:
+  # the firmware job and its artifact are not affected)
+  pages:
+    if: github.ref == 'refs/heads/main'
+    needs: firmware
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}install.html
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

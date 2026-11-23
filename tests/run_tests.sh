@@ -87,6 +87,7 @@ done
 [ "$found" = 1 ] || echo "(no SMK-37 packages in build/: BOARD=smk37 sh build.sh first)"
 
 run "installer (tools/fm1_install.py): FM-1 and SMK-37, install and the update-mode resume check the model" python3 tests/install_test.py
+run "install page (web/install.html, current with its source): the web installer against a simulated FM-1" sh -c "python3 tools/make_install_page.py --check && node tests/web_install_test.mjs"
 
 [ "$fail" = 0 ] && echo "ALL TESTS PASSED" || echo "SOME TESTS FAILED"
 exit "$fail"
