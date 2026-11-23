@@ -19,14 +19,39 @@ pantalla y flash. Licencia GPL-3.0-only.
 > samples) y puede sobrescribirlo. Lo más limpio es instalarlo sobre el firmware oficial. Para volver, el Hub reinstala
 > el oficial.
 
-## Probarlo en el emulador online
+## Instalar y actualizar
 
-1. Sube esta carpeta a un repositorio de GitHub (rama `main`).
-2. En **Actions**, espera el workflow `release` y descarga el artifact **nd07-fwsc**; extrae `nd07.fwsc`.
-3. Abre [joakimeriksson.github.io/fm1-emu](https://joakimeriksson.github.io/fm1-emu/), abre tu `nd07.fwsc` en la página
-   y presiona Start.
+**Lo más sencillo: la página del instalador** (Chrome o Edge, sin instalar nada):
+`https://richcer87.github.io/ND07-MONOLITH-FM-1/install.html`
 
-Para una versión publicada: `git tag v1.3 && git push --tags`.
+1. Conecta el FM-1 por USB y presiona **Conectar FM-1**.
+2. La página ya trae **la última compilación de `main`**. También puedes arrastrar cualquier `.fwsc` de ND-07.
+3. Presiona **Instalar**. Tarda alrededor de un minuto y el FM-1 se reinicia solo. Si algo se corta, vuelve a conectar
+   y presiona Instalar otra vez: termina la escritura que quedó a medias.
+
+El ciclo completo de una actualización: haces merge (o push) en `main` → GitHub Actions compila el firmware, corre las
+pruebas y publica la página con ese `.fwsc` (unos 5 minutos) → abres la página → Instalar.
+
+> **Una sola vez:** en GitHub, **Settings → Pages → Build and deployment → Source: GitHub Actions**. Hasta entonces la
+> página no se publica (el firmware se sigue compilando igual y queda en Actions → **nd07-fwsc**).
+
+**En Windows, con doble clic:** `tools/ND07-Update.cmd` (junto a `tools/fm1_install.py`). Descarga la última
+compilación y la instala; si arrastras un `.fwsc` encima, instala ese. Necesita Python 3 (instala `mido` y
+`python-rtmidi` la primera vez). A mano: `py tools\fm1_install.py nd07.fwsc`.
+
+La página usa el protocolo de actualización de SLOOP (`web/fm1ota.js`, `web/fm1pkg.js`, Leo Kuroshita, GPL-3.0),
+dentro de un solo archivo (`python3 tools/make_install_page.py` lo genera desde `web/install.src.html`), así que
+también funciona abierta desde el disco. Solo acepta paquetes de ND-07 (`FM-1_4707N`) que traen el cargador de
+actualización, y revisa los CRC del paquete antes de escribir.
+
+**¿Y el FM-1 Firmware Hub?** Para publicar ND-07 para otros, el Hub es lo mejor: instala con un clic desde el
+navegador, revisa el paquete y te deja volver al oficial. Pero no sirve para iterar: solo lista firmware probado en un
+FM-1 real, lee el repositorio una vez por noche y ofrece la última *release* (las que crea `git tag vX.Y && git push
+--tags`, con atestación de compilación). El envío empieza en `https://thefirmwarehub.com/submit/`; antes revisa
+"Is my identity free?" para `FM-1_4707N`. `fmhub.json` ya tiene la ficha.
+
+**Emulador:** [joakimeriksson.github.io/fm1-emu](https://joakimeriksson.github.io/fm1-emu/) abre un `.fwsc` sin el
+aparato.
 
 ## Nuevo en v1.3: el orden del trabajo y pantallas en movimiento
 
@@ -49,40 +74,46 @@ Para una versión publicada: `git tag v1.3 && git push --tags`.
 - La cadena de audio no cambió de orden y el sonido es idéntico (todas las pruebas de audio dan el mismo resultado bit a
   bit que la 1.2). El HAPPY ACCIDENT da los mismos resultados que antes. Las sesiones de la 1.1 y la 1.2 se cargan.
 
-**Pantallas en movimiento.** Debajo de la gráfica de cada página hay una capa que se mueve con lo que suena: la salida
-se analiza 25 veces por segundo (FFT de 256 puntos, 24 bandas logarítmicas de 60 Hz a 11 kHz, el nivel y los ataques)
-y cada página la dibuja como una figura abstracta en un campo que se realimenta: cada cuadro se gira, se acerca o se
-aleja, se desplaza y se desvanece, así que las figuras dejan estelas, espirales y túneles. En silencio siguen
-respirando despacio. Usa los colores del tema.
+**Pantallas en movimiento.** Cada página tiene una figura abstracta que se mueve con lo que suena, minimalista: líneas
+y puntos de un pixel con estelas que se desvanecen, en los colores del tema. La salida se analiza 25 veces por segundo
+(FFT de 256 puntos, 24 bandas de 60 Hz a 11 kHz, el nivel y los ataques); la figura se dibuja en un campo que se
+realimenta (gira, se acerca o se aleja, se desvanece) y por eso deja espirales, túneles y rastros. En silencio sigue
+respirando despacio.
+
+- **Nada se encima:** la figura solo ocupa lo que la gráfica de la página deja vacío y nunca toca su texto ni sus
+  curvas (un borde oscuro de un pixel alrededor de todo lo que la página dibuja). Cada página le da un escenario:
+  en SPACE el plano de la izquierda, en RTPC la caja de la curva, en BATCH el espacio entre el título y las lecturas.
+- La línea de cada cuadro va nítida; sus estelas, más tenues. Donde la gráfica llena la página (OSC & SAMPLE,
+  SAMPLE LAB) solo quedan las estelas.
 
 | Página | Figura |
 | --- | --- |
-| ASSETS | una corona del espectro que gira |
-| OSC & SAMPLE | el sonido contra sí mismo un instante después (un retrato de fase); en silencio, la onda elegida girando |
+| ASSETS | un espectrómetro pequeño a la derecha de la línea de estado; la cuadrícula queda quieta |
+| OSC & SAMPLE | el sonido contra sí mismo un instante después (un retrato de fase), solo estelas |
 | CHIP OSC | el retrato en una retícula de pasos de 8 bits |
 | GRAIN ENGINE | los granos como un vórtice |
-| SAMPLE LAB | el slot enrollado en un anillo |
+| SAMPLE LAB | el slot enrollado en un anillo, solo estelas |
 | ENVELOPES | un radar: la envolvente barrida en círculo, pétalos |
 | TRANSIENT | cada golpe, una onda que se expande |
 | RESONATOR | los modos como cuerpos en órbita: cada uno más lejos y más rápido, encendidos mientras suenan |
-| DESTROY | el retrato doblado en su borde (DRIVE) y sacudido |
-| VOWEL + SHIFT | una espiral: SHIFT la gira (arriba hacia afuera, abajo hacia adentro) |
-| RES MOD FILTER | la corona con un anillo donde corta el filtro |
+| DESTROY | el retrato como nube de puntos, doblada en su borde (DRIVE) y sacudida |
+| VOWEL + SHIFT | un anillo de 48 puntos que el espectro empuja; SHIFT lo gira (arriba hacia afuera, abajo hacia adentro) |
+| RES MOD FILTER | el anillo de puntos, dentro de un aro que marca dónde corta el filtro |
 | OTT | tres anillos, cada banda respirando |
 | DELAY + FLANGER | un túnel: los ecos van hacia adentro, girados por TIME, más largos con FDBK |
 | REVERB | una nebulosa de polvo donde están las bandas; DECAY la hace durar |
 | SPACE | ondas desde donde está la fuente |
-| LFO 1 + 2 | un armonógrafo: LFO 1 de lado a lado, LFO 2 de arriba abajo |
+| LFO 1 + 2 | un armonógrafo: LFO 1 de lado a lado, LFO 2 de arriba abajo (la pluma tiene peso) |
 | RTPC | crestas del espectro que suben más rápido cuanto más alto el valor |
 | CHAOS PAD | el dedo, en remolino |
-| VARIATION | una constelación de la semilla que destella con cada nota |
+| VARIATION | una constelación de la semilla: 12 estrellas unidas, que destellan con cada nota |
 | PHYSICS | una pelota por golpe que cae y rebota |
 | BATCH | una cascada (waterfall) del espectro que se aleja |
 
 - Costo: la pantalla se redibuja a 25 cuadros por segundo mientras algo suena y a 15 en reposo. El audio solo copia
   sus muestras; todo lo demás corre en el loop principal, fuera del audio. En el host cuesta ~0.1 ms por cuadro; en el
   FM-1 hay que verlo en el CPU del pie de pantalla.
-- Memoria: el campo usa 13 KB del pool y la copia de la salida, 2 KB.
+- Memoria: el campo usa 13 KB del pool; la copia de la salida, la línea nítida y el borde, 9 KB.
 
 ## Nuevo en v1.2: 15 ASSETS, puntos de partida para sound design
 
@@ -499,6 +530,7 @@ sh tests/run_host.sh tests/scripts/gesture.txt     # 20 GESTURE: grabado (SEL y 
 sh tests/run_host.sh tests/scripts/vox.txt         # 09 VOWEL + SHIFT: shift arriba/abajo, la espiral, U O A E I
 sh tests/run_host.sh tests/scripts/export.txt      # el slot de vuelta como WAV (SysEx LEN / READ)
 cc -O2 -Wall -o /tmp/sense_test tests/sense_test.c && /tmp/sense_test   # la velocity con presiones sintéticas
+python3 tools/make_install_page.py && node tests/web_install_test.mjs   # la página del instalador (contra un FM-1 simulado)
 python3 tools/gen_nd07_tables.py                  # tablas (seno, tanh, filtros, dB, μ-law...)
 python3 tools/gen_samples.py                      # los samples de fábrica
 ```

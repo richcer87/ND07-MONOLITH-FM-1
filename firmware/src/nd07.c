@@ -3032,6 +3032,9 @@ static int32_t fx_px = -1, fx_py, fx_flux;
 static uint32_t fx_ang;
 static uint32_t fx_onset, fx_rng = 0x51F15EEDu, fx_pg = 255u, fx_n, fx_was_on;
 static uint16_t fx_lut[64];
+static uint8_t fx_head[240u * 112u / 8u];      /* this frame's figure as crisp 1-pixel lines (on top of its trails) */
+static uint8_t fx_head_on = 1;                  /* (0: the next deposits are trails only) */
+static int32_t fx_cx0, fx_cy0, fx_cx1 = 480, fx_cy1 = 224;   /* the page's stage, Q2: figures stay inside it */
 static uint32_t fx_lut_key = 0xFFFFFFFFu;
 typedef struct { int16_t x, y, vx, vy; uint8_t life, a; } fx_part_t;
 static fx_part_t fx_pt[24];
@@ -3091,7 +3094,9 @@ static void fx_listen(void)                     /* the spectrum, the level, an o
 static inline void fx_dot(int32_t xq, int32_t yq, int32_t a)    /* a splat at a quarter-cell (Q2), 4 cells weighted */
 {
     int32_t x = xq >> 2, y = yq >> 2, fx = xq & 3, fy = yq & 3, i, w[4];
-    if ((uint32_t)x >= FXW - 1u || (uint32_t)y >= FXH - 1u) return;
+    if ((uint32_t)x >= FXW - 1u || (uint32_t)y >= FXH - 1u || xq < fx_cx0 || xq >= fx_cx1 || yq < fx_cy0 || yq >= fx_cy1) return;
+    if (fx_head_on) { uint32_t px = (uint32_t)xq >> 1, py = (uint32_t)yq >> 1; if (px < 240u && py < 112u) fx_head[(py * 240u + px) >> 3] |= (uint8_t)(1u << (px & 7u)); }
+    a = a * 5 >> 3;                             /* (the trail: softer than the line) */
     w[0] = (4 - fx) * (4 - fy); w[1] = fx * (4 - fy); w[2] = (4 - fx) * fy; w[3] = fx * fy;
     for (i = 0; i < 4; i++) {
         uint8_t *g = &fx_g[(y + (i >> 1)) * FXW + x + (i & 1)];
@@ -3137,20 +3142,41 @@ static void fx_feedback(uint32_t rot, int32_t zoom, int32_t dx, int32_t dy, int3
         }
     }
 }
-static void fx_show(uint16_t lo, uint16_t hi, uint16_t bg)   /* the field on the canvas, 2x, smoothed */
+static uint16_t fx_lo, fx_hi, fx_bg;            /* this frame's colours (fx_frame), for fx_composite */
+static void fx_composite(void)                  /* after the page's plot: the trails and the lines go only where the
+                                                   screen is empty and not next to the plot or its text (a dark rim
+                                                   keeps every word and curve clean) */
 {
+    uint16_t lo = fx_lo, hi = fx_hi, bg = fx_bg, e0 = swap16(bg), e1 = swap16(EVA ? EV_BG : RGB(10, 10, 13)), head = swap16(mix565(lo, hi, 200));
     uint32_t key = (uint32_t)lo << 16 ^ hi ^ (uint32_t)bg << 5, i, x, y;
-    if (key != fx_lut_key) {                    /* dark .. lo .. hi, the brightest a little short of hi */
+    static uint8_t full[112][30];               /* the plot's pixels, grown by one */
+    if (key != fx_lut_key) {                    /* dark .. lo .. a little short of hi: trails stay quiet */
         for (i = 0; i < 64u; i++)
-            fx_lut[i] = swap16(i < 32u ? mix565(bg, lo, (int32_t)(i * i * 256u / 1024u)) : mix565(lo, hi, (int32_t)((i - 32u) * 200u / 32u)));
+            fx_lut[i] = swap16(i < 36u ? mix565(bg, lo, (int32_t)(i * i * 170u / 1296u)) : mix565(mix565(bg, lo, 170), hi, (int32_t)((i - 36u) * 130u / 28u)));
         fx_lut_key = key;
     }
-    for (y = 2; y < 110u; y++) {                /* (inside the frame and the crop marks) */
+    memset(full, 0, sizeof full);
+    for (y = 0; y < 112u; y++) {
+        const uint16_t *r = &cv_px[y * cv_w];
+        for (x = 0; x < 240u; x++)
+            if (r[x] != e0 && r[x] != e1) {
+                uint32_t yy;
+                for (yy = y ? y - 1u : 0u; yy <= y + 1u && yy < 112u; yy++) {
+                    full[yy][x >> 3] |= (uint8_t)(1u << (x & 7u));
+                    if (x) full[yy][(x - 1u) >> 3] |= (uint8_t)(1u << ((x - 1u) & 7u));
+                    if (x < 239u) full[yy][(x + 1u) >> 3] |= (uint8_t)(1u << ((x + 1u) & 7u));
+                }
+            }
+    }
+    for (y = 2; y < 110u; y++) {
         const uint8_t *r0 = &fx_g[(y >> 1) * FXW], *r1 = (y & 1u) && (y >> 1) + 1u < FXH ? r0 + FXW : r0;
         uint16_t *o = &cv_px[y * cv_w];
         for (x = 2; x < 238u; x++) {
-            uint32_t c = x >> 1, n = (x & 1u) && c + 1u < FXW ? c + 1u : c;
-            uint32_t v = ((uint32_t)r0[c] + r0[n] + r1[c] + r1[n]) >> 2;
+            uint32_t c, n, v;
+            if (full[y][x >> 3] >> (x & 7u) & 1u) continue;
+            if (fx_head[(y * 240u + x) >> 3] >> (x & 7u) & 1u) { o[x] = head; continue; }
+            c = x >> 1; n = (x & 1u) && c + 1u < FXW ? c + 1u : c;
+            v = ((uint32_t)r0[c] + r0[n] + r1[c] + r1[n]) >> 2;
             if (v >= 8u) o[x] = fx_lut[v >> 2];
         }
     }
@@ -3177,34 +3203,34 @@ static void fx_particles(int32_t grav, int32_t bounce, int32_t a)   /* move, (fa
     }
 }
 static void fx_portrait(int32_t cx, int32_t cy, int32_t r, uint32_t ang, int32_t tau, int32_t a, int32_t fold)
-{   /* the sound against itself a moment later (a phase portrait), turned; fold: folded back at the rim (DESTROY) */
-    int32_t i, m = 2500, px = 0, py = 0, c = isin(ang + 0x40000000u), s = isin(ang);
+{   /* the sound against itself a moment later (a phase portrait), turned, as a cloud of points that leave trails;
+       fold: folded back at the rim (DESTROY) */
+    int32_t i, m = 2500, c = isin(ang + 0x40000000u), s = isin(ang);
     for (i = 0; i < 256; i++) if (absi(fx_s[i]) > m) m = absi(fx_s[i]);
-    for (i = 0; i + tau < 256; i += 2) {
+    for (i = 0; i + tau < 256; i += 3) {
         int32_t u = fx_s[i] * r / m, v = fx_s[i + tau] * r / m, x, y;
         if (fold) { int32_t lim = r * 2 / 3; while (u > lim || u < -lim) u = u > 0 ? 2 * lim - u : -2 * lim - u; while (v > lim || v < -lim) v = v > 0 ? 2 * lim - v : -2 * lim - v; }
         x = cx + ((u * c - v * s) * 15 >> 18); y = cy + ((u * s + v * c) >> 15);
-        if (i) fx_line(px, py, x, y, a);
-        px = x; py = y;
+        fx_dot(x, y, a);
     }
 }
-static void fx_corona(int32_t cx, int32_t cy, int32_t r0, int32_t len, uint32_t ang, int32_t a)   /* the spectrum, in a ring */
+static void fx_corona(int32_t cx, int32_t cy, int32_t r0, int32_t len, uint32_t ang, int32_t a)   /* the spectrum: a ring of
+                                                   48 points pushed out by the bands (mirrored), each with a short tail */
 {
     uint32_t k;
-    for (k = 0; k < 24u; k++) {
-        int32_t m = fx_band[k] * len / 255, x0, y0, x1, y1;
-        uint32_t t = ang + (k << 26) + (1u << 25);
-        if (m < 2) continue;
-        fx_polar(cx, cy, r0, t, &x0, &y0); fx_polar(cx, cy, r0 + m, t, &x1, &y1); fx_line(x0, y0, x1, y1, a);
-        t = ang - (k << 26) - (1u << 25);
-        fx_polar(cx, cy, r0, t, &x0, &y0); fx_polar(cx, cy, r0 + m, t, &x1, &y1); fx_line(x0, y0, x1, y1, a);
+    for (k = 0; k < 48u; k++) {
+        int32_t b = fx_band[k < 24u ? k : 47u - k], m = b * len / 255, x0, y0, x1, y1;
+        uint32_t t = ang + k * (0xFFFFFFFFu / 48u);
+        fx_polar(cx, cy, r0 + m, t, &x1, &y1);
+        fx_dot(x1, y1, a + b / 2);
+        if (m > 6) { fx_polar(cx, cy, r0 + m - 6, t, &x0, &y0); fx_line(x0, y0, x1, y1, a); }
     }
 }
-static void fx_ridge(int32_t y0, int32_t h, int32_t a)   /* the spectrum as one line across (a ridge of the waterfall) */
+static void fx_ridge(int32_t y0, int32_t h, int32_t a)   /* the spectrum as one line across the stage (a ridge of the waterfall) */
 {
-    int32_t k, px = 4 * 4, py = y0;
+    int32_t k, w = fx_cx1 - fx_cx0 - 8, px = fx_cx0 + 4, py = y0;
     for (k = 0; k < 24; k++) {
-        int32_t x = (4 + (k + 1) * 112 / 24) * 4, y = y0 - fx_band[k] * h / 255;
+        int32_t x = fx_cx0 + 4 + (k + 1) * w / 24, y = y0 - fx_band[k] * h / 255;
         fx_line(px, py, x, y, a); px = x; py = y;
     }
 }
@@ -3223,14 +3249,22 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     int32_t hit = on != on_seen;
     on_seen = on;
     if (page != fx_pg) { memset(fx_g, 0, sizeof fx_g); memset(fx_pt, 0, sizeof fx_pt); fx_px = -1; fx_pg = page; }
+    memset(fx_head, 0, sizeof fx_head); fx_head_on = 1;
+    fx_cx0 = 0; fx_cy0 = 0; fx_cx1 = FXW * 4; fx_cy1 = FXH * 4;
     fx_n++;
     switch (page) {
-    case PG_ASSET:                              /* a corona of the spectrum, turning; at rest, a slow ring */
-        fx_feedback(0x00800000u, 262, 0, 0, 226, FXW / 2, FXH / 2);
-        fx_corona(cx, cy, 44 + (int32_t)(br >> 4), 70, fx_ang += 0x01000000u + (uint32_t)lv * 0x40000u, 22);
-        if (!live) fx_ring(cx, cy, 60 + (int32_t)(br >> 3), 8);
+    case PG_ASSET:                              /* a small spectrometer at the right of the status line: 24 bars of
+                                                   points; under the grid nothing moves */
+        fx_feedback(0, 256, 0, 0, 150, FXW / 2, FXH / 2);
+        fx_cx0 = 176 * 2; fx_cy0 = 0; fx_cx1 = 236 * 2; fx_cy1 = 14 * 2;
+        for (k = 0; k < 18; k++) {
+            int32_t h = live ? fx_band[k + 3] * 22 / 255 : (int32_t)((uint32_t)(isin(t * 0x00040000u + (uint32_t)k * 0x0A000000u) + 32768) >> 13), x = (180 + k * 3) * 2, j;
+            for (j = 0; j <= h; j += 4) fx_dot(x, 26 - j, 80);
+        }
         lo = th->mut; hi = th->acc; break;
-    case PG_SRC:                                /* the sound against itself (a phase portrait); at rest the wave, breathing */
+    case PG_SRC:                                /* the sound against itself (a phase portrait); at rest the wave, breathing
+                                                   (the plots fill this page: trails only) */
+        fx_head_on = 0;
         fx_feedback(0x00C00000u, 254, 0, 0, 196, FXW / 2, FXH / 2);
         if (live) fx_portrait(cx, cy, 96, fx_ang += 0x00800000u, 6, 28, 0);
         else {
@@ -3270,6 +3304,7 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
         break;
     case PG_LAB: {                              /* the slot wound in a ring, turning slowly; where it plays */
         uint32_t ang = (fx_ang += 0x00300000u);
+        fx_head_on = 0;                         /* (under its plot: trails only) */
         fx_feedback(0, 256, 0, 0, 120, FXW / 2, FXH / 2);
         for (k = 0; k < 114; k++) {
             int32_t a = smp_view[k * 2] * 24 / 128, x0, y0, x1, y1;
@@ -3309,14 +3344,14 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     case PG_VOX: {                              /* a spiral: SHIFT turns it (up: out, down: in), the vowel its shape */
         int32_t sh = P[P_SMIX] ? P[P_SHIFT] : 0, z = 256 + (sh > 0 ? 6 : sh < 0 ? -6 : 0);
         fx_feedback((uint32_t)(int32_t)(sh * 0x00080000), z, 0, 0, 200, FXW / 2, FXH / 2);
-        fx_corona(cx, cy, 28 + P[P_VOWEL] / 4, 60, fx_ang += 0x00600000u, live ? 22 : 0);
+        fx_corona(cx, cy, 16 + P[P_VOWEL] / 6, 44, fx_ang += 0x00600000u, live ? 22 : 0);
         if (!live) fx_ring(cx, cy, 30 + (int32_t)(br >> 4), 12);
         break;
     }
     case PG_FLT: {                              /* the corona, ringed where the filter cuts */
         int32_t li = P[P_RFMODE] ? (int32_t)tm_rf_li : T_RF_LI[P[P_RFFREQ]], r = 20 + (li - LI_55) * 80 / (LI_MAX - LI_55);
         fx_feedback(0x00400000u, 258, 0, 0, 200, FXW / 2, FXH / 2 - 8);
-        fx_corona(cx, cy - 32, 22, 80, fx_ang += 0x00800000u, live ? 24 : 0);   /* (above the response's fill) */
+        fx_corona(cx, cy - 32, 14, 50, fx_ang += 0x00800000u, live ? 24 : 0);   /* (above the response's fill) */
         fx_ring(cx, cy - 32, r, 10 + P[P_RFRES] / 5);
         break;
     }
@@ -3343,6 +3378,7 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     case PG_SPC: {                              /* the source, a ripple from where it is */
         int32_t x = cx + clampi(tm_px, -1024, 1024) * 100 / 1024, y = cy;
         fx_feedback(0, 264, 0, 0, 220, x >> 2, y >> 2);
+        fx_cx0 = 4 * 2; fx_cx1 = 120 * 2; fx_cy0 = 4 * 2; fx_cy1 = 108 * 2;
         if (hit || (live && !(fx_n & 3u))) fx_ring(x, y, 12, 60 + lv / 3);
         if (!live) fx_ring(cx, cy, 10 + (int32_t)(br >> 3), 10);
         fx_dot(x, y, 120);
@@ -3360,22 +3396,29 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
     }
     case PG_RTPC:                               /* rising: the faster, the higher the value */
         fx_feedback(0, 256, 0, -(64 + (int32_t)tm_rtpc / 40), 236, FXW / 2, FXH / 2);
-        fx_ridge(FXH * 4 - 8, 60 + (int32_t)tm_rtpc / 100, live ? 90 : 14);
+        fx_cx0 = 10 * 2; fx_cx1 = 108 * 2; fx_cy0 = 6 * 2; fx_cy1 = 102 * 2;
+        fx_ridge(fx_cy1 - 4, 60 + (int32_t)tm_rtpc / 100, live ? 90 : 14);
         lo = th->mut; break;
     case PG_PAD:                                /* the finger, swirling */
         fx_feedback(0x01000000u, 252, 0, 0, 232, FXW / 2, FXH / 2);
         if (pad_on || pad_held) fx_pen(8 + (int32_t)pad_x * 460 / 127, 8 + (127 - (int32_t)pad_y) * 205 / 127, 200);
         else { fx_px = -1; fx_dot(cx + (isin(t * 0x00090000u) * 150 >> 15), cy + (isin(t * 0x000D0000u) * 70 >> 15), 70); }
         break;
-    case PG_VAR: {                              /* a constellation of the seed: a star a key, the one played flares */
-        uint32_t s = (uint32_t)P[P_VSEED] * 2654435761u + 1u;
+    case PG_VAR: {                              /* a constellation of the seed: 12 stars joined in order, the one
+                                                   played flares (on B, the morph's page: nothing) */
+        uint32_t sd = (uint32_t)P[P_VSEED] * 2654435761u + 1u;
+        int32_t px = 0, py = 0;
         fx_feedback(0, 256, 0, 0, 200, FXW / 2, FXH / 2);
-        for (k = 0; k < 27; k++) {
+        if (sub) { fx_head_on = 0; break; }
+        fx_cy0 = 30 * 2; fx_cy1 = 84 * 2;       /* (between the seed's line and the keys) */
+        for (k = 0; k < 12; k++) {
             int32_t x, y;
-            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
-            x = 16 + (int32_t)(s % 448u); y = 12 + (int32_t)((s >> 9) % 200u);
-            fx_dot(x, y, 70 + (int32_t)((br * (uint32_t)(k + 3)) & 63u)); fx_dot(x + 1, y + 1, 50);
-            if (hit && (fx_rand() & 7u) == 0u) { fx_spawn(x * 4, y * 4, (int32_t)(fx_rand() & 31u) - 16, -(int32_t)(fx_rand() & 15u), 30); }
+            sd ^= sd << 13; sd ^= sd >> 17; sd ^= sd << 5;
+            x = 24 + (int32_t)(sd % 432u); y = 64 + (int32_t)((sd >> 9) % 100u);
+            fx_dot(x, y, 70 + (int32_t)((br * (uint32_t)(k + 3)) & 63u));
+            fx_head_on = 0; if (k) fx_line(px, py, x, y, 10); fx_head_on = 1;
+            px = x; py = y;
+            if (hit && (fx_rand() & 3u) == 0u) fx_spawn(x * 4, y * 4, (int32_t)(fx_rand() & 31u) - 16, -(int32_t)(fx_rand() & 15u), 24);
         }
         fx_particles(0, 0, 120);
         break;
@@ -3387,13 +3430,14 @@ static void fx_frame(const theme_t *th)         /* the page's figure: one frame 
         if (!live && !(fx_n % 40u)) fx_spawn((int32_t)(30 + fx_rand() % 60u) * 16, 6 * 16, (int32_t)(fx_rand() & 15u) - 8, 0, 60);
         break;
     case PG_BAT:                                /* a waterfall: the spectrum as ridges, going back */
-        fx_feedback(0, 252, 0, -96, 238, FXW / 2, 6);
-        if (!(fx_n & 1u)) fx_ridge(FXH * 4 - 6, 120, live ? 100 : 10);
+        fx_feedback(0, 252, 0, -96, 232, FXW / 2, 6);
+        fx_cy0 = 16 * 2; fx_cy1 = 78 * 2;
+        if (!(fx_n & 1u)) fx_ridge(fx_cy1 - 4, 80, live ? 100 : 10);
         lo = th->mut; break;
     default: break;
     }
     if (EVA) { if (lo == th->cyan) lo = EV_GRN; }
-    fx_show(mix565(bg, lo, 150), hi, bg);
+    fx_lo = lo; fx_hi = hi; fx_bg = bg;
 }
 static void draw_vis(void)
 {
@@ -3981,6 +4025,7 @@ static void draw_vis(void)
         break;
     }
     }
+    fx_composite();                             /* the motion, in what the plot leaves empty */
     cv_blit(0, 40);
 }
 static uint32_t knob_ph(int32_t norm) { return ((uint32_t)norm + 225u) * 11930465u; }   /* degrees -> phase */
