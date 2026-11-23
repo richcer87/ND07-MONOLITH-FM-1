@@ -758,7 +758,7 @@ static void eng_coef(void)                      /* 03 CHIP ENGINE: the seven kno
         K.o_alg = (uint8_t)e[0]; K.o_fb = (uint8_t)e[1];
         for (k = 0; k < 4; k++) K.o_mul[k] = (uint32_t)(((uint64_t)RAT2[e[2]][k] * 32768u * exp2_q16(e[5] * IRR[k] / 100)) >> 16);
         K.o_ml = e[3] * 327;
-        ms = (3000u * exp2_q16(-e[4] * 2099 / 1000)) >> 16;   /* MOD DEC: 3 s .. 10 ms */
+        ms = (3000u * exp2_q16(-e[4] * 2099 / 100)) >> 16;   /* MOD DEC: 3 s .. 10 ms */
         K.o_dk = e[4] ? alpha_ms_x10(ms * 10u) : 0u;
         K.o_ssg = (uint8_t)e[6];
         K.o_sinc = 97391u * 1000u / (ms ? ms : 1u) * 1u;   /* (an SSG-EG cycle: the decay's time) */
@@ -775,7 +775,7 @@ static void eng_coef(void)                      /* 03 CHIP ENGINE: the seven kno
     case 4: {                                   /* SCSP */
         static const uint32_t FMR[8] = {32768, 65536, 98304, 131072, 196608, 262144, 327680, 458752};
         K.sc_fms = (uint8_t)e[0]; K.sc_fmd = e[1] * 64 / 100; K.sc_fmr = FMR[e[2]];
-        K.sc_linc = ((20u * exp2_q16(e[3] * 2491 / 1000)) >> 16) * 974u;   /* 0.2 .. 170 Hz */
+        K.sc_linc = ((20u * exp2_q16(e[3] * 2491 / 100)) >> 16) * 974u;   /* 0.2 .. 170 Hz */
         K.sc_pl = e[4] * 7864 / 100; K.sc_al = e[5] * 327; K.sc_dsp = (uint8_t)e[6]; K.sc_dinc = DLFO[e[6]] * 974u;
         break;
     }
@@ -3457,9 +3457,9 @@ static void fmt_param(uint32_t p, int32_t v, char *s)
             if (P[P_E1] >= 3) { static const char *const BM[5] = {"NOTE/4", "NOTE/2", "NOTE", "NOTEx2", "NOTEx4"}; cat(s, BM[v * 5 / 101]); }
             else fmt_chz(s, (25u * exp2_q16(v * 256 / 10)) >> 16);
             break;
-        case EF_DEC: if (!v) cat(s, "HOLD"); else fmt_ms(s, (3000u * exp2_q16(-v * 2099 / 1000)) >> 16); break;
+        case EF_DEC: if (!v) cat(s, "HOLD"); else fmt_ms(s, (3000u * exp2_q16(-v * 2099 / 100)) >> 16); break;
         case EF_MS16: fmt_num(s, v * 16, 0); cat(s, "ms"); break;
-        case EF_LHZ: fmt_chz(s, (20u * exp2_q16(v * 2491 / 1000)) >> 16); break;
+        case EF_LHZ: fmt_chz(s, (20u * exp2_q16(v * 2491 / 100)) >> 16); break;
         case EF_CH3: if (!v) cat(s, "OFF"); else { fmt_num(s, v, 0); cat(s, "%"); } break;
         default: if (!ep->hi) cat(s, "-"); else fmt_num(s, v, 0);
         }
