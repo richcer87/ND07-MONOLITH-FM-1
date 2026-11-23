@@ -1,4 +1,6 @@
-1 btn 8
+1 btndown 3
+2 btn 5
+3 btnup 3
 # 17 CHAOS PAD + KEYS: the pad over MIDI (CC16 X, CC17 Y, CC18 touch), the aftertouch (channel pressure)
 # LFO pressed 6 times: 15 LFO A B, 16 RTPC A B C, 17 CHAOS PAD
 300 midi 0x90 48 110
@@ -17,5 +19,4 @@
 2000 midi 0x80 48 0
 2600 end
 
-100 btn 11
-101 enc 0 -1
+4 enc 0 1

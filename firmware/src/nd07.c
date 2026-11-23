@@ -142,12 +142,14 @@ enum { P_MODE, P_WAVE, P_SLOT, P_BLEND, P_TUNE, P_COLOR, P_STR, P_SLOOP,
        P_STOOL, P_SAMT, P_RECIPE, P_GEST,
        P_VOWEL, P_VSIZE, P_VRES, P_VMIX, P_SHIFT, P_SFB, P_STIME, P_SMIX, P_GROWL, P_GRATE,
        P_THEME, P_ASSET,
-       P_EMU, P_ERATE, P_EGRIT, P_EMIX, P_EECHO, P_ETIME, P_ETONE, NP };
+       P_EMU, P_ERATE, P_EGRIT, P_EMIX, P_EECHO, P_ETIME, P_ETONE,
+       P_ENG, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7, P_SECRET, NP };
+#define NP_V15 (P_ETONE + 1)                    /* the parameters of a v1.4 / v1.5 session */
 #define NP_V13 (P_ASSET + 1)                    /* the parameters of a v1.2 / v1.3 session */
 #define NTGT_N (NP_V13 - 48)                    /* the mod targets: all but the slot, the theme, the asset, the target pickers, the PAD page, SOUND CHIPS */
 enum { F_VOWEL, F_SHZ, F_CENT, F_SEC10, F_RPM, F_INT, F_PCT, F_X100, F_ENUM, F_ATT, F_DEC, F_REL, F_GLIDE, F_RFHZ, F_RATE, F_DBH, F_XLO, F_XHI, F_PM, F_MS, F_DENS,
        F_SPR, F_SLOT, F_SEMI, F_BLEND, F_DTIME, F_FRATE, F_LRATE, F_RDEC, F_TGT, F_OXLO, F_OXHI, F_TSC,
-       F_ZDEC, F_BITS, F_XSR, F_XRHZ, F_BSPC, F_ERATE, F_ETIME, F_ETONE };
+       F_ZDEC, F_BITS, F_XSR, F_XRHZ, F_BSPC, F_ERATE, F_ETIME, F_ETONE, F_ENG };
 typedef struct { const char *name; int16_t lo, hi, def; uint8_t step, fmt; const char *const *en; } pdesc_t;
 static const char *const E_ONOFF[] = {"OFF", "ON"};
 static const char *const E_MODE[] = {"OSC", "SAMPLE", "MIX"};
@@ -189,6 +191,9 @@ static const char *const E_BCNT[] = {"4", "8", "12", "16"};
 /* SOUND CHIPS: the sound printed through a console's chip; each with the machines it sounds like */
 static const char *const E_EMU[] = {"OFF", "YM2149", "YM2612", "S-DSP", "SCSP", "DMG"};
 static const char *const EMU_HOST[] = {"", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY"};
+/* 03 CHIP ENGINE: the voice itself made by a console's chip (ND07: the oscillators and samples of 02, as they are) */
+static const char *const E_ENG[] = {"ND07", "YM2149", "YM2612", "SPC700", "SCSP", "DMG"};
+#define NENG 6
 /* 15 ASSETS: base sounds for game audio, three to a row (the screen's grid): hits, weapons, motion, UI, rewards, beings */
 static const char *const E_ASSET[] = {"EXPLODE", "IMPACT", "HIT", "DEBRIS", "GUNSHOT", "LASER", "ZAP", "WHOOSH", "RISER",
                                       "UI OK", "UI ERR", "UI TICK", "PICKUP", "POWERUP", "MAGIC", "MONSTER", "ALARM", "ENGINE", "SYNTH"};
@@ -288,6 +293,11 @@ static const pdesc_t PD[NP] = {
     [P_EGRIT] = {"GRIT", 0, 100, 30, 1, F_PCT, 0},          [P_EMIX] = {"MIX", 0, 100, 100, 1, F_PCT, 0},
     [P_EECHO] = {"ECHO", 0, 100, 0, 1, F_PCT, 0},           [P_ETIME] = {"E TIME", 1, 15, 5, 1, F_ETIME, 0},
     [P_ETONE] = {"TONE", 0, 100, 60, 1, F_ETONE, 0},
+    [P_ENG] = {"ENGINE", 0, NENG - 1, 0, 1, F_ENUM, E_ENG},
+    [P_E1] = {"E1", 0, 100, 0, 1, F_ENG, 0}, [P_E2] = {"E2", 0, 100, 0, 1, F_ENG, 0}, [P_E3] = {"E3", 0, 100, 0, 1, F_ENG, 0},
+    [P_E4] = {"E4", 0, 100, 0, 1, F_ENG, 0}, [P_E5] = {"E5", 0, 100, 0, 1, F_ENG, 0}, [P_E6] = {"E6", 0, 100, 0, 1, F_ENG, 0},
+    [P_E7] = {"E7", 0, 100, 0, 1, F_ENG, 0},
+    [P_SECRET] = {"SECRET", 0, 1, 0, 1, F_ENUM, E_ONOFF},
 };
 static volatile int16_t P[NP];                  /* as set */
 static volatile int16_t E[NP];                  /* as heard: P plus the LFOs, rounded (for the screen) */
@@ -301,8 +311,9 @@ static int lock_get(uint32_t p) { return (int)(locks[p >> 5] >> (p & 31u) & 1u);
  * source (HOME, ARP), shape it (ENV), colour it (EDIT), glue it (GLO), place it (FX), move it (LFO: what the game
  * drives), then vary it and deliver it (SEQ). The audio chain keeps its own order (see the audio). Each button holds its
  * pages one after the other (PAGE_GRP), so pressing it walks them in that order. */
-enum { PG_ASSET, PG_SRC, PG_CHIP, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_RES, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY, PG_REV,
-       PG_SPC, PG_LFO, PG_RTPC, PG_PAD, PG_VAR, PG_PHY, PG_BAT, NPAGE };
+enum { PG_ASSET, PG_SRC, PG_CHIP, PG_GRN, PG_LAB, PG_ENV, PG_RES, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY, PG_REV,
+       PG_LFO, PG_RTPC, PG_PAD, PG_VAR, PG_PHY, PG_BAT, NPAGE,
+       PG_TRN = NPAGE, PG_SPC };                /* (not pages: the views of ENVELOPES D and MULTIBAND REVERB C) */
 #define NO 255u                                 /* (an empty knob) */
 static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
     {{P_ASSET, P_VARY, P_RECIPE, P_VOL}, {P_EMU, P_ERATE, P_EGRIT, P_EMIX}, {P_EECHO, P_ETIME, P_ETONE, NO}, {NO, NO, NO, NO}},   /* (VARY,
@@ -311,16 +322,14 @@ static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
     {{P_CDUTY, P_CSWEEP, P_CARP, P_CARPS}, {P_CSTEP, P_CNOISE, P_CPRE, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_GPOS, P_GSIZE, P_GDENS, P_GSPRAY}, {P_GREV, P_GMODE, P_GFRZ, P_RNDP}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_STOOL, P_SAMT, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
-    {{P_ATT, P_DEC, P_SUS, P_REL}, {P_GLIDE, P_VELO, P_PITCH, P_VOL}, {P_MATK, P_MDEC, P_MAMT, P_MTGT}, {NO, NO, NO, NO}},
-    {{P_TATK, P_TSUS, P_TTIME, P_TOUT}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
+    {{P_ATT, P_DEC, P_SUS, P_REL}, {P_GLIDE, P_VELO, P_PITCH, P_VOL}, {P_MATK, P_MDEC, P_MAMT, P_MTGT}, {P_TATK, P_TSUS, P_TTIME, P_TOUT}},
     {{P_ZMAT, P_ZPITCH, P_ZDEC, P_ZMIX}, {P_ZDAMP, P_ZSPRD, P_ZHIT, P_ZTRK}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_XDRV, P_XSHP, P_XBITS, P_XSR}, {P_XRING, P_XRMIX, P_XTONE, P_XMIX}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_VOWEL, P_VSIZE, P_VRES, P_VMIX}, {P_SHIFT, P_SFB, P_STIME, P_SMIX}, {P_GROWL, P_GRATE, NO, NO}, {NO, NO, NO, NO}},
     {{P_RFFREQ, P_RFRES, P_RFMODE, P_RFPOLE}, {P_RFDEP, P_RFRATE, P_RFSRC, P_RFDRV}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_ODEPTH, P_OTIME, P_OUP, P_ODOWN}, {P_OIN, P_OOUT, P_OSTYLE, P_OPOS}, {P_OLOW, P_OMID, P_OHIGH, P_OTHR}, {P_OXLO, P_OXHI, P_OSOLO, NO}},
     {{P_DTIME, P_DFB, P_DMIX, P_DROUTE}, {P_FRATE, P_FDEPTH, P_FREGEN, P_FMIX}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
-    {{P_RSIZE, P_RDEC, P_RPRE, P_RMIX}, {P_RLOW, P_RHIGH, P_RXLO, P_RXHI}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
-    {{P_SDIST, P_SOCCL, P_SPASS, P_SDOPP}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
+    {{P_RSIZE, P_RDEC, P_RPRE, P_RMIX}, {P_RLOW, P_RHIGH, P_RXLO, P_RXHI}, {P_SDIST, P_SOCCL, P_SPASS, P_SDOPP}, {NO, NO, NO, NO}},
     {{P_L1SHP, P_L1RATE, P_L1MIX, P_L1TGT}, {P_L2SHP, P_L2RATE, P_L2MIX, P_L2TGT}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_QINT, P_QSWP, P_QCRV, NO}, {P_Q1T, P_Q1A, P_Q2T, P_Q2A}, {P_Q3T, P_Q3A, NO, NO}, {NO, NO, NO, NO}},
     {{P_XTGT, P_XAMT, P_YTGT, P_YAMT}, {P_PADM, P_GEST, P_KVEL, P_KSENS}, {P_ATTGT, P_ATAMT, NO, NO}, {NO, NO, NO, NO}},
@@ -330,12 +339,12 @@ static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
 };
 static uint8_t NSUB[NPAGE];                     /* how many of A B C D a page has */
 static const char *const PAGE_NAME[NPAGE] = {"ASSETS", "OSC & SAMPLE", "CHIP OSC", "GRAIN ENGINE", "SAMPLE LAB", "ENVELOPES",
-                                             "TRANSIENT", "RESONATOR", "DESTROY", "VOWEL + SHIFT", "RES MOD FILTER", "OTT MULTIBAND",
-                                             "DELAY + FLANGER", "MULTIBAND REVERB", "SPACE + MOTION", "LFO 1 + 2", "RTPC", "CHAOS PAD + KEYS",
+                                             "RESONATOR", "DESTROY", "VOWEL + SHIFT", "RES MOD FILTER", "OTT MULTIBAND",
+                                             "DELAY + FLANGER", "MULTIBAND REVERB", "LFO 1 + 2", "RTPC", "CHAOS PAD + KEYS",
                                              "VARIATION + MORPH", "PHYSICS TRIGGER", "BATCH + FIRE TEST"};
 #define NGRP 8
 static const uint8_t GRP_BTN[NGRP] = {BTN_HOME, BTN_ARP, BTN_ENV, BTN_EDIT, BTN_GLO, BTN_FX, BTN_LFO, BTN_SEQ};
-static const uint8_t PAGE_GRP[NPAGE] = {0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 3, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7};   /* the button each module is under */
+static const uint8_t PAGE_GRP[NPAGE] = {0, 0, 0, 1, 1, 2, 3, 3, 3, 3, 4, 5, 5, 6, 6, 6, 7, 7, 7};   /* the button each module is under */
 static uint8_t PMOD[NP];                        /* the page of each parameter */
 static uint8_t TGT[NP], NTGT;                   /* the mod targets (LFOs, pad, aftertouch): see NTGT_N */
 /* 13 the CHAOS PAD (MIDI CC16 / 17 / 18) and the aftertouch (the keys, MIDI pressure): mod sources, 0..127 */
@@ -653,7 +662,7 @@ static void reso_coef(void)
         K.zn = (uint8_t)(k + 1u);
     }
 }
-enum { KG_SRC = 1u << PG_SRC, KG_ENV = 1u << PG_ENV, KG_RES = 1u << PG_RES, KG_TRN = 1u << PG_TRN, KG_FLT = 1u << PG_FLT,
+enum { KG_SRC = 1u << PG_SRC, KG_ENV = 1u << PG_ENV, KG_RES = 1u << PG_RES, KG_TRN = 1u << PG_ENV, KG_FLT = 1u << PG_FLT,
        KG_DST = 1u << PG_DST, KG_VOX = 1u << PG_VOX, KG_GRN = 1u << PG_GRN, KG_OTT = 1u << PG_OTT, KG_DLY = 1u << PG_DLY, KG_REV = 1u << PG_REV,
        KG_CHIP = 1u << PG_CHIP, KG_EMU = 1u << PG_ASSET, KG_NOTE = 1u << 24, KG_ALL = 0xFFFFFFFFu };
 static void k_update(uint32_t chg)              /* the coefficients; the costly groups only when their knobs moved */
@@ -1022,9 +1031,9 @@ static uint32_t lfo_block(uint32_t n)           /* every 64 samples: MORPH, VARY
     {                                           /* the pad: each axis moves its parameter around where it is set; no
                                                    finger on it: the GESTURE, from the note's start */
         uint32_t gi = ns_t / 882u, gn = g_n;
-        int32_t px = pad_x, py = pad_y, on = pad_on || pad_held;
+        int32_t px = pad_x, py = pad_y, on = P[P_SECRET] && (pad_on || pad_held);
         g_act = 0;
-        if (!on && P[P_GEST] && gn && tm_awake && (P[P_GEST] == 2 || gi < gn)) {
+        if (!on && P[P_SECRET] && P[P_GEST] && gn && tm_awake && (P[P_GEST] == 2 || gi < gn)) {
             gi %= gn; px = g_x[gi]; py = g_y[gi]; on = 1; g_act = 1; g_pos = gi;
         }
         if (on) {
@@ -1040,9 +1049,9 @@ static uint32_t lfo_block(uint32_t n)           /* every 64 samples: MORPH, VARY
     if (ns_t < 0x70000000u) ns_t += n;
     {
         int32_t at = at_keys > at_midi ? at_keys : at_midi;
-        if (at && P[P_ATAMT]) lfo_apply(t8, TGT[P[P_ATTGT]], at * 258, P[P_ATAMT]);
+        if (at && P[P_ATAMT] && P[P_SECRET]) lfo_apply(t8, TGT[P[P_ATTGT]], at * 258, P[P_ATAMT]);
     }
-    if (rt_on || P[P_QINT]) rtpc_block(t8); else tm_rtpc = 0;
+    if (P[P_SECRET] && (rt_on || P[P_QINT])) rtpc_block(t8); else tm_rtpc = 0;
     space_block(t8, n);
     for (i = 0; i < NP; i++) {
         int32_t sv = S8[i], nv;
@@ -2015,6 +2024,20 @@ static void all_off(void) { nstk = 0; v_gate = 0; }
 
 /* ======================================================================== actions */
 static uint8_t page, sub, mutant, session_dirty;
+static int pg_hidden(uint32_t m)                /* RTPC and the CHAOS PAD: out of sight until SEL + LFO finds them */
+{
+    return (m == PG_RTPC || m == PG_PAD) && !P[P_SECRET];
+}
+static uint32_t page_no(uint32_t m)             /* the number it shows: the pages in sight counted */
+{
+    uint32_t q, n = 1;
+    for (q = 0; q < m; q++) if (!pg_hidden(q)) n++;
+    return n;
+}
+static uint32_t pg_view(void)                   /* what the screen shows: the page, or the module inside it (TRANSIENT, SPACE) */
+{
+    return page == PG_ENV && sub == 3u ? PG_TRN : page == PG_REV && sub == 2u ? PG_SPC : page;
+}
 static uint32_t sel_t, help_n;                  /* SEL: when it went down, the help lines shown while held */
 static uint8_t ui_dirty = 0xFF;                 /* 1 header 2 vis 4 knobs 8 footer */
 static uint32_t t_toast, mutant_t;
@@ -2119,6 +2142,7 @@ static void rnd_module(uint32_t m)
     case PG_CHIP: chip_preset((uint32_t)rnd_range(0, 6)); break;
     case PG_ASSET: set_unlocked(P_EMU, rnd_range(1, 5)); set_unlocked(P_ERATE, rnd_range(10, 90)); set_unlocked(P_EGRIT, rnd_range(0, 100));
             set_unlocked(P_EECHO, rnd_range(0, 99) > 50 ? rnd_range(10, 60) : 0); set_unlocked(P_ETIME, rnd_range(2, 12)); set_unlocked(P_ETONE, rnd_range(30, 100)); break;
+    case PG_SPC: set_unlocked(P_SDIST, rnd_range(0, 80)); set_unlocked(P_SOCCL, rnd_range(0, 99) > 60 ? rnd_range(20, 90) : 0); break;
     case PG_PAD: set_unlocked(P_XTGT, rnd_range(0, NTGT - 1)); set_unlocked(P_YTGT, rnd_range(0, NTGT - 1));
             set_unlocked(P_XAMT, rnd_range(-100, 100)); set_unlocked(P_YAMT, rnd_range(-100, 100)); break;
     default: set_unlocked(P_VARY, rnd_range(10, 70)); break;   /* MORPH: only the variation */
@@ -2212,7 +2236,7 @@ static void recipe(uint32_t kind)
 static const uint8_t ASSET_VOL[NASSET] = {45, 68, 36, 77, 79, 86, 80, 100, 42, 100, 100, 100, 100, 75, 36, 91, 36, 53, 37};   /* (each asset about as loud as the others: tests/assets_test.c) */
 static uint8_t asset_cur = 255;                 /* the one loaded (255: none) and the patch it left, to show EDITED */
 static uint32_t asset_sum;
-static uint32_t patch_sum(void) { uint32_t i, h = 2166136261u; for (i = 0; i < NP; i++) if (i != P_ASSET && i != P_THEME && i != P_VSEED) { h ^= (uint16_t)P[i]; h *= 16777619u; } return h; }
+static uint32_t patch_sum(void) { uint32_t i, h = 2166136261u; for (i = 0; i < NP; i++) if (i != P_ASSET && i != P_THEME && i != P_VSEED && i != P_SECRET) { h ^= (uint16_t)P[i]; h *= 16777619u; } return h; }
 static uint16_t asset_hold_ms(uint32_t k)       /* how long its audition holds the key */
 {
     static const uint16_t H[NASSET] = {150, 150, 150, 0, 150, 150, 400, 700, 1600, 150, 150, 150, 150, 150, 400, 900, 1200, 1200, 900};
@@ -2339,7 +2363,7 @@ static void asset_load(uint32_t k)
     }
     RS(P_VOL, ASSET_VOL[k]);
 }
-static const uint8_t HA_ORDER[NPAGE] = {PG_SRC, PG_CHIP, PG_RES, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY,
+static const uint8_t HA_ORDER[NPAGE + 2] = {PG_SRC, PG_CHIP, PG_RES, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY,
                                          PG_REV, PG_SPC, PG_ASSET, PG_VAR, PG_BAT, PG_PHY, PG_LFO, PG_RTPC, PG_PAD};
 static void happy_accident(void)
 {
@@ -2349,7 +2373,7 @@ static void happy_accident(void)
     for (i = 0; i < NP; i++) was[i] = P[i];
     morph_on = 0;
     if (P[P_RECIPE]) recipe((uint32_t)P[P_RECIPE]);
-    else for (i = 0; i < NPAGE; i++) {
+    else for (i = 0; i < NPAGE + 2u; i++) {
         m = HA_ORDER[i];                        /* (a fixed order: the same accident from the same state, release after release) */
         if (m == PG_PAD || m == PG_LAB || m == PG_PHY || m == PG_CHIP || m == PG_VAR || m == PG_BAT || m == PG_RTPC || m == PG_SPC || m == PG_ASSET ||
             (m == PG_LFO && rnd_range(0, 99) < 50)) continue;
@@ -2381,7 +2405,7 @@ static void undo(void)
     if (!undo_n) { say("NOTHING TO UNDO"); return; }
     undo_n--;
     morph_on = 0;
-    for (i = 0; i < NP; i++) if (i != P_SLOT && i != P_THEME) P[i] = undo_buf[undo_n][i];
+    for (i = 0; i < NP; i++) if (i != P_SLOT && i != P_THEME && i != P_SECRET) P[i] = undo_buf[undo_n][i];
     touched();
     say("UNDO");
     audition();
@@ -2397,7 +2421,7 @@ static void reset_module(uint32_t m)
         if (p == NO || p == P_SLOT) continue;
         if (lock_get(p)) kept++; else P[p] = PD[p].def;
     }
-    n[0] = (char)('0' + (m + 1u) / 10u); n[1] = (char)('0' + (m + 1u) % 10u); n[2] = 0;
+    n[0] = (char)('0' + page_no(m) / 10u); n[1] = (char)('0' + page_no(m) % 10u); n[2] = 0;
     cat(t, n);
     if (kept) { cat(t, " L"); n[0] = (char)('0' + kept % 10u); n[1] = 0; cat(t, n); }
     touched();
@@ -2757,7 +2781,7 @@ static void evolve_step(void)
         for (tries = 0; tries < 16u; tries++) {
             uint32_t p = (uint32_t)rnd_range(0, NP_V13 - 1), m = PMOD[p];
             int32_t r, d;
-            if (!CONT[p] || lock_get(p) || p == P_SLOT || p == P_VOL || m >= PG_SPC || m == PG_LFO || m == PG_LAB) continue;
+            if (!CONT[p] || lock_get(p) || p == P_SLOT || p == P_VOL || m >= PG_LFO || m == PG_LAB || (p >= P_SDIST && p <= P_SDOPP)) continue;
             r = PD[p].hi - PD[p].lo;
             d = r * P[P_EVOLVE] / 800;          /* 100 %: up to 1/8 of the range a step */
             P[p] = (int16_t)clampi(P[p] + rnd_range(-d - 1, d + 1), PD[p].lo, PD[p].hi);
@@ -2796,7 +2820,7 @@ static void module_random(void)                 /* SEL + OCT+: this page's modul
     if (page == PG_ASSET && !sub) { asset_take((uint32_t)rnd_range(0, NASSET - 1)); return; }
     if (page == PG_LAB || page == PG_BAT) { say("NOTHING TO RANDOMIZE HERE"); return; }
     push_undo();
-    rnd_module(page);
+    rnd_module(pg_view());
     touched();
     say(page == PG_LFO ? "RND LFOs" : page == PG_PAD ? "RND PAD TARGETS" : "RANDOMIZED MODULE");
     audition();
@@ -2825,7 +2849,7 @@ static void page_action(void)
         ui_dirty |= 2 | 8;
         return;
     }
-    if (page == PG_SPC) {                       /* a note held through one whole PASS-BY (or a second) */
+    if (pg_view() == PG_SPC) {                  /* a note held through one whole PASS-BY (or a second) */
         note_on((int32_t)last_note, 32767);
         sp_off = fm1_ms + (P[P_SPASS] ? (uint32_t)P[P_SPASS] * 100u : 1000u);
         return;
@@ -2844,7 +2868,7 @@ static void page_action(void)
         return;
     }
     push_undo();
-    rnd_module(page);
+    rnd_module(pg_view());
     touched();
     say(page == PG_LFO ? "RND LFOs" : page == PG_PAD ? "RND PAD TARGETS" : "RANDOMIZED MODULE");
     audition();
@@ -3048,6 +3072,7 @@ static void fmt_param(uint32_t p, int32_t v, char *s)
     case F_ERATE: if (!P[P_EMU]) cat(s, "--"); else fmt_hz(s, emu_rate(P[P_EMU], v * 256)); break;
     case F_ETIME: fmt_num(s, v * 16, 0); cat(s, "ms"); break;
     case F_ETONE: fmt_hz(s, (1500u * exp2_q16(v * 957 / 100)) >> 16); break;
+    case F_ENG: fmt_num(s, v, 0); break;
     default: fmt_num(s, v, 0); break;
     }
 }
@@ -3092,14 +3117,12 @@ static int page_on(uint32_t m)                  /* is the module doing something
     case PG_CHIP: return K.c_on || (P[P_WAVE] >= W_CPLS && P[P_WAVE] <= W_CNSE && P[P_MODE] != 1);
     case PG_RES: return P[P_ZMIX] != 0;
     case PG_GRN: return (P[P_GMODE] || P[P_GFRZ]) && P[P_MODE] != 0;
-    case PG_TRN: return P[P_TATK] || P[P_TSUS];
     case PG_DST: return K.x_on;
     case PG_VOX: return K.vx_on;
     case PG_FLT: return P[P_RFMODE] != 0;
     case PG_OTT: return K.ott;
     case PG_DLY: return P[P_DMIX] || P[P_FMIX];
-    case PG_REV: return P[P_RMIX] != 0;
-    case PG_SPC: return P[P_SDIST] || P[P_SOCCL] || P[P_SPASS];
+    case PG_REV: return P[P_RMIX] || P[P_SDIST] || P[P_SOCCL] || P[P_SPASS];
     case PG_VAR: return P[P_VARY] || P[P_VKEYS] || morph_on;
     case PG_BAT: return batch_on || ft_on;
     case PG_PHY: return P[P_PMODE] != 0;
@@ -3121,16 +3144,17 @@ static void eva_header(void)
     int32_t x = 42, w;
     cv_begin(240, 40, EV_BG);
     cv_rect(0, 0, 36, 38, mutant ? EV_LIM : EV_PUR);
-    s[0] = (char)('0' + (page + 1u) / 10u); s[1] = (char)('0' + (page + 1u) % 10u); s[2] = 0;
+    s[0] = (char)('0' + page_no(page) / 10u); s[1] = (char)('0' + page_no(page) % 10u); s[2] = 0;
     w = text_w(&FONT_D, s);
     cv_text(18 - w / 2, 12 - FONT_D_CAP, &FONT_D, s, EV_INK);
     if (text_w(&FONT_D, PAGE_NAME[page]) <= 194) cv_text(43, 5 - FONT_D_CAP, &FONT_D, PAGE_NAME[page], EV_TXT);
     else cv_text(43, 18 - FONT_M_BASE, &FONT_M, PAGE_NAME[page], EV_TXT);
     map_drawn = map_bits();
-    for (m = 0; m < NPAGE; m++) {               /* 20 ticks, a gap between the buttons' groups */
+    for (m = 0; m < NPAGE; m++) {               /* a tick a page, a gap between the buttons' groups */
         int on = (int)(map_drawn >> m & 1u);
+        if (pg_hidden(m)) continue;
         uint16_t c = m == page ? (on ? EV_LIM : EV_TXT) : m == PG_VAR && morph_on ? EV_PUR : on ? EV_GRN : EV_LN;
-        if (m && PAGE_GRP[m] != PAGE_GRP[m - 1u]) x += 3;   /* (21 ticks end at 168: clear of A B C D at 173) */
+        if (m && PAGE_GRP[m] != PAGE_GRP[m - 1u]) x += 3;   /* (19 ticks end at 158: clear of A B C D at 173) */
         cv_rect(x, on || m == page ? 27 : 32, 4, on || m == page ? 8 : 3, c);
         if (m == page) cv_rect(x - 1, 36, 6, 1, EV_LIM);
         x += 5;
@@ -3158,13 +3182,14 @@ static void draw_header(void)
     map_drawn = map_bits();
     for (m = 0; m < NPAGE; m++) {               /* the chain: a tick a module, a gap between the buttons' groups */
         int on = (int)(map_drawn >> m & 1u);
+        if (pg_hidden(m)) continue;
         if (m && PAGE_GRP[m] != PAGE_GRP[m - 1u]) x += 4;
         cv_rect(x, on ? 4 : 8, 4, on ? 10 : 6, m == PG_VAR && morph_on ? th->mut : on ? th->cyan : C_DK);
         if (m == page) cv_rect(x - 1, 16, 6, 2, th->acc);
-        x += 6;                                 /* (21 ticks: 66 .. 220) */
+        x += 6;                                 /* (19 ticks: 66 .. 208) */
     }
     cv_rect(0, 19, 240, 1, th->border);
-    s[0] = (char)('0' + (page + 1u) / 10u); s[1] = (char)('0' + (page + 1u) % 10u); s[2] = 0;
+    s[0] = (char)('0' + page_no(page) / 10u); s[1] = (char)('0' + page_no(page) % 10u); s[2] = 0;
     cv_rect(3, 23, 20, 14, mutant ? th->mut : th->acc);
     cv_text(5, 21, &FONT_S, s, RGB(10, 10, 12));
     cv_text_fit(28, 21, 236 - 18 * (int32_t)NSUB[page] - 30, PAGE_NAME[page], C_TXT, 0);
@@ -3484,10 +3509,10 @@ static void fx_frame(const theme_t *th)         /* the page's object: one frame,
     int32_t hit = ons != on_seen;
     on_seen = ons;
     vk_bg = EVA ? EV_BG : RGB(5, 5, 7); vk_lo = c1; vk_hi = c2;
-    if (page != fx_pg) { memset(fx_pt, 0, sizeof fx_pt); memset(fx_rip, 0, sizeof fx_rip); fx_tn = 0; fx_pg = page; }
+    if (pg_view() != fx_pg) { memset(fx_pt, 0, sizeof fx_pt); memset(fx_rip, 0, sizeof fx_rip); fx_tn = 0; fx_pg = pg_view(); }
     fx_n++;
     fx_ang += (uint32_t)sp * (0x00400000u + ((uint32_t)lv << 16));   /* (louder: faster) */
-    switch (page) {
+    switch (pg_view()) {
     case PG_ASSET:                              /* a small spectrometer at the right of the status line (A) */
         if (sub) break;
         for (k = 0; k < 18; k++) {
@@ -3782,7 +3807,7 @@ static void draw_vis(void)
     int32_t i, k;
     vis_crt(th);
     fx_listen(); fx_frame(th);                  /* the page's object, under its words */
-    switch (page) {
+    switch (pg_view()) {
     case PG_SRC: {                              /* the oscillator | the sample, the blend underneath */
         int32_t md = P[P_MODE], px = 0, py = 0, on_o = md != 1, on_s = md != 0;
         uint16_t co = on_o ? th->acc : C_DK, cs = on_s ? th->cyan : C_DK;
@@ -4401,7 +4426,8 @@ static uint32_t knob_ph(int32_t norm) { return ((uint32_t)norm + 225u) * 1193046
 static int mod_src(uint32_t p)                  /* who moves the parameter now: 0 no one, 1 an LFO, 2 the RTPC, 3 pad / aftertouch */
 {
     if ((P[P_L1MIX] && TGT[P[P_L1TGT]] == p) || (P[P_L2MIX] && TGT[P[P_L2TGT]] == p)) return 1;
-    if ((rt_on || P[P_QINT]) && ((P[P_Q1A] && TGT[P[P_Q1T]] == p) || (P[P_Q2A] && TGT[P[P_Q2T]] == p) || (P[P_Q3A] && TGT[P[P_Q3T]] == p))) return 2;
+    if (P[P_SECRET] && (rt_on || P[P_QINT]) && ((P[P_Q1A] && TGT[P[P_Q1T]] == p) || (P[P_Q2A] && TGT[P[P_Q2T]] == p) || (P[P_Q3A] && TGT[P[P_Q3T]] == p))) return 2;
+    if (!P[P_SECRET]) return P[P_MAMT] && tm_menv && TGT[P[P_MTGT]] == p ? 2 : 0;
     if ((pad_on || pad_held) && ((P[P_XAMT] && TGT[P[P_XTGT]] == p) || (P[P_YAMT] && TGT[P[P_YTGT]] == p))) return 3;
     if (P[P_ATAMT] && (at_keys || at_midi) && TGT[P[P_ATTGT]] == p) return 3;
     if (g_act && ((P[P_XAMT] && TGT[P[P_XTGT]] == p) || (P[P_YAMT] && TGT[P[P_YTGT]] == p))) return 3;
@@ -4620,7 +4646,7 @@ static void draw_knobs(void)
 }
 static const char *sel_hint(void)               /* what a tap on SEL does on this page */
 {
-    switch (page) {
+    switch (pg_view()) {
     case PG_SRC: return rec_state == REC_IDLE ? "REC ARM" : rec_state == REC_ARMED ? "CANCEL" : "REC STOP";
     case PG_CHIP: return "NEW SFX";
     case PG_SPC: return P[P_SPASS] ? "PLAY PASS" : "PLAY";
@@ -4705,7 +4731,7 @@ _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session must fit the settin
 _Static_assert(NPAGE <= 24, "a page's change flag (1 << PMOD) must stay below KG_NOTE");
 #define SESSION_VER (0x0D071000u + NP)
 _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session: one settings sector");
-_Static_assert(P_ETONE == NP - 1, "a new parameter goes last, and session_load learns the old layout");
+_Static_assert(P_SECRET == NP - 1, "a new parameter goes last, and session_load learns the old layout");
 static void session_save(void)
 {
     session_t ss;
@@ -4723,17 +4749,20 @@ static void session_save(void)
 /* the v1.0 / v1.1 session: the same parameters without P_ASSET (added last, so every index holds) */
 #define NP_V11 P_ASSET
 typedef struct { uint32_t ver; int16_t p[NP_V11]; uint32_t lk[NLOCKW]; int16_t a[NP_V11], b[NP_V11]; uint8_t ab, mon, gn, gx[GEST_MAX], gy[GEST_MAX]; } session_v11_t;
+/* the v1.4 / v1.5 session: without CHIP ENGINE and the secret (added last) */
+typedef struct { uint32_t ver; int16_t p[NP_V15]; uint32_t lk[NLOCKW]; int16_t a[NP_V15], b[NP_V15]; uint8_t ab, mon, gn, gx[GEST_MAX], gy[GEST_MAX]; } session_v15_t;
 /* the v1.2 / v1.3 session: without SOUND CHIPS (added last) */
 typedef struct { uint32_t ver; int16_t p[NP_V13]; uint32_t lk[NLOCKW]; int16_t a[NP_V13], b[NP_V13]; uint8_t ab, mon, gn, gx[GEST_MAX], gy[GEST_MAX]; } session_v13_t;
 static void session_load(void)
 {
-    static union { session_t n; session_v11_t o; session_v13_t m; } u;   /* (static: 2.5 KB off the stack) */
+    static union { session_t n; session_v11_t o; session_v13_t m; session_v15_t f; } u;   /* (static: 2.5 KB off the stack) */
     uint32_t i, np = NP;
     const int16_t *pp, *pa, *pb;
     const uint32_t *lk;
     const uint8_t *tail;
     for (i = 0; i < NP; i++) P[i] = PD[i].def;
     if (!settings_load(&u.n, sizeof u.n) && u.n.ver == SESSION_VER) { pp = u.n.p; pa = u.n.a; pb = u.n.b; lk = u.n.lk; tail = &u.n.ab; }
+    else if (!settings_load(&u.f, sizeof u.f) && u.f.ver == 0x0D071000u + NP_V15) { np = NP_V15; pp = u.f.p; pa = u.f.a; pb = u.f.b; lk = u.f.lk; tail = &u.f.ab; }
     else if (!settings_load(&u.m, sizeof u.m) && u.m.ver == 0x0D071000u + NP_V13) { np = NP_V13; pp = u.m.p; pa = u.m.a; pb = u.m.b; lk = u.m.lk; tail = &u.m.ab; }
     else if (!settings_load(&u.o, sizeof u.o) && u.o.ver == 0x0D071000u + NP_V11) { np = NP_V11; pp = u.o.p; pa = u.o.a; pb = u.o.b; lk = u.o.lk; tail = &u.o.ab; }
     else return;
@@ -4993,6 +5022,15 @@ static void app_init(void)                      /* the session, the tables, the 
     k_update(KG_ALL);
     fx_clear();
 }
+static uint32_t grp_first(uint32_t k) { uint32_t q = 0; while (PAGE_GRP[q] != k || pg_hidden(q)) q++; return q; }
+static void secret_toggle(void)                 /* SEL + LFO: RTPC and the CHAOS PAD shown (and at work) or hidden again */
+{
+    P[P_SECRET] = (int16_t)!P[P_SECRET];
+    session_dirty = 1;
+    if (P[P_SECRET]) { page = PG_RTPC; sub = 0; say("SECRET: RTPC + PAD"); }
+    else { if (page == PG_RTPC || page == PG_PAD) { page = PG_LFO; sub = 0; } rt_on = 0; say("RTPC + PAD HIDDEN"); }
+    ui_dirty = 0xFF;
+}
 static void app_main(void)
 {
     uint32_t prev_keys = 0, t_vis = 0, t_knob = 0, t_meter = 0, sel_used = 0, sel_down = 0, kpend = 0, i;
@@ -5010,9 +5048,14 @@ static void app_main(void)
         if (b & (1u << BTN_SEL)) { sel_down = 1; sel_used = 0; sel_t = fm1_ms; help_n = 0; }
         for (k = 0; k < NGRP; k++)
             if (b & (1u << GRP_BTN[k])) {           /* its modules in turn, each one's knob sets in turn */
-                if (PAGE_GRP[page] != k) { uint32_t q = 0; while (PAGE_GRP[q] != k) q++; page = (uint8_t)q; sub = 0; }
+                if (sel && GRP_BTN[k] == BTN_LFO) { secret_toggle(); sel_used = 1; continue; }
+                if (PAGE_GRP[page] != k) page = (uint8_t)grp_first(k), sub = 0;
                 else if (sub + 1u < NSUB[page]) sub++;
-                else { uint32_t q = page + 1u; if (q >= NPAGE || PAGE_GRP[q] != k) while (q > 0u && PAGE_GRP[q - 1u] == k) q--; page = (uint8_t)q; sub = 0; }
+                else {
+                    uint32_t q = page + 1u;
+                    while (q < NPAGE && PAGE_GRP[q] == k && pg_hidden(q)) q++;
+                    page = (uint8_t)(q < NPAGE && PAGE_GRP[q] == k ? q : grp_first(k)); sub = 0;
+                }
                 ui_dirty = 0xFF;
             }
         /* one rule on every page: a button alone does its job; with SEL held, its second job (the same everywhere):
@@ -5045,7 +5088,7 @@ static void app_main(void)
            further: SELECT the knob set (A B C D), ALGORITHM the look (theme), PRESETS the asset (loaded and played) */
         if ((e = fm1_enc_take(ENC_SELECT)) != 0) {
             if (sel) { sub = (uint8_t)((sub + (e > 0 ? 1u : NSUB[page] - 1u)) % NSUB[page]); sel_used = 1; }
-            else { page = (uint8_t)((page + (e > 0 ? 1u : NPAGE - 1u)) % NPAGE); sub = 0; }
+            else { do page = (uint8_t)((page + (e > 0 ? 1u : NPAGE - 1u)) % NPAGE); while (pg_hidden(page)); sub = 0; }
             ui_dirty = 0xFF;
         }
         if ((e = fm1_enc_take(ENC_ALGORITHM)) != 0) {

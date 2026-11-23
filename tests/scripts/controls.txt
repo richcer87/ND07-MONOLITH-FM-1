@@ -41,16 +41,15 @@
 5600 shot
 # VARIATION B: SEL stores A, then B
 5700 btn 11
-5800 btn 11
+5701 btn 11
 5900 btn 3
 6000 shot
 6050 btn 13
 6100 btn 3
 6200 shot
 # BATCH running: SEL + PLAY stops everything
-6300 btn 11
-6400 btn 11
-6500 btn 11
+6300 btn 8
+6301 enc 0 -1
 6600 btn 3
 7500 btndown 3
 7550 btn 12
@@ -58,8 +57,7 @@
 7700 shot
 # SAMPLE LAB: TOOL FACTORY (it was SEL + PLAY)
 7800 btn 10
-7900 btn 10
-8000 btn 10
+7801 enc 0 1
 8100 enc 2 8
 8300 btn 3
 8400 shot
