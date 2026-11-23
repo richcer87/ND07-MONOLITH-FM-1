@@ -1,50 +1,55 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* ND-07 // MONOLITH for the M-VAVE FM-1 (Noise Dungeon) - v0.6: a sampler and synth for game-audio SFX design.
- * The REAPER SFX workstation (Lua ReaImGui + JSFX) rebuilt for the FM-1 in integer C (JieLi AC79: no FPU, no libgcc).
+/* ND-07 // MONOLITH for the M-VAVE FM-1: a sampler and synth for game-audio sound effects.
+ * The REAPER workstation (Lua ReaImGui + JSFX) rebuilt for the FM-1 in integer C (JieLi AC79: no FPU, no libgcc).
  *
- *   01 OSC & SAMPLE      an oscillator (SINE TRI SAW SQUARE PULSE SUPERSAW NOISE + SUB-SAW FORMANT METAL FM PAD SCAN,
- *                        PolyBLEP) and an 8-slot sample bank (factory sounds in flash; record your own into a slot by
- *                        resampling the FM-1's output, kept in flash); OSC only, SAMPLE only, or MIX with a blend
- *   02 RESONATOR         6-mode modal bank (METAL GLASS WOOD STRING BELL DRUM TUBE): the source becomes a struck material
- *   03 AMP ENVELOPE      ADSR on a mono voice (held keys, last-note priority, legato glide), velocity, pitch, out
- *   04 TRANSIENT         transient shaper: ATTACK and SUSTAIN boost / cut (3 envelope followers), TIME, OUT
- *   05 RES MOD FILTER    ZDF SVF 12/24 dB, LP/BP/HP/NOTCH, mod by env follower / LFO / S&H / the amp envelope
- *   06 DESTROY           drive into SOFT / HARD / FOLD / RECTIFY, bit crusher, sample-rate reducer, ring mod, tone, mix
- *   07 GRAIN ENGINE      grain stream on the sample: position, size, density, spray, reverse, freeze
- *   08 OTT MULTIBAND     Ableton's OTT preset / Xfer OTT: LR4 crossovers (88.3 Hz, 2.5 kHz), RMS, 66.7:1 / inf:1 down and
- *                        1:4.17 up per band; DEPTH TIME UPWD DOWNWD IN OUT, band gains, THRESH, SOLO, PRE or POST the FX
- *   09 DELAY + FLANGER   1 s delay (smoothed time: tape glides) and a flanger, four routings
- *   10 MULTIBAND REVERB  predelay, diffusion, a 4-line FDN whose LOW / MID / HIGH bands decay separately
- *   11 LFO x2            shape, rate, mix and a target: any parameter, the other LFO and MORPH included
- *   12 MORPH + BATCH     two stored patches A and B and a MORPH knob between them (locks stay put); VARY: every note a
- *                        little different; BATCH: 4..16 hits in a row with silence between, for one take in REAPER
- *   13 CHAOS PAD + KEYS  an XY pad over MIDI (CC16 X, CC17 Y, CC18 touch: web/pad.html on a phone, or any XY app), each
- *                        axis on any parameter; key velocity and aftertouch from the FM-1's keys (beta, OFF by default)
- *   14 CHIP OSC          8-bit console voices (NES-style pulse 12.5 / 25 / 50 / 75 %, 32-step triangle, LFSR noise long /
- *                        93-step), and the console's 60 Hz frame on any source: pitch SWEEP, ARP, 16-step volume;
- *                        SEL makes a new sound of the PRESET kind (COIN, JUMP, LASER, HIT, POWERUP, EXPLODE, BLIP), sfxr-style
- *   + HAPPY ACCIDENT, parameter locks, 16-step undo, 5 themes (EVA-01 by default), the session in flash.
- *   The chain (mono): SOURCE (osc / sample / grains) x ENV > RESONATOR > TRANSIENT > DESTROY > FILTER > OTT PRE > DLY+FLG >
- *   REVERB > OTT POST > out. Modules at rest cost nothing; after ~1 s of silence the whole chain sleeps.
- *   It runs in 64-sample blocks, module by module; the heavy stages run from RAM (.ram_text) and call nothing.
+ * 22 pages, in the order of the work; the eight buttons each hold one step of it:
+ *   HOME  01 ASSETS           18 starting points (EXPLODE ... ENGINE): a whole patch, loaded and played
+ *         02 OSC & SAMPLE     15 waves (PolyBLEP, CHIP voices, SHEPARD) and 8 sample slots; OSC, SAMPLE or a blend;
+ *                             loop / sustain points, up to 3 layered voices; record your own into a slot
+ *         03 CHIP OSC         NES-style pulse, triangle and LFSR noise; the 60 Hz frame: SWEEP, ARP, 16-step volume
+ *   ARP   04 GRAIN ENGINE     grains on the sample: position, size, density, spray, reverse, freeze
+ *         05 SAMPLE LAB       reverse, crop, fades, half / double speed, normalize, revert, factory sound
+ *   ENV   06 ENVELOPES        ADSR, glide, velocity, pitch, out; a modulation envelope to any target
+ *         07 TRANSIENT        attack and sustain boost / cut
+ *   EDIT  08 RESONATOR        6 modes: METAL GLASS WOOD STRING BELL DRUM TUBE
+ *         09 DESTROY          drive (SOFT HARD FOLD RECTIFY), bits, rate, ring mod, tone
+ *         10 VOWEL + SHIFT    formants U O A E I, a frequency shifter with a feedback spiral, growl
+ *         11 RES MOD FILTER   ZDF SVF 12 / 24 dB, LP BP HP NOTCH, moved by envelope, LFO, S&H or the amp envelope
+ *   GLO   12 OTT MULTIBAND    three-band up / down compression (the OTT preset), before or after the effects
+ *   FX    13 DELAY + FLANGER  1 s delay and a flanger, four routings
+ *         14 MULTIBAND REVERB a 4-line FDN with separate LOW / MID / HIGH decay
+ *         15 SPACE + MOTION   distance, occlusion, a pass-by with Doppler
+ *   LFO   16 LFO 1 + 2        shape, rate, mix and any target
+ *         17 RTPC             one game value swept or set by hand, on three targets, with a curve
+ *         18 CHAOS PAD + KEYS an XY pad over MIDI, key velocity and aftertouch, a recorded gesture
+ *   SEQ   19 VARIATION + MORPH a seed of variations on the keys; two patches and a MORPH between them
+ *         20 PHYSICS TRIGGER  one key, many hits: BOUNCE DEBRIS ROLL STUTTER SCATTER
+ *         21 BATCH + FIRE TEST a run of varied hits to record, or fired as a game would, level matched
+ *         22 SOUND CHIPS      the result through a console's chip: YM2149, YM2612, S-DSP, SCSP, DMG
+ *   Also: HAPPY ACCIDENT, parameter locks, 16 undo steps, 5 themes (EVA-01 by default), the session in flash.
  *
- * Panel (one rule: a control alone does its job; with SEL held, its second job, the same on every page):
- *   HOME ARP ENV EDIT GLO FX LFO SEQ   the steps of the work; press again: the next set of knobs (A/B/C/D), then the
- *                                     button's next module (see PAGE_GRP)
- *   SELECT                            previous / next page              SEL + SELECT      the knob set (A B C D)
- *   K1..K4                            the page's parameters             SEL + K           lock / unlock
- *   ALGORITHM                         oscillator wave                   SEL + ALGORITHM   the theme
- *   PRESETS                           sample slot                       SEL + PRESETS     an asset, loaded and played
- *   keys F3..G5                       play (held = gate); OCT- / OCT+ the octave
- *   PLAY                              a held C4                         SEL + PLAY        stop all (batch, fire test, ...)
- *   REC                               HAPPY ACCIDENT                    SEL + REC         UNDO
- *   SAVE                              the session into flash            SEL + SAVE        clear all locks
- *   OCT- / OCT+                       the octave                        SEL + OCT- / +    reset / randomize the module
- *   SEL tap                           the page's action (the footer says which); SEL held: the second jobs on the footer
- *   MIDI in                           notes (velocity), pitch bend +-2, CC1 LFO1 mix, CC11 MORPH, CC74 filter freq,
- *                                     CC16 / 17 / 18 the pad's X / Y / touch, channel and key pressure (aftertouch)
- *  * The engine reads every parameter in Q8, glided over ~6 ms (S8): knob turns and LFOs move without steps.
- * Integer only: no float, no 64-bit division (docs/RULES.md). Tables: tools/gen_nd07_tables.py; samples: tools/gen_samples.py */
+ * The chain (mono): SOURCE x ENV > RESONATOR > TRANSIENT > DESTROY > VOWEL + SHIFT > FILTER > OTT (pre) > DELAY +
+ * FLANGER > REVERB > OTT (post) > SOUND CHIPS > SPACE > limiter > out. A module at rest costs nothing; after about a
+ * second of silence the whole chain sleeps. It runs in 64-sample blocks; the heavy stages run from RAM (.ram_text)
+ * and call nothing.
+ *
+ * The panel follows one rule: a control alone does its job; with SEL held it does its second job, the same on
+ * every page.
+ *   HOME ARP ENV EDIT GLO FX LFO SEQ  a step of the work; again: the next knob set (A B C D), then the next page
+ *   SELECT       previous / next page              SEL + SELECT      the knob set
+ *   K1..K4       the page's parameters             SEL + K           lock / unlock
+ *   ALGORITHM    oscillator wave                   SEL + ALGORITHM   the theme
+ *   PRESETS      sample slot                       SEL + PRESETS     the next asset, loaded and played
+ *   PLAY         a held C4                         SEL + PLAY        stop everything
+ *   REC          HAPPY ACCIDENT                    SEL + REC         undo
+ *   SAVE         the session into flash            SEL + SAVE        clear all locks
+ *   OCT- / OCT+  the octave                        SEL + OCT- / +    reset / randomize this page
+ *   SEL tap      the page's own action (the footer names it); SEL held: the second jobs, one by one, on the footer
+ *   MIDI in      notes with velocity, pitch bend +-2, CC1 LFO 1 mix, CC11 MORPH, CC74 filter, CC16/17/18 the pad,
+ *                channel and key pressure
+ *
+ * Every parameter reaches the engine in Q8, glided over ~6 ms (S8), so knobs and LFOs move without steps.
+ * Integer only, no 64-bit division (docs/RULES.md). Tables: tools/gen_nd07_tables.py; samples: tools/gen_samples.py */
 
 #define APP_NAME "ND-07"
 #define STORE_MAGIC 0x3730444Eu                 /* "ND07" */
@@ -203,10 +208,10 @@ static const pdesc_t PD[NP] = {
     [P_RFSRC] = {"MOD SRC", 0, 3, 3, 1, F_ENUM, E_RFSRC},  [P_RFDRV] = {"ANALOG", 0, 100, 20, 1, F_PCT, 0},
     [P_GPOS] = {"POS", 5, 90, 30, 1, F_PCT, 0},            [P_GSIZE] = {"SIZE", 20, 220, 80, 2, F_MS, 0},
     [P_GDENS] = {"DENS", 5, 42, 18, 1, F_DENS, 0},         [P_GSPRAY] = {"SPRAY", 0, 50, 12, 1, F_SPR, 0},
-    [P_GREV] = {"REV %", 0, 100, 25, 1, F_PCT, 0},         [P_GMODE] = {"GRAIN", 0, 1, 0, 1, F_ENUM, E_ONOFF},
+    [P_GREV] = {"REVERSE", 0, 100, 25, 1, F_PCT, 0},         [P_GMODE] = {"GRAIN", 0, 1, 0, 1, F_ENUM, E_ONOFF},
     [P_GFRZ] = {"FREEZE", 0, 1, 0, 1, F_ENUM, E_ONOFF},    [P_RNDP] = {"RND PIT", 0, 1, 0, 1, F_ENUM, E_ONOFF},
     [P_ODEPTH] = {"DEPTH", 0, 100, 30, 1, F_PCT, 0},       [P_OTIME] = {"TIME", 0, 100, 50, 1, F_TSC, 0},
-    [P_OUP] = {"UPWD", 0, 100, 100, 1, F_PCT, 0},          [P_ODOWN] = {"DOWNWD", 0, 100, 100, 1, F_PCT, 0},
+    [P_OUP] = {"UP", 0, 100, 100, 1, F_PCT, 0},          [P_ODOWN] = {"DOWN", 0, 100, 100, 1, F_PCT, 0},
     [P_OIN] = {"IN", -48, 48, 0, 1, F_DBH, 0},             [P_OOUT] = {"OUT", -48, 48, 0, 1, F_DBH, 0},
     [P_OSTYLE] = {"STYLE", 0, 4, 1, 1, F_ENUM, E_OSTY},    [P_OPOS] = {"PLACE", 0, 1, 0, 1, F_ENUM, E_OPOS},
     [P_OLOW] = {"LOW", -24, 24, 0, 1, F_DBH, 0},           [P_OMID] = {"MID", -24, 24, 0, 1, F_DBH, 0},
@@ -225,15 +230,15 @@ static const pdesc_t PD[NP] = {
     [P_L1MIX] = {"MIX", 0, 100, 0, 1, F_PCT, 0},           [P_L1TGT] = {"TARGET", 0, NTGT_N - 1, 13, 1, F_TGT, 0},
     [P_L2SHP] = {"SHAPE", 0, 8, 1, 1, F_ENUM, E_LSHP},     [P_L2RATE] = {"RATE", 0, 63, 25, 1, F_LRATE, 0},
     [P_L2MIX] = {"MIX", 0, 100, 0, 1, F_PCT, 0},           [P_L2TGT] = {"TARGET", 0, NTGT_N - 1, 15, 1, F_TGT, 0},
-    [P_ZMAT] = {"MATERL", 0, 6, 0, 1, F_ENUM, E_ZMAT},     [P_ZPITCH] = {"PITCH", -24, 24, 0, 1, F_SEMI, 0},
+    [P_ZMAT] = {"BODY", 0, 6, 0, 1, F_ENUM, E_ZMAT},     [P_ZPITCH] = {"PITCH", -24, 24, 0, 1, F_SEMI, 0},
     [P_ZDEC] = {"DECAY", 0, 63, 34, 1, F_ZDEC, 0},         [P_ZMIX] = {"RES MIX", 0, 100, 0, 1, F_PCT, 0},
     [P_ZDAMP] = {"DAMP", 0, 100, 35, 1, F_PCT, 0},         [P_ZSPRD] = {"SPREAD", 0, 100, 50, 1, F_PCT, 0},
-    [P_ZHIT] = {"HIT POS", 2, 50, 13, 1, F_PCT, 0},        [P_ZTRK] = {"KEYTRK", 0, 1, 1, 1, F_ENUM, E_ONOFF},
+    [P_ZHIT] = {"HIT POS", 2, 50, 13, 1, F_PCT, 0},        [P_ZTRK] = {"KEY TRK", 0, 1, 1, 1, F_ENUM, E_ONOFF},
     [P_TATK] = {"ATTACK", -100, 100, 0, 2, F_PM, 0},       [P_TSUS] = {"SUSTAIN", -100, 100, 0, 2, F_PM, 0},
     [P_TTIME] = {"TIME", 0, 100, 50, 1, F_TSC, 0},         [P_TOUT] = {"OUT", -48, 48, 0, 1, F_DBH, 0},
     [P_XDRV] = {"DRIVE", 0, 72, 0, 1, F_DBH, 0},           [P_XSHP] = {"SHAPE", 0, 3, 0, 1, F_ENUM, E_XSHP},
     [P_XBITS] = {"BITS", 2, 16, 16, 1, F_BITS, 0},         [P_XSR] = {"RATE", 0, 63, 0, 1, F_XSR, 0},
-    [P_XRING] = {"RING HZ", 0, 63, 30, 1, F_XRHZ, 0},      [P_XRMIX] = {"RNG MIX", 0, 100, 0, 1, F_PCT, 0},
+    [P_XRING] = {"RING HZ", 0, 63, 30, 1, F_XRHZ, 0},      [P_XRMIX] = {"RING MIX", 0, 100, 0, 1, F_PCT, 0},
     [P_XTONE] = {"TONE", 0, 63, 63, 1, F_RFHZ, 0},         [P_XMIX] = {"MIX", 0, 100, 100, 1, F_PCT, 0},
     [P_MORPH] = {"MORPH", 0, 100, 0, 1, F_PCT, 0},         [P_VARY] = {"VARY", 0, 100, 0, 1, F_PCT, 0},
     [P_BMODE] = {"BATCH", 0, 2, 0, 1, F_ENUM, E_BMODE},    [P_BCNT] = {"COUNT", 0, 3, 1, 1, F_ENUM, E_BCNT},
@@ -260,7 +265,7 @@ static const pdesc_t PD[NP] = {
     [P_EVOLVE] = {"EVOLVE", 0, 100, 0, 1, F_PCT, 0},
     [P_TRATE] = {"RATE", 30, 1200, 300, 10, F_RPM, 0},     [P_TPOOL] = {"POOL", 2, 16, 6, 1, F_INT, 0},
     [P_TORDER] = {"ORDER", 0, 2, 1, 1, F_ENUM, E_TORDER},
-    [P_QINT] = {"INTENS", 0, 100, 0, 1, F_PCT, 0},          [P_QSWP] = {"SWEEP", 5, 200, 30, 1, F_SEC10, 0},
+    [P_QINT] = {"VALUE", 0, 100, 0, 1, F_PCT, 0},          [P_QSWP] = {"SWEEP", 5, 200, 30, 1, F_SEC10, 0},
     [P_QCRV] = {"CURVE", 0, 3, 0, 1, F_ENUM, E_QCRV},
     [P_Q1T] = {"TARGET 1", 0, NTGT_N - 1, 15, 1, F_TGT, 0}, [P_Q1A] = {"AMT 1", -100, 100, 60, 2, F_PM, 0},
     [P_Q2T] = {"TARGET 2", 0, NTGT_N - 1, 14, 1, F_TGT, 0}, [P_Q2A] = {"AMT 2", -100, 100, 0, 2, F_PM, 0},
@@ -292,10 +297,10 @@ static uint8_t CONT[NP];                        /* a continuous parameter: smoot
 static uint32_t locks[NLOCKW];                  /* (NP <= 256) bit p: locked (mutations and MORPH leave it alone) */
 static int lock_get(uint32_t p) { return (int)(locks[p >> 5] >> (p & 31u) & 1u); }
 
-/* the pages in the order of the work (v1.3), a button a step: start from an ASSET and make the source (HOME, ARP),
- * shape it (ENV), colour it (EDIT), glue it (GLO), place it (FX), move it (LFO: what the game drives), then vary it and
- * deliver it (SEQ: VARIATION, PHYSICS, BATCH). The audio chain keeps its own order (see the audio).
- * each button holds its pages one after the other (PAGE_GRP), so its presses walk them in that order too */
+/* The pages follow the work, one button a step: start from an ASSET and make the source (HOME, ARP), shape it (ENV),
+ * colour it (EDIT), glue it (GLO), place it (FX), move it (LFO: what the game drives), then vary it, deliver it and print
+ * it through a console chip (SEQ). The audio chain keeps its own order (see the audio). Each button holds its pages one
+ * after the other (PAGE_GRP), so pressing it walks them in that order. */
 enum { PG_ASSET, PG_SRC, PG_CHIP, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_RES, PG_DST, PG_VOX, PG_FLT, PG_OTT, PG_DLY, PG_REV,
        PG_SPC, PG_LFO, PG_RTPC, PG_PAD, PG_VAR, PG_PHY, PG_BAT, PG_EMU, NPAGE };
 #define NO 255u                                 /* (an empty knob) */
@@ -2340,7 +2345,7 @@ static void happy_accident(void)
     morph_on = 0;
     if (P[P_RECIPE]) recipe((uint32_t)P[P_RECIPE]);
     else for (i = 0; i < NPAGE; i++) {
-        m = HA_ORDER[i];                        /* (the order of v1.2: the same accident from the same state) */
+        m = HA_ORDER[i];                        /* (a fixed order: the same accident from the same state, release after release) */
         if (m == PG_PAD || m == PG_LAB || m == PG_PHY || m == PG_CHIP || m == PG_VAR || m == PG_BAT || m == PG_RTPC || m == PG_SPC || m == PG_ASSET || m == PG_EMU ||
             (m == PG_LFO && rnd_range(0, 99) < 50)) continue;
         if (m == PG_RES && rnd_range(0, 99) < 65) { set_unlocked(P_ZMIX, 0); continue; }   /* the extra modules: sometimes */
@@ -2454,9 +2459,9 @@ static const uint8_t BCNT[4] = {4, 8, 12, 16};
 static void batch_start(void)
 {
     if (batch_on) { batch_on = 0; vary_mute = 0; all_off(); say("BATCH STOPPED"); ui_dirty |= 2; return; }
-    if (P[P_BMODE] && has_ab != 3u) { say("A>B: STORE A AND B FIRST"); return; }
-    if (!P[P_BMODE] && !P[P_VARY]) say("BATCH (VARY 0: ALL THE SAME)");
-    else say("BATCH: RECORD IT IN REAPER");
+    if (P[P_BMODE] && has_ab != 3u) { say("MORPH: STORE A AND B"); return; }
+    if (!P[P_BMODE] && !P[P_VARY]) say("BATCH: VARY 0, ALL SAME");
+    else say("BATCH: RECORD IN A DAW");
     batch_n = BCNT[P[P_BCNT] & 3]; batch_i = 0; batch_t0 = fm1_ms + 300u; batch_on = 1; batch_ph = 0;
     lvl_clear();
     vary_mute = P[P_BMODE] == 1;
@@ -2518,7 +2523,7 @@ static void fire_start(void)
 {
     if (ft_on) { ft_on = 0; note_off((int32_t)last_note); lvl_hit(0); lvl_live = 0; say("FIRE TEST STOPPED"); ui_dirty |= 2; return; }
     if (batch_on) batch_start();
-    if (!P[P_VARY]) say("FIRE TEST (VARY 0: ALL THE SAME)"); else say("FIRE TEST");
+    if (!P[P_VARY]) say("FIRE: VARY 0, ALL SAME"); else say("FIRE TEST");
     ft_on = 1; ft_t = fm1_ms + 200u; ft_off = 0; ft_prev = 0; ft_bag = 0; ft_hits = 0; lvl_clear();
     ui_dirty |= 2;
 }
@@ -2842,7 +2847,7 @@ static void page_action(void)
 static void rec_commit(void)                    /* the recording, trimmed and normalized, into the active slot (16-bit) */
 {
     uint32_t n = rec_n, i, pk = 1, g;
-    char t[32] = "RECORDED SLOT x (SAVE KEEPS)";
+    char t[32] = "SLOT x RECORDED";
     while (n > 256u && absi(T_ULAW[rec.d[n - 1u]]) < 200) n--;
     if (n < 512u) { say("REC: NOTHING HEARD"); rec_state = REC_IDLE; return; }
     for (i = 0; i < n; i++) { uint32_t v = (uint32_t)absi(T_ULAW[rec.d[i]]); if (v > pk) pk = v; }
@@ -2875,7 +2880,7 @@ static void rec_commit(void)                    /* the recording, trimmed and no
     lp_pb = 0;
     smp_overview();
     rec_state = REC_IDLE;
-    t[14] = (char)('1' + cur_slot);
+    t[5] = (char)('1' + cur_slot);
     say(P[P_RECM] == 1 ? "OVERDUBBED (SAVE KEEPS)" : t);
     if (P[P_RECM] == 2) {                       /* BOUNCE: the sound is the sample now; the chain back to dry */
         static const uint8_t DRY[] = {P_ZMIX, P_TATK, P_TSUS, P_TOUT, P_XMIX, P_ODEPTH, P_DMIX, P_FMIX, P_RMIX, P_L1MIX, P_L2MIX,
@@ -3216,13 +3221,12 @@ static int32_t wave_shape(uint32_t w, uint32_t ph, int32_t m)   /* the oscillato
     default: return isin(ph) >> 1;
     }
 }
-/* ======================================================================== the motion layer (v1.4: thin vectors)
- * What is heard, as an object drawn in thin lines: each page has its own (a cloud of grains, a bell of modes, a crushed
- * ball, a room as a tunnel, a ball bouncing through the hits...). It moves with the sound, the knobs and the notes, and
- * when it is quiet it keeps breathing. The output (stage_out keeps its last 1024 samples) is read each frame: a
- * 256-point FFT into 24 log bands (60 Hz .. 11 kHz), the level, the onsets, the last second of both. The object is
- * drawn first, the page's words over it. All in the main loop, in flash; the audio only writes its samples. (Its own
- * random numbers: the patch's stay as they were.) */
+/* ======================================================================== the motion layer
+ * Each page has an object drawn in thin lines (grains, a struck body, a ball through a shaper, a room as a tunnel...)
+ * that moves with the sound, the knobs and the notes, and keeps breathing when it is quiet. Each frame reads the output
+ * (stage_out keeps its last 1024 samples): a 256-point FFT into 24 log bands (60 Hz .. 11 kHz), the level, the onsets,
+ * and the last second of both. The object is drawn first and the page's words over it. It all runs in the main loop;
+ * the audio only writes its samples. It has its own random numbers, so the patch's never change. */
 static uint8_t fx_band[24], fx_lv;              /* the spectrum (0..255 a band), the level (0..255) */
 static int16_t fx_s[256];                       /* the last 256 samples (every 2nd: 22 kHz), for the figures */
 static int32_t fx_flux;
@@ -3657,7 +3661,7 @@ static void fx_frame(const theme_t *th)         /* the page's object: one frame,
     default: break;
     }
 }
-/* ======================================================================== the hero value, the solids (v1.3)
+/* ======================================================================== the hero value, the solids
  * A knob just turned: its value takes the screen a moment, big, in thin drawn numerals, in the knob's colour, over the
  * page dimmed (the number is the picture). Numerals drawn as strokes on a 6 x 10 grid (corners cut), not a font. */
 static const uint8_t HN_PTS[] = {   /* per glyph: strokes of points (x,y); 0xFF ends a stroke, 0xFE the glyph */
@@ -4389,11 +4393,11 @@ static void draw_vis(void)
             vk_circ(30, 28, 2, cb);
             cv_text(48 - text_w(&FONT_A, E_EMU[m]) / 2, 42 - FONT_A_CAP, &FONT_A, E_EMU[m], cb);
         } else {                                /* a DIP: two rows of pins, the notch */
-            cv_frame(30, 18, 36, 62, cb);
+            cv_frame(22, 18, 52, 62, cb);
             vk_ell(48, 18, 5, 5, 0, 0x80000000u, 8, cb);
             for (k = 0; k < np; k++) {
                 int32_t y = 22 + k * 54 / (np - 1), lit = on && fx_lv > 20 && ((k + (int32_t)(fm1_ms >> 6)) % 4) == 0;
-                cv_rect(24, y, 6, 2, lit ? C_TXT : cl); cv_rect(66, y, 6, 2, lit ? C_TXT : cl);
+                cv_rect(16, y, 6, 2, lit ? C_TXT : cl); cv_rect(74, y, 6, 2, lit ? C_TXT : cl);
             }
             cv_text(48 - text_w(&FONT_A, E_EMU[m]) / 2, 45 - FONT_A_CAP, &FONT_A, E_EMU[m], cb);
         }
