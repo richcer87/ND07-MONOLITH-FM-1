@@ -1,5 +1,23 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.6: el chip como motor
+
+- **03 CHIP ENGINE:** la voz puede salir del chip de una consola en lugar de 02: **YM2149** (tres cuadradas, ruido, la envolvente de 32 pasos, BUZZER y SYNCBUZ, SID, DIGI), **YM2612** (FM de 4 operadores, 8 algoritmos, feedback, CH3 con pitch por operador, SSG-EG, el canal DAC y el escalón del *ladder*), **SPC700** (BRR de 4 bits, interpolación gaussiana, PMON, eco con FIR de 8 tomas), **SCSP** (PCM de 16 bits con FM desde cualquier onda, PLFO, ALFO y programas del DSP) y **DMG** (dos pulsos, la wave RAM, el ruido de 15 o 7 bits, la envolvente por hardware y el *zombie mode*). **ND07** es el motor de siempre. Cada motor tiene sus siete perillas y su pantalla. Ver el README.
+- Lo que era CHIP OSC queda dentro: el *driver* de 60 Hz (SWEEP, ARP, ARP SPD, STEPS) en C, para cualquier motor; DUTY, NOISE y PRESET en D. SEL genera un NEW SFX con el motor que tengas.
+- **09 3-BAND EQ** en lugar de VOWEL + SHIFT: shelf de graves, campana y shelf de agudos (SVF de Simper), ±15 dB, la frecuencia de cada banda, el Q de la campana y OUT. Los assets que usaban la boca (MONSTER, UI ERR, ENGINE) se rehicieron con el EQ y un LFO al OUT.
+- **TRANSIENT** es ahora el juego D de 06 ENVELOPES y **SPACE** el juego C de 13 MULTIBAND REVERB: 19 páginas.
+- **RTPC y CHAOS PAD + KEYS quedan escondidas.** Ver el final del README.
+- Sin cambios de sonido en lo que no se tocó: con ENGINE ND07, las pruebas de audio dan lo mismo bit a bit que la 1.5 (salvo las que pasan por el HAPPY ACCIDENT, que ahora también sortea el EQ). Las sesiones anteriores se cargan; lo que era VOWEL + SHIFT empieza plano.
+
+## v1.5
+
+- **SOUND CHIPS pasa a 01 ASSETS** (juegos B y C): la consola se escoge al empezar, junto con el asset. Vuelven a ser 21 páginas.
+- **Asset SYNTH:** un saw abierto, sostenido y seco, con un poco de vibrato; el mejor punto de partida para oír qué hace cada chip.
+- **02 OSC & SAMPLE:** el oscilador como wavetable visto de lado (el ciclo al frente y detrás la misma onda con menos COLOR) y el sample como tallos con punta.
+- **10 VOWEL + SHIFT:** una boca que dice la vocal, se abre con el sonido y tiembla con GROWL.
+- **11 RES MOD FILTER:** de vuelta la respuesta rellena con la topografía encima.
+- ASSETS en cuatro columnas.
+
 ## v1.4
 
 - **22 SOUND CHIPS:** la última página imprime todo el sonido a través del chip de una consola: YM2149 (Atari ST, MSX), YM2612 (Mega Drive), S-DSP (Super NES), SCSP (Saturn) y DMG (Game Boy). Ver el README.

@@ -1,11 +1,10 @@
-1 btn 8
 # the page's download: a sample imported into slot 3 (SysEx, as web/index.html), then read back (LEN, READ x N):
 # build/host/export-500.wav must be that sample, export-1000.wav the same reversed; then slot 3 reversed in 05 SAMPLE LAB and exported again
 # btn: 3 SEL, 10 ARP
 200 import 2
 500 export
-600 btn 10
-601 enc 0 1
+1 btn 10
+2 enc 0 1
 800 btn 3
 1000 export
 1200 end

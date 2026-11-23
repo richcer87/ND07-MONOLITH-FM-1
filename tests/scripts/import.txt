@@ -1,5 +1,5 @@
-1 btn 8
 # web/index.html's sample import over SysEx: a test sound into slot 5, saved; then played
+1 btn 8
 100 enc 6 4
 300 import 5
 400 shot

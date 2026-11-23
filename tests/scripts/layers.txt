@@ -1,9 +1,9 @@
-1 btn 8
 # 01 OSC & SAMPLE set D: LAYER 3 (an octave down + a detuned double) on the saw; then SHEPARD (ALGORITHM), COLOR 90 %: rising
 # btn: 8 HOME; enc: 1 ALGORITHM, 2..5 = K1..K4
-100 btn 8
-101 btn 8
-102 btn 8
+1 enc 0 1
+2 btn 8
+3 btn 8
+4 btn 8
 300 enc 2 2
 400 keys 1
 1200 shot
