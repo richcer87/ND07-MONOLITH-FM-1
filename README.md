@@ -1,17 +1,18 @@
-# ND-07 // MONOLITH · FM-1 · v1.5
+# ND-07 // MONOLITH · FM-1 · v1.6
 
 Firmware para el **M-VAVE FM-1**: un sampler y sintetizador para diseñar efectos de sonido de videojuegos. Es la
 versión de bolsillo de la estación ND-07 // MONOLITH para REAPER, escrita en C entero para el chip JieLi AC79 (sin FPU).
 
-21 páginas en el orden del trabajo: escoges un **ASSET** de partida (y, si quieres, la consola en la que va a sonar: **SOUND CHIPS**), armas la fuente (osciladores, samples, granos,
-chip de 8 bits), le das forma, color y espacio, la mueves como la movería el juego (LFOs, **RTPC**, **CHAOS PAD**), la
-varías y la entregas (**VARIATION**, **PHYSICS**, **BATCH**). Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-01 por defecto).
+19 páginas en el orden del trabajo: escoges un **ASSET** de partida (y, si quieres, la consola en la que va a sonar: **SOUND CHIPS**), armas la fuente (osciladores, samples, granos,
+o el chip de una consola como motor: **CHIP ENGINE** con YM2149, YM2612, SPC700, SCSP y DMG), le das forma, color y
+espacio, la mueves como la movería el juego (LFOs), la varías y la entregas (**VARIATION**, **PHYSICS**, **BATCH**).
+Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-01 por defecto).
 
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.5.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
-> nuevo de la 1.0 a la 1.5 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
+> **Estado: 1.6.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
+> nuevo de la 1.0 a la 1.6 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
 > GitHub Actions con la toolchain de JieLi. Instalar firmware es bajo tu propio riesgo: el
 > [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-** al encender entra
 > al rescate USB. Las sesiones de la 1.1 en adelante se cargan.
@@ -59,7 +60,8 @@ aparato.
 
 `web/index.html` (Web MIDI, sin instalar nada) tiene dos partes: **CHAOS PAD** (el pad XY a pantalla completa, una tira
 de presión y un teclado de 13 notas con velocity según dónde tocas) y **SAMPLES** (arrastras cualquier audio, se
-convierte a mono 22.05 kHz, lo escuchas tal como sonará y se manda a uno de los 8 slots por SysEx).
+convierte a mono 22.05 kHz, lo escuchas tal como sonará y se manda a uno de los 8 slots por SysEx). El pad y la tira mueven
+parámetros solo cuando la página CHAOS PAD está a la vista (ver el final de este archivo).
 
 | | Cómo |
 | --- | --- |
@@ -75,45 +77,67 @@ Settings → Pages → "Deploy from a branch", `main`, carpeta `/ (root)`, y áb
 ## El flujo de trabajo
 
 Cada botón es un paso. Presiónalo otra vez para el siguiente juego de perillas (A B C D) y, después del último, para
-la siguiente página del mismo botón. **SELECT** recorre las 21 páginas. Al encender estás en **01 ASSETS**.
+la siguiente página del mismo botón. **SELECT** recorre las 19 páginas. Al encender estás en **01 ASSETS**.
 
 | Paso | Botón | Páginas |
 | --- | --- | --- |
-| Empezar y crear la fuente | **HOME** | 01 ASSETS (y SOUND CHIPS) · 02 OSC & SAMPLE · 03 CHIP OSC |
+| Empezar y crear la fuente | **HOME** | 01 ASSETS (y SOUND CHIPS) · 02 OSC & SAMPLE · 03 CHIP ENGINE |
 | Material | **ARP** | 04 GRAIN ENGINE · 05 SAMPLE LAB |
-| Dar forma | **ENV** | 06 ENVELOPES · 07 TRANSIENT |
-| Color | **EDIT** | 08 RESONATOR · 09 DESTROY · 10 VOWEL + SHIFT · 11 RES MOD FILTER |
-| Pegar | **GLO** | 12 OTT MULTIBAND |
-| Colocar | **FX** | 13 DELAY + FLANGER · 14 MULTIBAND REVERB · 15 SPACE + MOTION |
-| Mover (lo que controla el juego) | **LFO** | 16 LFO 1 + 2 · 17 RTPC · 18 CHAOS PAD + KEYS |
-| Variar y entregar | **SEQ** | 19 VARIATION + MORPH · 20 PHYSICS TRIGGER · 21 BATCH + FIRE TEST |
+| Dar forma | **ENV** | 06 ENVELOPES (D: TRANSIENT) |
+| Color | **EDIT** | 07 RESONATOR · 08 DESTROY · 09 3-BAND EQ · 10 RES MOD FILTER |
+| Pegar | **GLO** | 11 OTT MULTIBAND |
+| Colocar | **FX** | 12 DELAY + FLANGER · 13 MULTIBAND REVERB (C: SPACE) |
+| Mover (lo que controla el juego) | **LFO** | 14 LFO 1 + 2 |
+| Variar y entregar | **SEQ** | 15 VARIATION + MORPH · 16 PHYSICS TRIGGER · 17 BATCH + FIRE TEST |
 
 | # | Página | Perillas A | Perillas B (C, D) |
 | --- | --- | --- | --- |
 | 01 | **ASSETS** | ASSET, VARY, HA KIND, OUT | B (SOUND CHIPS): CHIP, RATE, GRIT, MIX · C: ECHO, E TIME, TONE |
 | 02 | OSC & SAMPLE | SOURCE, WAVE (15 ondas), SAMPLE, BLEND | B: TUNE, COLOR, STRETCH, REC · C: LOOP, L POS, L LEN, XFADE · D: VOICES, L PITCH, DETUNE, L LEVEL |
-| 03 | CHIP OSC | DUTY, SWEEP, ARP, ARP SPD | STEPS, NOISE, PRESET |
+| 03 | **CHIP ENGINE** | ENGINE y las tres primeras del motor | B: las otras cuatro del motor · C: SWEEP, ARP, ARP SPD, STEPS · D: DUTY, NOISE, PRESET |
 | 04 | GRAIN ENGINE | POS, SIZE, DENS, SPRAY | REVERSE, GRAIN, FREEZE, RND PIT |
 | 05 | SAMPLE LAB | TOOL, AMOUNT | — |
-| 06 | ENVELOPES | ATTACK, DECAY, SUSTAIN, RELEASE | B: GLIDE, VELO, PITCH, OUT · C: M ATK, M DEC, M AMT, M TGT |
-| 07 | TRANSIENT | ATTACK, SUSTAIN, TIME, OUT | — |
-| 08 | RESONATOR | BODY, PITCH, DECAY, RES MIX | DAMP, SPREAD, HIT POS, KEY TRK |
-| 09 | DESTROY | DRIVE, SHAPE, BITS, RATE | RING HZ, RING MIX, TONE, MIX |
-| 10 | VOWEL + SHIFT | VOWEL, SIZE, RES, V MIX | B: SHIFT, FDBK, S TIME, S MIX · C: GROWL, G RATE |
-| 11 | RES MOD FILTER | FREQ, RES, MODE, SLOPE | DEPTH, RATE, MOD SRC, ANALOG |
-| 12 | OTT MULTIBAND | A: DEPTH, TIME, UP, DOWN · B: IN, OUT, STYLE, PLACE | C: LOW, MID, HIGH, THRESH · D: X-LO, X-HI, SOLO |
-| 13 | DELAY + FLANGER | TIME, FDBK, DLY MIX, ROUTE | RATE, DEPTH, REGEN, FLG MIX |
-| 14 | MULTIBAND REVERB | SIZE, DECAY, PRE-DLY, REV MIX | LOW x, HIGH x, X-LO, X-HI |
-| 15 | SPACE + MOTION | DIST, OCCLUDE, PASS-BY, DOPPLER | — |
-| 16 | LFO 1 + 2 | SHAPE, RATE, MIX, TARGET (LFO 1) | SHAPE, RATE, MIX, TARGET (LFO 2) |
-| 17 | RTPC | VALUE, SWEEP, CURVE | B: TARGET 1, AMT 1, TARGET 2, AMT 2 · C: TARGET 3, AMT 3 |
-| 18 | CHAOS PAD + KEYS | X TGT, X AMT, Y TGT, Y AMT | B: PAD, GESTURE, KEY VEL, SENS · C: AT TGT, AT AMT |
-| 19 | VARIATION + MORPH | VARY, SEED, KEYS, RESEED | MORPH, HA AMT, EVOLVE, HA KIND |
-| 20 | PHYSICS TRIGGER | TRIGGER, HITS, TIME, FALL | PITCH, JITTER |
-| 21 | BATCH + FIRE TEST | BATCH, COUNT, SPACE, GATE | B: RATE, POOL, ORDER · C: MATCH, TARGET |
+| 06 | ENVELOPES | ATTACK, DECAY, SUSTAIN, RELEASE | B: GLIDE, VELO, PITCH, OUT · C: M ATK, M DEC, M AMT, M TGT · D (TRANSIENT): ATTACK, SUSTAIN, TIME, OUT |
+| 07 | RESONATOR | BODY, PITCH, DECAY, RES MIX | DAMP, SPREAD, HIT POS, KEY TRK |
+| 08 | DESTROY | DRIVE, SHAPE, BITS, RATE | RING HZ, RING MIX, TONE, MIX |
+| 09 | **3-BAND EQ** | LOW, MID, HIGH (±15 dB), MID HZ | LOW HZ, HIGH HZ, MID Q, OUT |
+| 10 | RES MOD FILTER | FREQ, RES, MODE, SLOPE | DEPTH, RATE, MOD SRC, ANALOG |
+| 11 | OTT MULTIBAND | A: DEPTH, TIME, UP, DOWN · B: IN, OUT, STYLE, PLACE | C: LOW, MID, HIGH, THRESH · D: X-LO, X-HI, SOLO |
+| 12 | DELAY + FLANGER | TIME, FDBK, DLY MIX, ROUTE | RATE, DEPTH, REGEN, FLG MIX |
+| 13 | MULTIBAND REVERB | SIZE, DECAY, PRE-DLY, REV MIX | B: LOW x, HIGH x, X-LO, X-HI · C (SPACE): DIST, OCCLUDE, PASS-BY, DOPPLER |
+| 14 | LFO 1 + 2 | SHAPE, RATE, MIX, TARGET (LFO 1) | SHAPE, RATE, MIX, TARGET (LFO 2) |
+| 15 | VARIATION + MORPH | VARY, SEED, KEYS, RESEED | MORPH, HA AMT, EVOLVE, HA KIND |
+| 16 | PHYSICS TRIGGER | TRIGGER, HITS, TIME, FALL | PITCH, JITTER |
+| 17 | BATCH + FIRE TEST | BATCH, COUNT, SPACE, GATE | B: RATE, POOL, ORDER · C: MATCH, TARGET |
 
-La cadena de audio (mono): FUENTE (osc / sample / granos) × ENV → RESONATOR → TRANSIENT → DESTROY → VOWEL + SHIFT →
-FILTER → OTT (PRE) → DELAY + FLANGER → REVERB → OTT (POST) → SOUND CHIPS → SPACE → limitador → salida.
+La cadena de audio (mono): FUENTE (osc / sample / granos, o el CHIP ENGINE) × ENV → RESONATOR → TRANSIENT → DESTROY
+→ EQ → FILTER → OTT (PRE) → DELAY + FLANGER → REVERB → OTT (POST) → SOUND CHIPS → SPACE → limitador → salida.
+
+## CHIP ENGINE (página 03)
+
+Con **ENGINE** (K1 en A) la voz ya no sale de 02: la hace el chip de una consola, con sus partes y sus trucos. **ND07**
+es el motor de siempre (02 OSC & SAMPLE). Cada motor trae sus siete perillas (A y B; al cambiar de motor empiezan en
+un punto que ya suena), y 02 le sigue prestando el sample, sus puntos de loop y el SUSTAIN. La envolvente de 06 sigue
+siendo el VCA, así que con SUSTAIN al 100 % oyes la envolvente del chip tal cual.
+
+En **C** está el *driver* de 60 Hz (SWEEP, ARP, ARP SPD, STEPS), como lo hacían los drivers de música de los juegos:
+sirve con cualquier motor. **D** tiene DUTY (los pulsos de ND07 y del DMG), NOISE (el LFSR largo o corto) y PRESET;
+SEL en esta página genera un **NEW SFX** del tipo del PRESET con el motor que tengas.
+
+| Motor | Consola | Perillas | Qué hace |
+| --- | --- | --- | --- |
+| **YM2149** | Atari ST, MSX | MIXER, NOISE, CHORD, ENV, E RATE, SID, DIGI | Tres cuadradas, el ruido LFSR de 17 bits y una envolvente de 32 pasos logarítmicos (8 formas). MIXER: TONE, NOISE, TONE+NS, **BUZZER** (la envolvente a la frecuencia de la nota: el bajo del Atari) y **SYNCBUZ** (la cuadrada reinicia la envolvente). CHORD reparte los tres canales (unísono, octava, quinta, acordes). **SID**: el volumen se abre y cierra cerca del tono (el PWM de SID-voice). **DIGI**: el sample por el registro de volumen (los *digi-drums*). |
+| **YM2612** | Mega Drive / Genesis | ALGO, FDBK, RATIO, MOD LVL, MOD DEC, CH3, SSG-EG | FM de 4 operadores con los 8 algoritmos y feedback en el operador 1. **CH3**: cada operador con su propio pitch, fuera de la serie armónica (campanas, metal, motores). **SSG-EG**: las envolventes de los moduladores en loop, normal o invertida. ALGO **DAC PCM**: el canal 6 tocando el sample a 8 bits. Sale por el DAC de 9 bits con el escalón del *ladder* en cero. |
+| **SPC700** | Super NES | SRC RATE, BRR, PMON, ECHO, E TIME, E FDBK, FIR | El sample guardado a SRC RATE (22–4 kHz), codificado a **BRR** (4 bits, bloques de 16; GRIT lo engorda) y suavizado como la interpolación gaussiana. **PMON**: el pitch movido por otra voz. El **eco** con su FIR de 8 tomas (filtros como los que ponían los juegos), E TIME en pasos de 16 ms y feedback. |
+| **SCSP** | Saturn | FM SRC, DEPTH, RATIO, LFO RATE, PLFO, ALFO, DSP | El sample como PCM de 16 bits con su fase modulada por cualquier onda (seno, saw, cuadrada, ruido o el mismo sample). El LFO del slot: **PLFO** al pitch, **ALFO** al nivel. **DSP**: un programa de su DSP (CHORUS, FLANGER, MULTITAP, WATER: lo de "bajo el agua"). |
+| **DMG** | Game Boy | PULSE, PULSE 2, WAVE, W VOL, NOISE, ENV, ZOMBIE | Dos pulsos (DUTY en D), el canal de onda de 32 pasos de 4 bits con su volumen 100/50/25 %, el ruido LFSR (NOISE en D: 15 o 7 bits), la envolvente de volumen por hardware (64 Hz) y **ZOMBIE**: el volumen empujado hacia arriba hasta dar la vuelta. Sale por el capacitor de salida. |
+
+Lo que queda fuera, con franqueza: el motor es **mono** (una voz de cada chip), así que el paneo duro del DMG y la
+inversión de fase L/R del S-DSP no aplican. Del SCSP no están los 32 slots ni el DSP programable completo: son una voz
+y cuatro programas fijos. Del YM2612, un canal y no seis. Son el carácter de cada chip, no un emulador ciclo a ciclo.
+
+La diferencia con **SOUND CHIPS** (ASSETS B y C): el CHIP ENGINE *hace* el sonido con el chip; SOUND CHIPS *imprime*
+cualquier sonido (también el de un CHIP ENGINE) a través del convertidor de una consola. Se pueden combinar.
 
 ## SOUND CHIPS (ASSETS B y C)
 
@@ -148,21 +172,18 @@ ataques y el último segundo de ambos). Al girar una perilla, su celda se ilumin
 | --- | --- |
 | ASSETS | un espectrómetro pequeño en la línea de estado; en B y C, el chip como pieza con sus pines, la salida en escalones y los cinco chips como etiquetas de cartucho |
 | OSC & SAMPLE | el oscilador como wavetable visto de lado: el ciclo al frente y detrás la misma onda con menos COLOR; el sample como tallos con punta; en D, un anillo de trazos por voz |
-| CHIP OSC | el sonido en bloques de 8 bits |
+| CHIP ENGINE | en A y B el chip como lo dibujaba su manual: los canales del YM2149 y la forma de su envolvente, el algoritmo del YM2612 con sus operadores encendidos por su envolvente, el bloque BRR y las tomas del FIR del SPC700, el slot y el programa del DSP del SCSP, los canales del DMG en segmentos de LCD y su wave RAM; en C y D el sonido en bloques de 8 bits |
 | GRAIN ENGINE | cada grano un aro que nace donde lee, sube y se encoge; las orillas del SPRAY punteadas |
 | SAMPLE LAB | el slot enrollado en un anillo, la herramienta como signo al centro, lo que toca resaltado |
-| ENVELOPES | el ADSR con nodos; la etapa activa en blanco; la voz como un aro que crece |
-| TRANSIENT | una onda desde el ataque en cada golpe; la ganancia como aguja |
+| ENVELOPES | el ADSR con nodos; la etapa activa en blanco; la voz como un aro que crece; en D (TRANSIENT) una onda desde el ataque en cada golpe y la ganancia como aguja |
 | RESONATOR | el cuerpo golpeado, un aro por modo, apilados como el material; cada aro tiembla mientras suena |
 | DESTROY | una esfera de alambre a través del shaper: HARD la cuadra, FOLD la dobla, BITS la ajusta a una retícula |
-| VOWEL + SHIFT | una boca que dice la vocal (U chica y redonda, A abierta, I ancha y delgada), se abre con el sonido y tiembla con GROWL; la voz saliendo |
+| 3-BAND EQ | la respuesta (LOW, MID, HIGH sumadas) rellena, con una manija por banda, sobre el espectro en vivo en la misma escala |
 | RES MOD FILTER | la respuesta del filtro rellena, como en una caja de filtro, con la topografía del espectro encima |
 | OTT | cilindro, prisma y pirámide de alambre; flechas de lo que sube y baja la ganancia |
 | DELAY + FLANGER | los ecos como losas hacia un punto de fuga |
-| REVERB | la sala como túnel de marcos: SIZE los separa, DECAY los mantiene encendidos |
-| SPACE | frentes de onda desde la fuente; se juntan delante al pasar (Doppler) |
+| REVERB | la sala como túnel de marcos: SIZE los separa, DECAY los mantiene encendidos; en C (SPACE) frentes de onda desde la fuente que se juntan delante al pasar (Doppler) |
 | LFO 1 + 2 | un armonógrafo con el rastro de la pluma |
-| CHAOS PAD | el rastro del dedo; en SPRING, la línea que lo regresa al centro |
 | VARIATION | la semilla como constelación; en MORPH, un cubo que se vuelve octaedro |
 | PHYSICS | un tallo por golpe y una pelota que salta entre ellos |
 | BATCH | una onda en cada golpe nuevo |
@@ -176,7 +197,7 @@ el pie muestra los segundos trabajos uno tras otro, y al soltar no pasa nada.
 | Control | Solo | Con SEL sostenido |
 | --- | --- | --- |
 | Botones de página | su paso del trabajo; otra vez: perillas A/B…, luego la siguiente página del botón | (lo mismo) |
-| **SELECT** | página anterior / siguiente (las 21) | juego de perillas A B C D de la página |
+| **SELECT** | página anterior / siguiente (las 19) | juego de perillas A B C D de la página |
 | **K1..K4** | los parámetros de la página | lock / unlock de ese parámetro |
 | **ALGORITHM** | onda del oscilador | tema (EVA-01, 01 TEST, 02 PROD…) |
 | **PRESETS** | slot de sample | asset anterior / siguiente: se carga y suena (desde cualquier página) |
@@ -185,7 +206,7 @@ el pie muestra los segundos trabajos uno tras otro, y al soltar no pasa nada.
 | **SAVE** | guardar sesión (con A y B, y el sample grabado) | borrar todos los locks |
 | **OCT− / OCT+** | octava | **RESET** / **RANDOMIZE** el módulo de la página (en ASSETS: un asset al azar) |
 | Teclas **F3..G5** | tocar (sostener = nota sostenida, monofónico, última nota gana, glide legato) | |
-| **SEL (toque)** | la acción de la página: **01** A: cargar y tocar el asset, B y C: un chip al azar · **02** REC ARM / STOP · **03** un sonido nuevo del PRESET · **05** aplicar la herramienta · **15** tocar una pasada · **17** barrido RTPC · **18** grabar un gesto · **19** A: semilla nueva, B: guardar A, luego B · **20** tocar el patrón · **21** BATCH (A, C) o FIRE TEST (B) / detener · las demás: aleatorizar el módulo (respeta locks) | |
+| **SEL (toque)** | la acción de la página: **01** A: cargar y tocar el asset, B y C: un chip al azar · **02** REC ARM / STOP · **03** NEW SFX: un sonido nuevo del PRESET con el motor · **05** aplicar la herramienta · **13** C: tocar una pasada · **15** A: semilla nueva, B: guardar A, luego B · **16** tocar el patrón · **17** BATCH (A, C) o FIRE TEST (B) / detener · las demás: aleatorizar el módulo (respeta locks) | |
 
 | Entrada | |
 | --- | --- |
@@ -214,10 +235,12 @@ señal a L y R): delay, flanger, reverb y OTT procesan un solo canal.
 | SUPRSAW | +170 sobre SAW | — |
 | DESTROY (todo encendido) | ~110 | cada parte apagada no cuesta |
 | TRANSIENT | ~95 | ATTACK y SUSTAIN en 0 = 0 |
+| 3-BAND EQ | ~50 por banda | una banda en 0 dB no cuesta; todo plano = 0 |
+| CHIP ENGINE | en lugar del oscilador: DMG como un SAW; YM2149 +80; SCSP +160 (con DSP); YM2612 +180; SPC700 +200 (con eco) | ENGINE ND07 = 0 |
 | Delay / Flanger | ~80 / ~30 | MIX 0 = 0 |
 | LAYER 2 / 3 (0.7, estimado) | la FUENTE ×2 / ×3 (con SUPRSAW, lo más caro) | VOICES MONO = 0 · en SAMPLE sólo con STRETCH 1.00x |
 | SHEPARD (0.7, estimado) | ~ como SUPRSAW | — |
-| SPACE, RTPC (0.7) | muy poco | DIST, OCCLUDE, PASS-BY en 0 / VALUE 0 = 0 |
+| SPACE (0.7) | muy poco | DIST, OCCLUDE, PASS-BY en 0 = 0 |
 
 SOUND CHIPS cuesta poco (un muestreo, un convertidor y un filtro por muestra; el eco del S-DSP, ocho multiplicaciones); en el aparato se ve en el pie de pantalla.
 
@@ -242,14 +265,15 @@ sh tests/run_host.sh tests/scripts/nd07_v04.txt    # resonador, transient, DESTR
 sh tests/run_host.sh tests/scripts/nd07_tour.txt   # el recorrido de los módulos anteriores
 sh tests/run_host.sh tests/scripts/pad.txt         # el CHAOS PAD y el aftertouch por MIDI
 sh tests/run_host.sh tests/scripts/import.txt      # un sample por SysEx, como lo manda la página web
-sh tests/run_host.sh tests/scripts/chip.txt        # 03 CHIP OSC: un preset de cada tipo
-sh tests/run_host.sh tests/scripts/variation.txt   # 19 VARIATION: teclas = variaciones con semilla
+sh tests/run_host.sh tests/scripts/chip.txt        # 03 CHIP ENGINE: un NEW SFX de cada tipo; en DMG y YM2149
+sh tests/run_host.sh tests/scripts/engines.txt     # 03 CHIP ENGINE: los cinco chips, una nota cada uno
+sh tests/run_host.sh tests/scripts/variation.txt   # 15 VARIATION: teclas = variaciones con semilla
 sh tests/run_host.sh tests/scripts/sustain.txt     # 02 LOOP SUSTAIN: START > LOOP > STOP
-sh tests/run_host.sh tests/scripts/motion.txt      # 17 RTPC (barrido) y 15 SPACE (PASS-BY)
+sh tests/run_host.sh tests/scripts/motion.txt      # RTPC (barrido) y 13 C SPACE (PASS-BY)
 sh tests/run_host.sh tests/scripts/layers.txt      # 02 D: LAYER 3 y la onda SHEPARD
 sh tests/run_host.sh tests/scripts/bounce.txt      # REC BOUNCE y BATCH con MATCH
 sh tests/run_host.sh tests/scripts/overdub.txt     # REC OVERDUB
-sh tests/run_host.sh tests/scripts/physics.txt     # 20 PHYSICS TRIGGER: BOUNCE, DEBRIS, SCATTER
+sh tests/run_host.sh tests/scripts/physics.txt     # 16 PHYSICS TRIGGER: BOUNCE, DEBRIS, SCATTER
 sh tests/run_host.sh tests/scripts/lab.txt         # 05 SAMPLE LAB: REVERSE, 1/2 SPD, REVERT
 sh tests/run_host.sh tests/scripts/modenv.txt      # 06 C MOD ENV y las recetas del HAPPY ACCIDENT
 sh tests/run_host.sh tests/scripts/assets.txt      # 01 ASSETS: escoger, SEL carga y toca, HAPPY ACCIDENT en la familia
@@ -258,8 +282,8 @@ sh tests/run_host.sh tests/scripts/screens.txt     # todas las páginas y juegos
 python3 tools/gen_screens_tour.py                  # regenera screens.txt si cambian las páginas
 sh tests/run_host.sh tests/scripts/eva_states.txt  # EVA-01: perilla recién girada, lock, HAPPY ACCIDENT, modulación
 python3 tools/gen_eva_font.py                      # regenera firmware/gen/eva_font.h (fuentes del tema EVA-01)
-sh tests/run_host.sh tests/scripts/gesture.txt     # 18 GESTURE: grabado (SEL y CC19) y repetido por la nota
-sh tests/run_host.sh tests/scripts/vox.txt         # 10 VOWEL + SHIFT: shift arriba/abajo, la espiral, U O A E I
+sh tests/run_host.sh tests/scripts/gesture.txt     # GESTURE del pad: grabado (SEL y CC19) y repetido por la nota
+sh tests/run_host.sh tests/scripts/eq.txt          # 09 3-BAND EQ: LOW, MID, HIGH sobre ruido
 sh tests/run_host.sh tests/scripts/export.txt      # el slot de vuelta como WAV (SysEx LEN / READ)
 cc -O2 -Wall -o /tmp/sense_test tests/sense_test.c && /tmp/sense_test   # la velocity con presiones sintéticas
 python3 tools/make_install_page.py && node tests/web_install_test.mjs   # la página del instalador (contra un FM-1 simulado)
@@ -273,3 +297,10 @@ patches aleatorios con todos los módulos: sin pasarse del techo del limitador, 
 
 La identidad del paquete es `FM-1_4707N` (4707 = N D 0 7; `FM-1_950` ya es de CS-1). Antes de publicar, revisa
 "Is my identity free?" en el Firmware Hub. `fmhub.json` tiene la ficha para el Hub.
+
+## Para quien lee hasta el final
+
+Hay dos páginas que no aparecen: **RTPC** (un valor del juego, barrido o a mano, sobre tres destinos con curva) y
+**CHAOS PAD + KEYS** (el pad XY por MIDI, la velocity de las teclas, el aftertouch y un gesto grabado). Se muestran con
+**SEL + LFO** y se esconden igual; la sesión lo recuerda. Escondidas no hacen nada (el pad, el gesto, el aftertouch y
+el RTPC dejan de mover parámetros); al mostrarlas, quedan en el botón LFO como 15 y 16, y las de SEQ se corren a 17–19.
