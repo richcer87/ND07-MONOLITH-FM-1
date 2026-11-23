@@ -1,18 +1,17 @@
-# ND-07 // MONOLITH · FM-1 · v1.4
+# ND-07 // MONOLITH · FM-1 · v1.5
 
 Firmware para el **M-VAVE FM-1**: un sampler y sintetizador para diseñar efectos de sonido de videojuegos. Es la
 versión de bolsillo de la estación ND-07 // MONOLITH para REAPER, escrita en C entero para el chip JieLi AC79 (sin FPU).
 
-22 páginas en el orden del trabajo: escoges un **ASSET** de partida, armas la fuente (osciladores, samples, granos,
+21 páginas en el orden del trabajo: escoges un **ASSET** de partida (y, si quieres, la consola en la que va a sonar: **SOUND CHIPS**), armas la fuente (osciladores, samples, granos,
 chip de 8 bits), le das forma, color y espacio, la mueves como la movería el juego (LFOs, **RTPC**, **CHAOS PAD**), la
-varías (**VARIATION**, **PHYSICS**, **BATCH**) y, si quieres, la imprimes a través del chip de una consola
-(**SOUND CHIPS**). Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-01 por defecto).
+varías y la entregas (**VARIATION**, **PHYSICS**, **BATCH**). Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-01 por defecto).
 
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.4.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
-> nuevo de la 1.0 a la 1.4 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
+> **Estado: 1.5.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
+> nuevo de la 1.0 a la 1.5 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
 > GitHub Actions con la toolchain de JieLi. Instalar firmware es bajo tu propio riesgo: el
 > [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-** al encender entra
 > al rescate USB. Las sesiones de la 1.1 en adelante se cargan.
@@ -76,22 +75,22 @@ Settings → Pages → "Deploy from a branch", `main`, carpeta `/ (root)`, y áb
 ## El flujo de trabajo
 
 Cada botón es un paso. Presiónalo otra vez para el siguiente juego de perillas (A B C D) y, después del último, para
-la siguiente página del mismo botón. **SELECT** recorre las 22 páginas. Al encender estás en **01 ASSETS**.
+la siguiente página del mismo botón. **SELECT** recorre las 21 páginas. Al encender estás en **01 ASSETS**.
 
 | Paso | Botón | Páginas |
 | --- | --- | --- |
-| Empezar y crear la fuente | **HOME** | 01 ASSETS · 02 OSC & SAMPLE · 03 CHIP OSC |
+| Empezar y crear la fuente | **HOME** | 01 ASSETS (y SOUND CHIPS) · 02 OSC & SAMPLE · 03 CHIP OSC |
 | Material | **ARP** | 04 GRAIN ENGINE · 05 SAMPLE LAB |
 | Dar forma | **ENV** | 06 ENVELOPES · 07 TRANSIENT |
 | Color | **EDIT** | 08 RESONATOR · 09 DESTROY · 10 VOWEL + SHIFT · 11 RES MOD FILTER |
 | Pegar | **GLO** | 12 OTT MULTIBAND |
 | Colocar | **FX** | 13 DELAY + FLANGER · 14 MULTIBAND REVERB · 15 SPACE + MOTION |
 | Mover (lo que controla el juego) | **LFO** | 16 LFO 1 + 2 · 17 RTPC · 18 CHAOS PAD + KEYS |
-| Variar, entregar e imprimir | **SEQ** | 19 VARIATION + MORPH · 20 PHYSICS TRIGGER · 21 BATCH + FIRE TEST · 22 SOUND CHIPS |
+| Variar y entregar | **SEQ** | 19 VARIATION + MORPH · 20 PHYSICS TRIGGER · 21 BATCH + FIRE TEST |
 
 | # | Página | Perillas A | Perillas B (C, D) |
 | --- | --- | --- | --- |
-| 01 | **ASSETS** | ASSET, VARY, HA KIND, OUT | — |
+| 01 | **ASSETS** | ASSET, VARY, HA KIND, OUT | B (SOUND CHIPS): CHIP, RATE, GRIT, MIX · C: ECHO, E TIME, TONE |
 | 02 | OSC & SAMPLE | SOURCE, WAVE (15 ondas), SAMPLE, BLEND | B: TUNE, COLOR, STRETCH, REC · C: LOOP, L POS, L LEN, XFADE · D: VOICES, L PITCH, DETUNE, L LEVEL |
 | 03 | CHIP OSC | DUTY, SWEEP, ARP, ARP SPD | STEPS, NOISE, PRESET |
 | 04 | GRAIN ENGINE | POS, SIZE, DENS, SPRAY | REVERSE, GRAIN, FREEZE, RND PIT |
@@ -112,16 +111,17 @@ la siguiente página del mismo botón. **SELECT** recorre las 22 páginas. Al en
 | 19 | VARIATION + MORPH | VARY, SEED, KEYS, RESEED | MORPH, HA AMT, EVOLVE, HA KIND |
 | 20 | PHYSICS TRIGGER | TRIGGER, HITS, TIME, FALL | PITCH, JITTER |
 | 21 | BATCH + FIRE TEST | BATCH, COUNT, SPACE, GATE | B: RATE, POOL, ORDER · C: MATCH, TARGET |
-| 22 | **SOUND CHIPS** | CHIP, RATE, GRIT, MIX | ECHO, E TIME, TONE |
 
 La cadena de audio (mono): FUENTE (osc / sample / granos) × ENV → RESONATOR → TRANSIENT → DESTROY → VOWEL + SHIFT →
 FILTER → OTT (PRE) → DELAY + FLANGER → REVERB → OTT (POST) → SOUND CHIPS → SPACE → limitador → salida.
 
-## 22 SOUND CHIPS
+## SOUND CHIPS (ASSETS B y C)
 
-La última página toma todo lo que suena y lo pasa por el chip de sonido de una consola, como si el juego corriera ahí:
+Junto con el asset escoges la consola: los juegos de perillas B y C de **01 ASSETS** pasan todo lo que suena por el chip de sonido de una consola, como si el juego corriera ahí:
 la frecuencia de muestreo del chip (sin filtro antialias, como el hardware), su convertidor y su carácter. Apagado por
 defecto; HAPPY ACCIDENT, los ASSETS y las recetas no lo tocan, así que puedes escoger un chip y recorrer sonidos con él.
+Para oírlo bien empieza con el asset **SYNTH**: un saw abierto, sostenido y seco, con un poco de vibrato. Con SEL en
+B o C, un chip al azar.
 
 | CHIP | Consolas | Qué emula | GRIT |
 | --- | --- | --- | --- |
@@ -147,8 +147,8 @@ fino. Con HAPPY ACCIDENT todo gira más rápido un momento.
 
 | Página | Objeto |
 | --- | --- |
-| ASSETS | un espectrómetro pequeño en la línea de estado |
-| OSC & SAMPLE | el ciclo del oscilador enrollado en un anillo que gira; el sample como contorno; en D, un anillo de trazos por voz |
+| ASSETS | un espectrómetro pequeño en la línea de estado; en B y C, el chip como pieza con sus pines, la salida en escalones y los cinco chips como etiquetas de cartucho |
+| OSC & SAMPLE | el oscilador como wavetable visto de lado: el ciclo al frente y detrás la misma onda con menos COLOR; el sample como tallos con punta; en D, un anillo de trazos por voz |
 | CHIP OSC | el sonido en bloques de 8 bits |
 | GRAIN ENGINE | cada grano un aro que nace donde lee, sube y se encoge; las orillas del SPRAY punteadas |
 | SAMPLE LAB | el slot enrollado en un anillo, la herramienta como signo al centro, lo que toca resaltado |
@@ -156,8 +156,8 @@ fino. Con HAPPY ACCIDENT todo gira más rápido un momento.
 | TRANSIENT | una onda desde el ataque en cada golpe; la ganancia como aguja |
 | RESONATOR | el cuerpo golpeado, un aro por modo, apilados como el material; cada aro tiembla mientras suena |
 | DESTROY | una esfera de alambre a través del shaper: HARD la cuadra, FOLD la dobla, BITS la ajusta a una retícula |
-| VOWEL + SHIFT | una topografía del espectro; SHIFT la gira |
-| RES MOD FILTER | el último segundo del espectro como familia de curvas, bajo la respuesta del filtro |
+| VOWEL + SHIFT | una boca que dice la vocal (U chica y redonda, A abierta, I ancha y delgada), se abre con el sonido y tiembla con GROWL; la voz saliendo |
+| RES MOD FILTER | la respuesta del filtro rellena, como en una caja de filtro, con la topografía del espectro encima |
 | OTT | cilindro, prisma y pirámide de alambre; flechas de lo que sube y baja la ganancia |
 | DELAY + FLANGER | los ecos como losas hacia un punto de fuga |
 | REVERB | la sala como túnel de marcos: SIZE los separa, DECAY los mantiene encendidos |
@@ -167,7 +167,6 @@ fino. Con HAPPY ACCIDENT todo gira más rápido un momento.
 | VARIATION | la semilla como constelación; en MORPH, un cubo que se vuelve octaedro |
 | PHYSICS | un tallo por golpe y una pelota que salta entre ellos |
 | BATCH | una onda en cada golpe nuevo |
-| SOUND CHIPS | el chip con sus pines, la salida en escalones, los cinco chips |
 
 ## Panel
 
@@ -178,7 +177,7 @@ el pie muestra los segundos trabajos uno tras otro, y al soltar no pasa nada.
 | Control | Solo | Con SEL sostenido |
 | --- | --- | --- |
 | Botones de página | su paso del trabajo; otra vez: perillas A/B…, luego la siguiente página del botón | (lo mismo) |
-| **SELECT** | página anterior / siguiente (las 22) | juego de perillas A B C D de la página |
+| **SELECT** | página anterior / siguiente (las 21) | juego de perillas A B C D de la página |
 | **K1..K4** | los parámetros de la página | lock / unlock de ese parámetro |
 | **ALGORITHM** | onda del oscilador | tema (EVA-01, 01 TEST, 02 PROD…) |
 | **PRESETS** | slot de sample | asset anterior / siguiente: se carga y suena (desde cualquier página) |
@@ -187,7 +186,7 @@ el pie muestra los segundos trabajos uno tras otro, y al soltar no pasa nada.
 | **SAVE** | guardar sesión (con A y B, y el sample grabado) | borrar todos los locks |
 | **OCT− / OCT+** | octava | **RESET** / **RANDOMIZE** el módulo de la página (en ASSETS: un asset al azar) |
 | Teclas **F3..G5** | tocar (sostener = nota sostenida, monofónico, última nota gana, glide legato) | |
-| **SEL (toque)** | la acción de la página: **01** cargar y tocar el asset · **02** REC ARM / STOP · **03** un sonido nuevo del PRESET · **05** aplicar la herramienta · **15** tocar una pasada · **17** barrido RTPC · **18** grabar un gesto · **19** A: semilla nueva, B: guardar A, luego B · **20** tocar el patrón · **21** BATCH (A, C) o FIRE TEST (B) / detener · las demás (también 22): aleatorizar el módulo (respeta locks) | |
+| **SEL (toque)** | la acción de la página: **01** A: cargar y tocar el asset, B y C: un chip al azar · **02** REC ARM / STOP · **03** un sonido nuevo del PRESET · **05** aplicar la herramienta · **15** tocar una pasada · **17** barrido RTPC · **18** grabar un gesto · **19** A: semilla nueva, B: guardar A, luego B · **20** tocar el patrón · **21** BATCH (A, C) o FIRE TEST (B) / detener · las demás: aleatorizar el módulo (respeta locks) | |
 
 | Entrada | |
 | --- | --- |
@@ -255,7 +254,7 @@ sh tests/run_host.sh tests/scripts/physics.txt     # 20 PHYSICS TRIGGER: BOUNCE,
 sh tests/run_host.sh tests/scripts/lab.txt         # 05 SAMPLE LAB: REVERSE, 1/2 SPD, REVERT
 sh tests/run_host.sh tests/scripts/modenv.txt      # 06 C MOD ENV y las recetas del HAPPY ACCIDENT
 sh tests/run_host.sh tests/scripts/assets.txt      # 01 ASSETS: escoger, SEL carga y toca, HAPPY ACCIDENT en la familia
-cc -O2 -DDINGHY_HOST -Ifirmware/hal -Ifirmware/src -Ifirmware/gen -o /tmp/at tests/assets_test.c -lm && /tmp/at   # los 18 como WAV + niveles
+cc -O2 -DDINGHY_HOST -Ifirmware/hal -Ifirmware/src -Ifirmware/gen -o /tmp/at tests/assets_test.c -lm && /tmp/at   # los 19 como WAV + niveles
 sh tests/run_host.sh tests/scripts/screens.txt     # todas las páginas y juegos (capturas para revisar el tema)
 python3 tools/gen_screens_tour.py                  # regenera screens.txt si cambian las páginas
 sh tests/run_host.sh tests/scripts/eva_states.txt  # EVA-01: perilla recién girada, lock, HAPPY ACCIDENT, modulación

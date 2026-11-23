@@ -1,5 +1,14 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.5
+
+- **SOUND CHIPS pasa a 01 ASSETS** (juegos B y C): la consola se escoge al empezar, junto con el asset. Vuelven a ser 21 páginas.
+- **Asset SYNTH:** un saw abierto, sostenido y seco, con un poco de vibrato; el mejor punto de partida para oír qué hace cada chip.
+- **02 OSC & SAMPLE:** el oscilador como wavetable visto de lado (el ciclo al frente y detrás la misma onda con menos COLOR) y el sample como tallos con punta.
+- **10 VOWEL + SHIFT:** una boca que dice la vocal, se abre con el sonido y tiembla con GROWL.
+- **11 RES MOD FILTER:** de vuelta la respuesta rellena con la topografía encima.
+- ASSETS en cuatro columnas.
+
 ## v1.4
 
 - **22 SOUND CHIPS:** la última página imprime todo el sonido a través del chip de una consola: YM2149 (Atari ST, MSX), YM2612 (Mega Drive), S-DSP (Super NES), SCSP (Saturn) y DMG (Game Boy). Ver el README.

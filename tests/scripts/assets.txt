@@ -1,6 +1,4 @@
-1 btn 8
 # 15 ASSETS (SEQ): pick WHOOSH, SEL loads and plays it; then GUNSHOT, its HAPPY ACCIDENT (WEAPON), DEBRIS (a PHYSICS pattern)
-100 enc 0 -1
 200 enc 2 1
 220 enc 2 1
 240 enc 2 1

@@ -58,7 +58,6 @@
 # 15 BATCH x4 (SEQ, COUNT down, SEL tap), SPACE AUTO: each hit waits for the last one's tail to die
 7400 btn 8
 7401 enc 0 -1
-7402 enc 0 -1
 7450 enc 3 -1
 7700 btn 3
 9000 shot

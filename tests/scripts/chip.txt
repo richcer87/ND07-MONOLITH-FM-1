@@ -1,9 +1,9 @@
-1 btn 8
 # 02 CHIP OSC (HOME pressed 3 times: 01 A B C, 02 A): a preset of each kind with SEL, played at C4 (tests/run_host.sh tests/scripts/chip.txt)
 # btn: 3 SEL 8 HOME; enc: 4 = K3 (set B: PRESET)
-150 btn 8
-151 btn 8
-152 btn 8
+1 enc 0 1
+2 btn 8
+3 btn 8
+4 btn 8
 500 btn 3
 600 shot
 1500 btn 8
