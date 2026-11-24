@@ -24,8 +24,8 @@ run "FM-1 MIDI: USB, the TRS jack, a clock, the channel" sh tests/run_host.sh te
 run "SMK-37: velocity, a pad, an outer key, the pitch wheel" env BOARD=smk37 sh tests/run_host.sh tests/scripts/smk37.txt
 run "ND-07: the CHAOS PAD and the aftertouch over MIDI" sh tests/run_host.sh tests/scripts/pad.txt
 run "ND-07: a sample over SysEx, as web/index.html sends it" sh tests/run_host.sh tests/scripts/import.txt
-run "ND-07: 03 CHIP ENGINE: a NEW SFX of each kind, on ND07, DMG, YM2149" sh tests/run_host.sh tests/scripts/chip.txt
-run "ND-07: 03 CHIP ENGINE: the five chips, a note each" sh tests/run_host.sh tests/scripts/engines.txt
+run "ND-07: 02 ASSETS B: a NEW SFX of each kind, on ND07, DMG, YM2149" sh tests/run_host.sh tests/scripts/chip.txt
+run "ND-07: 01 ENGINE: the five chips, a note each" sh tests/run_host.sh tests/scripts/engines.txt
 run "ND-07: VARIATION keys, the seeded hits" sh tests/run_host.sh tests/scripts/variation.txt
 run "ND-07: SUSTAIN loop, START > LOOP > STOP" sh tests/run_host.sh tests/scripts/sustain.txt
 run "ND-07: the secret RTPC sweep, SPACE pass-by" sh tests/run_host.sh tests/scripts/motion.txt
@@ -44,6 +44,8 @@ run "ND-07 EVA-01 theme: every page and knob set on screen" sh tests/run_host.sh
 run "ND-07 EVA-01 theme: a knob just turned, a lock, HAPPY ACCIDENT, modulated" sh tests/run_host.sh tests/scripts/eva_states.txt
 $CC -DDINGHY_HOST -DAPP_VER='"dev"' -Ifirmware/hal -Ifirmware/src -Ifirmware/gen -o "$OUT/eva_fit_test" tests/eva_fit_test.c
 run "ND-07 EVA-01 theme: every name and every value of every knob fits its cell, no cut text" "$OUT/eva_fit_test"
+$CC -DDINGHY_HOST -DAPP_VER='"dev"' -Ifirmware/hal -Ifirmware/src -Ifirmware/gen -o "$OUT/chips_test" tests/chips_test.c -lm
+run "ND-07: 01 ENGINE: the chips' pitch grids, ROMs, DAC, Gaussian and BRR against the hardware's numbers" "$OUT/chips_test"
 $CC -DDINGHY_HOST -DAPP_VER='"dev"' -Ifirmware/hal -Ifirmware/src -Ifirmware/gen -o "$OUT/assets_test" tests/assets_test.c -lm
 run "ND-07: the 18 ASSETS rendered (build/host/assets), each as loud as the others, none clipped" "$OUT/assets_test"
 $CC -o "$OUT/sense_test" tests/sense_test.c
