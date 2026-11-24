@@ -3,12 +3,13 @@
  * The REAPER workstation (Lua ReaImGui + JSFX) rebuilt for the FM-1 in integer C (JieLi AC79: no FPU, no libgcc).
  *
  * 19 pages, in the order of the work; the eight buttons each hold one step of it:
- *   HOME  01 ASSETS           19 starting points (EXPLODE ... SYNTH): a whole patch, loaded and played; B, C: SOUND
- *                             CHIPS, the result through a console's chip (YM2149, YM2612, S-DSP, SCSP, DMG)
- *         02 OSC & SAMPLE     15 waves (PolyBLEP, CHIP voices, SHEPARD) and 8 sample slots; OSC, SAMPLE or a blend;
+ *   HOME  01 ENGINE           what makes the voice: ND07 (02's oscillators and samples) or a console's chip, YM2149,
+ *                             YM2612, SPC700, SCSP, DMG (A, B: its own knobs); C: PRINT, the whole result through a
+ *                             chip's DAC; D: the 60 Hz driver, SWEEP, ARP, 16-step volume
+ *         02 ASSETS           19 starting points (EXPLODE ... SYNTH): a whole patch on the engine, loaded and played;
+ *                             B: a NEW SFX of a kind (COIN, JUMP, LASER ...) for the engine
+ *         03 OSC & SAMPLE     15 waves (PolyBLEP, CHIP voices, SHEPARD) and 8 sample slots; OSC, SAMPLE or a blend;
  *                             loop / sustain points, up to 3 layered voices; record your own into a slot
- *         03 CHIP ENGINE      the voice from a console's chip instead: YM2149, YM2612, SPC700, SCSP, DMG (A, B: its
- *                             own knobs); the 60 Hz driver: SWEEP, ARP, 16-step volume (C); the pulse, the noise (D)
  *   ARP   04 GRAIN ENGINE     grains on the sample: position, size, density, spray, reverse, freeze
  *         05 SAMPLE LAB       reverse, crop, fades, half / double speed, normalize, revert, factory sound
  *   ENV   06 ENVELOPES        ADSR, glide, velocity, pitch, out; a modulation envelope to any target; D: TRANSIENT,
@@ -28,8 +29,8 @@
  *         17 BATCH + FIRE TEST a run of varied hits to record, or fired as a game would, level matched
  *   Also: HAPPY ACCIDENT, parameter locks, 16 undo steps, 5 themes (EVA-01 by default), the session in flash.
  *
- * The chain (mono): SOURCE (or a CHIP ENGINE) x ENV > RESONATOR > TRANSIENT > DESTROY > EQ > FILTER > OTT (pre) > DELAY
- * + FLANGER > REVERB > OTT (post) > SOUND CHIPS > SPACE > limiter > out. A module at rest costs nothing; after about a
+ * The chain (mono): ENGINE (02's source or a chip) x ENV > RESONATOR > TRANSIENT > DESTROY > EQ > FILTER > OTT (pre) > DELAY
+ * + FLANGER > REVERB > OTT (post) > PRINT > SPACE > limiter > out. A module at rest costs nothing; after about a
  * second of silence the whole chain sleeps. It runs in 64-sample blocks; the heavy stages run from RAM (.ram_text)
  * and call nothing.
  *
@@ -116,7 +117,7 @@ static int16_t rv_ap2[256] __attribute__((section(".pool")));
 static int16_t smp16[SMP_MAX] __attribute__((section(".pool")));   /* the active slot when it holds a recording: 16-bit */
 #define DSP_N 4096u                              /* the SCSP engine's DSP line (chorus, flanger, taps): 93 ms */
 static int16_t dsp_buf[DSP_N] __attribute__((section(".pool")));
-#define EM_N 16384u                             /* SOUND CHIPS' echo line: 371 ms */
+#define EM_N 16384u                             /* the SPC700 engine's echo line: 371 ms */
 static int16_t em_buf[EM_N] __attribute__((section(".pool")));
 static smprec_t rec __attribute__((section(".pool")));       /* the recorder, and the flash staging (8-bit mu-law) */
 
@@ -192,10 +193,10 @@ static const char *const E_CSTEP[] = {"OFF", "60 Hz", "30 Hz", "15 Hz"};
 static const char *const E_CNOISE[] = {"LONG", "SHORT 93"};
 static const char *const E_CPRE[] = {"COIN", "JUMP", "LASER", "HIT", "POWERUP", "EXPLODE", "BLIP"};
 static const char *const E_BCNT[] = {"4", "8", "12", "16"};
-/* SOUND CHIPS: the sound printed through a console's chip; each with the machines it sounds like */
+/* PRINT (ENGINE C): the sound printed through a console's chip; each with the machines it sounds like */
 static const char *const E_EMU[] = {"OFF", "YM2149", "YM2612", "S-DSP", "SCSP", "DMG"};
 static const char *const EMU_HOST[] = {"", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY"};
-/* 03 CHIP ENGINE: the voice itself made by a console's chip (ND07: the oscillators and samples of 02, as they are) */
+/* 01 ENGINE: the voice itself made by a console's chip (ND07: the oscillators and samples of 02, as they are) */
 static const char *const E_ENG[] = {"ND07", "YM2149", "YM2612", "SPC700", "SCSP", "DMG"};
 #define NENG 6
 /* 15 ASSETS: base sounds for game audio, three to a row (the screen's grid): hits, weapons, motion, UI, rewards, beings */
@@ -294,7 +295,7 @@ static const pdesc_t PD[NP] = {
     [P_RSV1] = {"-", 0, 0, 0, 1, F_INT, 0},                 [P_RSV2] = {"-", 0, 0, 0, 1, F_INT, 0},   /* (VOWEL's last two) */
     [P_THEME] = {"THEME", 0, 4, 4, 1, F_ENUM, E_THEME},
     [P_ASSET] = {"ASSET", 0, NASSET - 1, 0, 1, F_ENUM, E_ASSET},
-    [P_EMU] = {"CHIP", 0, 5, 0, 1, F_ENUM, E_EMU},          [P_ERATE] = {"RATE", 0, 100, 50, 1, F_ERATE, 0},
+    [P_EMU] = {"PRINT", 0, 5, 0, 1, F_ENUM, E_EMU},          [P_ERATE] = {"RATE", 0, 100, 50, 1, F_ERATE, 0},
     [P_EGRIT] = {"GRIT", 0, 100, 30, 1, F_PCT, 0},          [P_EMIX] = {"MIX", 0, 100, 100, 1, F_PCT, 0},
     [P_EECHO] = {"ECHO", 0, 100, 0, 1, F_PCT, 0},           [P_ETIME] = {"E TIME", 1, 15, 5, 1, F_ETIME, 0},
     [P_ETONE] = {"TONE", 0, 100, 60, 1, F_ETONE, 0},
@@ -307,9 +308,11 @@ static const pdesc_t PD[NP] = {
 static volatile int16_t P[NP];                  /* as set */
 static volatile int16_t E[NP];                  /* as heard: P plus the LFOs, rounded (for the screen) */
 static volatile int32_t S8[NP];                 /* as heard, Q8 and smoothed: the engine reads this (no zipper, fine LFO steps) */
-/* 03 CHIP ENGINE: each engine's seven knobs (E1 .. E7): its name, its top, where it starts, how it reads */
+/* 01 ENGINE: each engine's seven knobs (E1 .. E7): its name, its top, where it starts, how it reads */
 enum { EF_NUM, EF_PCT, EF_EN, EF_ENV7, EF_ZHZ, EF_NP, EF_YRATE, EF_DEC, EF_MS16, EF_LHZ, EF_CH3 };
 typedef struct { const char *name; uint8_t hi, def, fmt; const char *const *en; } eparam_t;
+static const char *const EN_DUTY[] = {"OFF", "12.5%", "25%", "50%", "75%"};
+static const char *const EN_DNS[] = {"OFF", "LONG", "SHORT"};
 static const char *const EN_P2[] = {"OFF", "DETUNE", "OCT UP", "5TH UP", "OCT DN"};
 static const char *const EN_DWAV[] = {"OFF", "SAW", "TRI", "SINE", "PULSE", "BASS", "VOX", "BELL", "GRIT"};
 static const char *const EN_WVOL[] = {"0%", "25%", "50%", "100%"};
@@ -336,11 +339,41 @@ static const eparam_t EPD[NENG][7] = {
      {"E TIME", 15, 6, EF_MS16, 0}, {"E FDBK", 95, 40, EF_PCT, 0}, {"FIR", 4, 2, EF_EN, EN_FIR}},
     {{"FM SRC", 5, 1, EF_EN, EN_FMS}, {"DEPTH", 100, 20, EF_PCT, 0}, {"RATIO", 7, 1, EF_EN, EN_FMR}, {"LFO RATE", 100, 45, EF_LHZ, 0},
      {"PLFO", 100, 0, EF_PCT, 0}, {"ALFO", 100, 0, EF_PCT, 0}, {"DSP", 4, 1, EF_EN, EN_DSP}},
-    {{"PULSE", 15, 15, EF_NUM, 0}, {"PULSE 2", 4, 0, EF_EN, EN_P2}, {"WAVE", 8, 0, EF_EN, EN_DWAV}, {"W VOL", 3, 3, EF_EN, EN_WVOL},
-     {"NOISE", 15, 0, EF_NUM, 0}, {"ENV", 14, 7, EF_ENV7, 0}, {"ZOMBIE", 100, 0, EF_ZHZ, 0}},
+    {{"DUTY", 4, 3, EF_EN, EN_DUTY}, {"PULSE 2", 4, 0, EF_EN, EN_P2}, {"WAVE", 8, 0, EF_EN, EN_DWAV}, {"W VOL", 3, 3, EF_EN, EN_WVOL},
+     {"NOISE", 2, 0, EF_EN, EN_DNS}, {"ENV", 14, 7, EF_ENV7, 0}, {"ZOMBIE", 100, 0, EF_ZHZ, 0}},
 };
+/* the YM2612's two ROMs (as decapped: Nuked-OPN2): a quarter sine as -log2 (Q8), and 2^x for its way back. An operator
+ * adds its attenuation (Q8 octaves / 32: 0.094 dB) to the log, and the exp turns it into 13 bits and a sign */
+static const uint16_t OPN_LOGSIN[256] = {
+    2137, 1731, 1543, 1419, 1326, 1252, 1190, 1137, 1091, 1050, 1013, 979, 949, 920, 894, 869, 846, 825, 804, 785,
+    767, 749, 732, 717, 701, 687, 672, 659, 646, 633, 621, 609, 598, 587, 576, 566, 556, 546, 536, 527, 518, 509,
+    501, 492, 484, 476, 468, 461, 453, 446, 439, 432, 425, 418, 411, 405, 399, 392, 386, 380, 375, 369, 363, 358,
+    352, 347, 341, 336, 331, 326, 321, 316, 311, 307, 302, 297, 293, 289, 284, 280, 276, 271, 267, 263, 259, 255,
+    251, 248, 244, 240, 236, 233, 229, 226, 222, 219, 215, 212, 209, 205, 202, 199, 196, 193, 190, 187, 184, 181,
+    178, 175, 172, 169, 167, 164, 161, 159, 156, 153, 151, 148, 146, 143, 141, 138, 136, 134, 131, 129, 127, 125,
+    122, 120, 118, 116, 114, 112, 110, 108, 106, 104, 102, 100, 98, 96, 94, 92, 91, 89, 87, 85, 83, 82, 80, 78, 77,
+    75, 74, 72, 70, 69, 67, 66, 64, 63, 62, 60, 59, 57, 56, 55, 53, 52, 51, 49, 48, 47, 46, 45, 43, 42, 41, 40, 39,
+    38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 23, 22, 21, 20, 20, 19, 18, 17, 17, 16, 15, 15,
+    14, 13, 13, 12, 12, 11, 10, 10, 9, 9, 8, 8, 7, 7, 7, 6, 6, 5, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1,
+    1, 1, 0, 0, 0, 0, 0, 0, 0, 0};
+static const uint16_t OPN_EXP[256] = {
+    0, 3, 6, 8, 11, 14, 17, 20, 22, 25, 28, 31, 34, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81,
+    84, 87, 90, 93, 96, 99, 102, 105, 108, 111, 114, 117, 120, 123, 126, 130, 133, 136, 139, 142, 145, 148, 152, 155,
+    158, 161, 164, 168, 171, 174, 177, 181, 184, 187, 190, 194, 197, 200, 204, 207, 210, 214, 217, 220, 224, 227,
+    231, 234, 237, 241, 244, 248, 251, 255, 258, 262, 265, 268, 272, 276, 279, 283, 286, 290, 293, 297, 300, 304,
+    308, 311, 315, 318, 322, 326, 329, 333, 337, 340, 344, 348, 352, 355, 359, 363, 367, 370, 374, 378, 382, 385,
+    389, 393, 397, 401, 405, 409, 412, 416, 420, 424, 428, 432, 436, 440, 444, 448, 452, 456, 460, 464, 468, 472,
+    476, 480, 484, 488, 492, 496, 501, 505, 509, 513, 517, 521, 526, 530, 534, 538, 542, 547, 551, 555, 560, 564,
+    568, 572, 577, 581, 585, 590, 594, 599, 603, 607, 612, 616, 621, 625, 630, 634, 639, 643, 648, 652, 657, 661,
+    666, 670, 675, 680, 684, 689, 693, 698, 703, 708, 712, 717, 722, 726, 731, 736, 741, 745, 750, 755, 760, 765,
+    770, 774, 779, 784, 789, 794, 799, 804, 809, 814, 819, 824, 829, 834, 839, 844, 849, 854, 859, 864, 869, 874,
+    880, 885, 890, 895, 900, 906, 911, 916, 921, 927, 932, 937, 942, 948, 953, 959, 964, 969, 975, 980, 986, 991,
+    996, 1002, 1007, 1013, 1018};
+static const uint16_t SCSP_LFOF[32] = {17, 19, 23, 27, 34, 39, 45, 55, 68, 78, 92, 110, 139, 160, 187, 227, 287, 331, 392,
+                                       479, 607, 718, 860, 1080, 1440, 1720, 2150, 2870, 4310, 5740, 8610, 17230};   /* (the SCSP's
+                                                   32 LFO rates, cHz: LFOF) */
 static const uint8_t OPN_CAR[9] = {8, 8, 8, 8, 10, 14, 14, 15, 0};   /* YM2612: each algorithm's carriers (bit k: operator k + 1) */
-static const char *const ENG_HOST[NENG] = {"02 OSC + SAMPLE", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY"};
+static const char *const ENG_HOST[NENG] = {"03 OSC + SAMPLE", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY"};
 #define ENG_G (P[P_ENG] < 0 ? 0 : P[P_ENG] >= NENG ? NENG - 1 : P[P_ENG])   /* (the engine, in range) */
 static int32_t p_hi(uint32_t p)                 /* a knob's top: ENGINE's seven, as its engine says */
 {
@@ -357,20 +390,20 @@ static uint8_t CONT[NP];                        /* a continuous parameter: smoot
 static uint32_t locks[NLOCKW];                  /* (NP <= 256) bit p: locked (mutations and MORPH leave it alone) */
 static int lock_get(uint32_t p) { return (int)(locks[p >> 5] >> (p & 31u) & 1u); }
 
-/* The pages follow the work, one button a step: start from an ASSET (and the console it will sound on) and make the
- * source (HOME, ARP), shape it (ENV), colour it (EDIT), glue it (GLO), place it (FX), move it (LFO: what the game
+/* The pages follow the work, one button a step: pick the ENGINE (the console the sound is made on), start from an
+ * ASSET and make the source (HOME, ARP), shape it (ENV), colour it (EDIT), glue it (GLO), place it (FX), move it (LFO: what the game
  * drives), then vary it and deliver it (SEQ). The audio chain keeps its own order (see the audio). Each button holds its
  * pages one after the other (PAGE_GRP), so pressing it walks them in that order. */
-enum { PG_ASSET, PG_SRC, PG_CHIP, PG_GRN, PG_LAB, PG_ENV, PG_RES, PG_DST, PG_EQ, PG_FLT, PG_OTT, PG_DLY, PG_REV,
+enum { PG_CHIP, PG_ASSET, PG_SRC, PG_GRN, PG_LAB, PG_ENV, PG_RES, PG_DST, PG_EQ, PG_FLT, PG_OTT, PG_DLY, PG_REV,
        PG_LFO, PG_RTPC, PG_PAD, PG_VAR, PG_PHY, PG_BAT, NPAGE,
        PG_TRN = NPAGE, PG_SPC };                /* (not pages: the views of ENVELOPES D and MULTIBAND REVERB C) */
 #define NO 255u                                 /* (an empty knob) */
 static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
-    {{P_ASSET, P_VARY, P_RECIPE, P_VOL}, {P_EMU, P_ERATE, P_EGRIT, P_EMIX}, {P_EECHO, P_ETIME, P_ETONE, NO}, {NO, NO, NO, NO}},   /* (VARY,
-                                                   HA KIND, OUT: here too; B, C: the SOUND CHIP, chosen with the asset) */
+    {{P_ENG, P_E1, P_E2, P_E3}, {P_E4, P_E5, P_E6, P_E7}, {P_EMU, P_ERATE, P_EGRIT, P_EMIX}, {P_CSWEEP, P_CARP, P_CARPS, P_CSTEP}},   /* (C: the
+                                                   print through a chip's DAC, last in the chain; D: the 60 Hz driver) */
+    {{P_ASSET, P_VARY, P_RECIPE, P_VOL}, {P_CPRE, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},   /* (VARY, HA KIND, OUT: here
+                                                   too; B: a NEW SFX of a kind, on the engine) */
     {{P_MODE, P_WAVE, P_SLOT, P_BLEND}, {P_TUNE, P_COLOR, P_STR, P_RECM}, {P_SLOOP, P_LPOS, P_LLEN, P_LXF}, {P_VOICES, P_LPIT, P_LDET, P_LLVL}},
-    {{P_ENG, P_E1, P_E2, P_E3}, {P_E4, P_E5, P_E6, P_E7}, {P_CSWEEP, P_CARP, P_CARPS, P_CSTEP}, {P_CDUTY, P_CNOISE, P_CPRE, NO}},   /* (C: the
-                                                   60 Hz driver, any engine; D: the pulse's duty, the noise's length) */
     {{P_GPOS, P_GSIZE, P_GDENS, P_GSPRAY}, {P_GREV, P_GMODE, P_GFRZ, P_RNDP}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_STOOL, P_SAMT, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},
     {{P_ATT, P_DEC, P_SUS, P_REL}, {P_GLIDE, P_VELO, P_PITCH, P_VOL}, {P_MATK, P_MDEC, P_MAMT, P_MTGT}, {P_TATK, P_TSUS, P_TTIME, P_TOUT}},
@@ -389,7 +422,7 @@ static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
     {{P_BMODE, P_BCNT, P_BSPC, P_BGATE}, {P_TRATE, P_TPOOL, P_TORDER, NO}, {P_LMATCH, P_LTGT, NO, NO}, {NO, NO, NO, NO}},
 };
 static uint8_t NSUB[NPAGE];                     /* how many of A B C D a page has */
-static const char *const PAGE_NAME[NPAGE] = {"ASSETS", "OSC & SAMPLE", "CHIP ENGINE", "GRAIN ENGINE", "SAMPLE LAB", "ENVELOPES",
+static const char *const PAGE_NAME[NPAGE] = {"ENGINE", "ASSETS", "OSC & SAMPLE", "GRAIN ENGINE", "SAMPLE LAB", "ENVELOPES",
                                              "RESONATOR", "DESTROY", "3-BAND EQ", "RES MOD FILTER", "OTT MULTIBAND",
                                              "DELAY + FLANGER", "MULTIBAND REVERB", "LFO 1 + 2", "RTPC", "CHAOS PAD + KEYS",
                                              "VARIATION + MORPH", "PHYSICS TRIGGER", "BATCH + FIRE TEST"};
@@ -573,7 +606,7 @@ static void slot_select(int32_t i)
 /* ======================================================================== coefficients (k_update, from E) */
 static struct {
     uint8_t mode, wave, sloop, unity, gmode, gfrz, rfmode, rfpole, rfsrc, mbcrv, route;
-    uint8_t c_on, c_arp, c_arps, c_step, c_short;  /* 14 CHIP: the frame clock runs; ARP; frames a step; frames a volume step */
+    uint8_t c_on, c_arp, c_arps, c_step, c_short, c_nsh;  /* 14 CHIP: the frame clock runs; ARP; frames a step; frames a volume step */
     uint8_t ly_n;                               /* 03 LAYERS: how many more voices; their pitches (Q16), level, the sum's trim */
     uint32_t ly_mul[2];
     int32_t ly_g, ly_norm;
@@ -608,13 +641,13 @@ static struct {
     uint8_t eq_on, eq_b;                        /* 09 EQ: at work; its bands at work (bits: LOW MID HIGH) */
     int32_t eq_a1[3], eq_a2[3], eq_a3[3];       /* each band's SVF: a1 (Q16), a2 a3 (Q30) */
     int32_t eq_m[3][3], eq_out, eq_li[3];       /* its mix of in, band, low (Q16); OUT (Q12); where (for the screen) */
-    uint8_t em, em_n, em_bits;                  /* SOUND CHIPS: which chip (0 off); YM2149 levels; bits */
-    uint32_t em_inc, em_d;                      /* its sample clock (a phase step a sample); the echo's delay */
-    int32_t em_lv[32], em_lad, em_sh, em_mix, em_ev, em_fb, em_lp;   /* YM2149's log DAC; the 2612's ladder; BRR's extra
-                                                   shift / DMG's volume shift; mix, echo level and feedback, the tone (Q15) */
-    uint8_t eng, d_p2, d_wave, d_wsh, y_mix, y_env, y_nch, o_alg, o_fb, o_ssg, s_brr, s_fir, sc_fms, sc_dsp;   /* 03 ENGINE */
-    int32_t d_vol, d_nvol, d_edir, y_sid, y_digi, y_g, o_cl, o_ml, o_lad, s_pm, s_ev, s_fb, sc_fmd, sc_pl, sc_al;
-    uint32_t d_eper, d_zper, d_p2mul, y_ninc, y_einc, y_bmul, y_mul[3], o_mul[4], o_dk, o_sinc, s_d, s_rinv, s_ed, sc_linc, sc_fmr, sc_dinc;
+    uint8_t em, em_n, em_bits;                  /* PRINT: which chip (0 off); YM2149 levels; bits */
+    uint32_t em_inc;                            /* its sample clock (a phase step a sample) */
+    int32_t em_lv[32], em_sh, em_mix, em_lp;   /* YM2149's log DAC; BRR's extra shift / DMG's
+                                                   volume shift; mix; the console's low-pass after it (Q15) */
+    uint8_t eng, d_p2, d_wave, d_wsh, d_short, y_np, y_mix, y_env, y_nch, o_alg, o_fb, o_ssg, o_dr, s_brr, s_fir, sc_fms, sc_dsp;   /* 01 ENGINE */
+    int32_t d_vol, d_nvol, d_edir, y_sid, y_digi, y_g, o_tl, o_ctl, s_pm, s_ev, s_fb, sc_fmd, sc_pl, sc_al;
+    uint32_t d_pw, d_eper, d_zper, d_p2mul, y_einc, y_bmul, y_mul[3], o_mul[4], o_sinc, s_d, s_rinv, s_ed, sc_linc, sc_fmr, sc_dinc;
 } K;
 static volatile int32_t v_note = 60, v_gate, v_vel = 25800;
 static volatile uint32_t v_seq, v_pseq;
@@ -638,7 +671,7 @@ static uint32_t db_lin(int32_t q)               /* 10^(q / 80): a gain in quarte
 {
     return T_DB2LIN[clampi(288 + q, 0, 480)];
 }
-static uint32_t emu_rate(int32_t chip, int32_t v8)   /* SOUND CHIPS: RATE (Q8 %) as the chip's sample clock, Hz, on a log scale
+static uint32_t emu_rate(int32_t chip, int32_t v8)   /* PRINT: RATE (Q8 %) as the chip's sample clock, Hz, on a log scale
                                                    over what its games used */
 {
     static const uint16_t LO[6] = {0, 4000, 4000, 8000, 11025, 2048}, HI[6] = {0, 22050, 26000, 32000, 44100, 16384};
@@ -721,13 +754,25 @@ static void reso_coef(void)
 }
 enum { KG_SRC = 1u << PG_SRC, KG_ENV = 1u << PG_ENV, KG_RES = 1u << PG_RES, KG_TRN = 1u << PG_ENV, KG_FLT = 1u << PG_FLT,
        KG_DST = 1u << PG_DST, KG_EQ = 1u << PG_EQ, KG_GRN = 1u << PG_GRN, KG_OTT = 1u << PG_OTT, KG_DLY = 1u << PG_DLY, KG_REV = 1u << PG_REV,
-       KG_CHIP = 1u << PG_CHIP, KG_EMU = 1u << PG_ASSET, KG_NOTE = 1u << 24, KG_ALL = 0xFFFFFFFFu };
+       KG_CHIP = 1u << PG_CHIP, KG_EMU = 1u << PG_CHIP, KG_NOTE = 1u << 24, KG_ALL = 0xFFFFFFFFu };
 static uint8_t eva_big[NP];                     /* (the knob row: a knob's value size, worked out once: see eva_big_ok) */
 static struct {
     uint32_t ph[4], nacc, lfsr, eph, ecy, sph, mph, lph, dph, pos, mpos, dacc, w, sw, bi;   /* (w: the echo's line, sw: the DSP's) */
-    int32_t vol[3], ecnt, zcnt, o1, o2, men[4], bin[16], bout[16], bprev, bh[4], fir[8], hp_x, hp_y, lp, lv[4];
+    int32_t vol[3], ecnt, zcnt, o1, o2, men[4], bin[16], bout[16], bprev, bprev2, bh[4], fir[8], hp_x, hp_y, lp, lv[4];
+    uint32_t qin, qout[4], qn, egacc, egcnt;    /* the chip's own pitch grid: the note it was given, what it plays */
 } EN;
-static void eng_coef(void)                      /* 03 CHIP ENGINE: the seven knobs, as the engine reads them */
+#define YM_CLK16 ((uint32_t)(125000ull * 4294967296ull / 44100ull >> 4))   /* (125 kHz as a phase step, / 16) */
+#define YM_N16 ((uint32_t)(125000ull * 65536ull / 44100ull))   /* (125 kHz as steps a sample, Q16) */
+#define DMG_CLK16 ((uint32_t)(131072ull * 4294967296ull / 44100ull >> 4))
+#define DMG_N24 ((uint32_t)(524288ull * 65536ull * 256ull / 44100ull))   /* (the DMG's noise clock, steps a sample: Q24) */
+static const uint16_t YM_LOG[32] = {0, 0, 152, 253, 359, 457, 557, 656, 798, 973, 1149, 1323, 1590, 1911, 2230, 2548, 3031,
+                                    3640, 4251, 4865, 5789, 6932, 8073, 9211, 10935, 13121, 15315, 17512, 20813, 24838, 28833, 32767};   /* (the
+                                                   YM2149's DAC as measured, ayumi's table: a fixed volume v is step 2v + 1) */
+static uint32_t pulse_w(int32_t d)               /* a pulse's duty: off, 12.5, 25, 50, 75 % (75: the 25 upside down) */
+{
+    return d <= 0 ? 0u : d >= 4 ? 0xC0000000u : 0x10000000u << d;
+}
+static void eng_coef(void)                      /* 01 ENGINE: the seven knobs, as the engine reads them */
 {
     static const uint32_t P2[5] = {0, 65839, 131072, 98193, 32768}, YB[7][2] = {{65800, 65273}, {131072, 32768}, {98193, 131072},
         {82570, 98193}, {77935, 98193}, {87480, 98193}, {77935, 92682}};   /* (CHORD: B and C over A; UNISON: +-7 cents) */
@@ -741,32 +786,37 @@ static void eng_coef(void)                      /* 03 CHIP ENGINE: the seven kno
     if (g != K.eng) {                           /* another chip: its filters from rest (each keeps its state its own way) */
         for (k = 0; k < 7; k++) eva_big[P_E1 + k] = 0;   /* (new names, new values: their sizes again) */
         EN.hp_x = EN.hp_y = EN.lp = 0; EN.lv[0] = EN.lv[1] = EN.lv[2] = EN.lv[3] = 0;
+        EN.qin = 0;
     }
     K.eng = (uint8_t)g;
     switch (g) {
     case 1:                                     /* YM2149 */
         K.y_mix = (uint8_t)e[0];
-        K.y_ninc = 31311000u / (uint32_t)(e[1] ? e[1] : 1);   /* (125 kHz / NP at C4, over the note: Q16) */
+        K.y_np = (uint8_t)(e[1] ? e[1] : 1);  /* NOISE: the period NP at C4 (125 kHz / NP), over the note */
         K.y_nch = e[2] ? 3u : 1u;
         if (e[2]) { K.y_mul[1] = YB[e[2] - 1][0]; K.y_mul[2] = YB[e[2] - 1][1]; }
         K.y_env = (uint8_t)e[3];
         if (K.y_mix >= 3u && (e[3] == 0 || e[3] == 1 || e[3] == 2 || e[3] == 5 || e[3] == 7)) K.y_env = 3u;   /* (a buzz loops) */
-        K.y_einc = ((25u * exp2_q16(e[4] * 256 / 10)) >> 16) * 974u;   /* 0.25 .. 256 Hz */
+        ms = (25u * exp2_q16(e[4] * 256 / 10)) >> 16;   /* E RATE: 0.25 .. 256 Hz (cHz), as the period EP makes it: */
+        ms = (781250u + (ms >> 1)) / (ms ? ms : 1u);   /* 2 MHz / 256 / EP a ramp */
+        K.y_einc = YM_CLK16 / (ms < 1u ? 1u : ms > 65535u ? 65535u : ms);
         K.y_bmul = 16384u << (e[4] * 5 / 101);  /* BUZZER: the note x 1/4 .. 4 */
+        EN.qin = 0;
         K.y_sid = e[5] * 327; K.y_digi = e[6] * 327;
         K.y_g = 51800 / (int32_t)K.y_nch;
         break;
     case 2:                                     /* YM2612 */
         K.o_alg = (uint8_t)e[0]; K.o_fb = (uint8_t)e[1];
         for (k = 0; k < 4; k++) K.o_mul[k] = (uint32_t)(((uint64_t)RAT2[e[2]][k] * 32768u * exp2_q16(e[5] * IRR[k] / 100)) >> 16);
-        K.o_ml = e[3] * 327;
-        ms = (3000u * exp2_q16(-e[4] * 2099 / 100)) >> 16;   /* MOD DEC: 3 s .. 10 ms */
-        K.o_dk = e[4] ? alpha_ms_x10(ms * 10u) : 0u;
+        K.o_tl = e[3] ? clampi((ilog2_q8(100u) - ilog2_q8((uint32_t)e[3])) * 1027 >> 15, 0, 127) << 3 : 1016;   /* MOD LVL as
+                                                   the modulators' TOTAL LEVEL: 0.75 dB steps */
+        ms = (3000u * exp2_q16(-e[4] * 2099 / 100)) >> 16;   /* MOD DEC: 3 s .. 10 ms, as the DECAY rate (2 R + KS) */
+        K.o_dr = (uint8_t)(e[4] ? 10 + e[4] * 33 / 100 : 0);   /* (3 s .. 10 ms a 8.7 dB, as before) */
         K.o_ssg = (uint8_t)e[6];
         K.o_sinc = 97391u * 1000u / (ms ? ms : 1u) * 1u;   /* (an SSG-EG cycle: the decay's time) */
         for (a = 0, k = 0; k < 4; k++) a += OPN_CAR[K.o_alg] >> k & 1;
-        K.o_cl = 30000 / (a ? a : 1);
-        K.o_lad = 96;
+        K.o_ctl = a >= 4 ? 128 : a == 3 ? 104 : a == 2 ? 64 : 0;   /* (the carriers' TL, as a game sets it: the sum fits the 9 bits) */
+        EN.qin = 0;
         break;
     case 3:                                     /* SPC700 */
         K.s_d = 4096u * 22050u / SR[e[0]];
@@ -777,14 +827,15 @@ static void eng_coef(void)                      /* 03 CHIP ENGINE: the seven kno
     case 4: {                                   /* SCSP */
         static const uint32_t FMR[8] = {32768, 65536, 98304, 131072, 196608, 262144, 327680, 458752};
         K.sc_fms = (uint8_t)e[0]; K.sc_fmd = e[1] * 64 / 100; K.sc_fmr = FMR[e[2]];
-        K.sc_linc = ((20u * exp2_q16(e[3] * 2491 / 100)) >> 16) * 974u;   /* 0.2 .. 170 Hz */
-        K.sc_pl = e[4] * 7864 / 100; K.sc_al = e[5] * 327; K.sc_dsp = (uint8_t)e[6]; K.sc_dinc = DLFO[e[6]] * 974u;
+        K.sc_linc = SCSP_LFOF[(e[3] * 31 + 50) / 100] * 974u;   /* LFOF: one of its 32 rates, 0.17 .. 172 Hz */
+        K.sc_pl = (e[4] * 7 + 50) / 100 * 7864 / 7; K.sc_al = (e[5] * 7 + 50) / 100 * 32767 / 7;   /* PLFOS, ALFOS: 8 depths each */ K.sc_dsp = (uint8_t)e[6]; K.sc_dinc = DLFO[e[6]] * 974u;
         break;
     }
     case 5:                                     /* DMG */
-        K.d_vol = e[0]; K.d_p2 = (uint8_t)e[1]; K.d_p2mul = P2[e[1]];
+        K.d_vol = e[0] ? 15 : 0; K.d_pw = pulse_w(e[0]); K.d_p2 = (uint8_t)e[1]; K.d_p2mul = P2[e[1]];
         K.d_wave = (uint8_t)e[2]; K.d_wsh = (uint8_t)(3 - e[3] + (e[3] == 0));   /* (0 %: 4, silent) */
-        K.d_nvol = e[4];
+        K.d_nvol = e[4] ? 15 : 0; K.d_short = (uint8_t)(e[4] == 2);
+        EN.qin = 0;
         k = e[5] - 7; K.d_edir = k < 0 ? -1 : k > 0;   /* ENV: down or up a step every (8 - n) / 64 s */
         K.d_eper = k ? (uint32_t)(8 - absi(k)) * 689u : 0u;
         K.d_zper = e[6] ? 44100u / (2u + (uint32_t)e[6] * 58u / 100u) : 0u;   /* ZOMBIE: 2 .. 60 pokes a second */
@@ -802,15 +853,18 @@ static void k_update(uint32_t chg)              /* the coefficients; the costly 
         K.c_sw = sw * (sw < 0 ? -sw : sw) * 16 / 150;   /* squared: fine near 0, up to 2/3 octave a frame (Q4) */
         K.c_arp = (uint8_t)(ei(P_CARP) < NARP ? ei(P_CARP) : 0); K.c_arps = (uint8_t)ei(P_CARPS);
         K.c_step = (uint8_t)(ei(P_CSTEP) ? 1u << (ei(P_CSTEP) - 1) : 0u);
-        K.c_short = (uint8_t)ei(P_CNOISE);
-        K.c_pw = 0x20000000u << ei(P_CDUTY);    /* 1/8, 1/4, 1/2 */
-        if (ei(P_CDUTY) == 3) K.c_pw = 0xC0000000u;   /* 3/4: the 1/4 upside down (the NES's fourth) */
         K.c_on = K.c_sw || K.c_arp || K.c_step;
         eng_coef();
     }
     if (chg & KG_SRC) {
         K.mode = (uint8_t)ei(P_MODE); K.wave = (uint8_t)ei(P_WAVE); K.sloop = (uint8_t)ei(P_SLOOP);
         K.color = e8(P_COLOR) * 327 >> 8;
+        {                                       /* 02's chip waves: COLOR is the pulse's duty, the noise's clock and length */
+            int32_t c = ei(P_COLOR);
+            K.c_pw = pulse_w(c * 4 / 101 + 1);
+            K.c_short = (uint8_t)(c >= 75);
+            K.c_nsh = (uint8_t)(c < 75 ? c * 4 / 75 : (c - 75) * 4 / 26);   /* 8, 16, 32, 64 x the note */
+        }
         K.ws = K.mode == 0 ? 0 : K.mode == 1 ? 32767 : e8(P_BLEND) * 327 >> 8;
         K.wo = K.mode == 1 ? 0 : 32767 - (K.mode == 2 ? K.ws : 0);
         K.unity = str >= 98u && str <= 102u;
@@ -944,30 +998,20 @@ static void k_update(uint32_t chg)              /* the coefficients; the costly 
         }
         K.o_rms = alpha_ms_x10(12u);            /* RMS over ~5 ms, updated every 4th sample */
     }
-    /* SOUND CHIPS */
+    /* PRINT (ENGINE C) */
     if (chg & KG_EMU) {
         int32_t g = ei(P_EGRIT), m = ei(P_EMU);
-        uint32_t j, fc;
+        uint32_t j;
         K.em = (uint8_t)(ei(P_EMIX) ? m : 0);
         K.em_inc = emu_rate(m, e8(P_ERATE)) * 97391u;   /* (2^32 / 44100 a Hz) */
-        K.em_n = (uint8_t)(g < 50 ? 32 : 16);   /* YM2149: 32 steps of its envelope DAC; AY-style 16 from half way */
-        {
-            int32_t st = (150 + g * 9 / 2) * 256 / 602;   /* 1.5 .. 6 dB a step, in 1/256 octave */
-            K.em_lv[0] = 0;
-            for (j = 1; j < K.em_n; j++) K.em_lv[j] = (int32_t)((65535u * exp2_q16(-(int32_t)(K.em_n - 1u - j) * st)) >> 16);
-        }
+        K.em_n = (uint8_t)(g < 50 ? 32 : 16);   /* YM2149: the 32 steps of its envelope DAC; from half way the 16 of its
+                                                   volume register (as measured: YM_LOG) */
+        for (j = 0; j < K.em_n; j++) K.em_lv[j] = (int32_t)YM_LOG[K.em_n == 32u ? j : j * 2u + 1u] * 2;
         K.em_bits = (uint8_t)(m == 2 ? 9 - g * 3 / 100 : 16 - g * 8 / 100);   /* YM2612: 9 .. 6 bits; SCSP: 16 .. 8 */
-        K.em_lad = g * 512 / 100;               /* YM2612: the ladder's step at zero, up to 4 of its 9-bit steps */
         K.em_sh = m == 5 ? g * 3 / 101 : g / 40;   /* DMG: wave volume 100 / 50 / 25 %; S-DSP: BRR 0 .. 2 shifts coarser */
         K.em_mix = e8(P_EMIX) * 327 >> 8;
-        K.em_ev = (m == 3 || m == 4) ? e8(P_EECHO) * 327 >> 8 : 0;
-        K.em_fb = K.em_ev * 45 >> 6;
-        K.em_d = (uint32_t)ei(P_ETIME) * 706u;  /* 16 ms steps, as the S-DSP's echo */
-        fc = (1500u * exp2_q16(e8(P_ETONE) * 957 / 25600)) >> 16;   /* TONE: 1.5 .. 20 kHz */
-        {
-            int32_t w = (int32_t)fc * 4668 / 1000;
-            K.em_lp = (int32_t)((int64_t)w * 32768 / (32768 + w));
-        }
+        K.em_lp = m == 2 ? 19661 : 32768;       /* the console's own low-pass after its DAC: the Mega Drive (model 1)
+                                                   a pole that keeps 40 % a sample, ~6.4 kHz; the others: none */
     }
     /* 09 DELAY + FLANGER */
     if (chg & KG_DLY) {
@@ -1316,8 +1360,8 @@ DSP int32_t osc_tick(uint32_t inc)           /* 01 OSC: one sample, Q15 */
         int32_t st = (int32_t)(ph >> 27);
         return ((st < 16 ? 15 - st : st - 16) * 2 - 15) * 2184;
     }
-    case W_CNSE: {                               /* a 15-bit LFSR clocked at 8..64 x the note (COLOR); SHORT: 93 steps */
-        uint32_t ni = inc << (3u + (uint32_t)(m >> 13)), o = V.c_nph;
+    case W_CNSE: {                               /* a 15-bit LFSR clocked at 8..64 x the note; SHORT: 93 steps (COLOR) */
+        uint32_t ni = inc << (3u + K.c_nsh), o = V.c_nph;
         if (ni < inc) ni = 0xFFFFFFFFu;         /* (past 44.1 kHz: a step every sample) */
         V.c_nph += ni;
         if (V.c_nph < o || ni == 0xFFFFFFFFu) {
@@ -1811,7 +1855,7 @@ static int32_t __attribute__((noinline)) smp_layer(uint32_t k, uint32_t step)
     } else if (i > len - 260) s = s * (len - 4 - i) >> 8;
     return s;
 }
-/* 03 CHIP ENGINE (in flash, as 01): the voice made by a console's sound chip in place of 02's oscillators and samples.
+/* 01 ENGINE (in flash, as 01): the voice made by a console's sound chip in place of 02's oscillators and samples.
  * One voice of each chip (the engine is mono): the stereo tricks (the Game Boy's hard pans, the S-DSP's phase flips)
  * have no place here. The 60 Hz driver of C (SWEEP, ARP, STEPS) plays any of them, as the games' music drivers did.
  *   YM2149   three square tones, the 17-bit noise, one envelope of 32 log steps; BUZZER: the envelope at the note's
@@ -1836,20 +1880,37 @@ static const uint8_t DMG_W[8][32] = {
     {8, 12, 10, 5, 6, 12, 14, 10, 6, 10, 14, 12, 6, 5, 10, 12, 8, 3, 5, 10, 9, 3, 1, 5, 9, 5, 1, 3, 9, 10, 5, 3},
     {10, 4, 12, 1, 2, 3, 11, 1, 6, 1, 2, 13, 13, 2, 7, 2, 13, 1, 3, 7, 1, 12, 1, 7, 1, 4, 9, 13, 4, 3, 9, 5},
 };
-static const uint16_t YM_LOG[32] = {0, 184, 219, 260, 309, 368, 437, 519, 617, 734, 872, 1036, 1232, 1464, 1740, 2067, 2457,
-                                    2920, 3471, 4125, 4903, 5827, 6925, 8231, 9782, 11626, 13818, 16422, 19518, 23197, 27570, 32767};
 static const int8_t SPC_FIR[5][8] = {{127, 0, 0, 0, 0, 0, 0, 0}, {-1, 8, 23, 36, 36, 23, 8, -1}, {12, 33, 43, 43, 19, -2, -13, -7},
                                      {88, -65, -37, -16, -2, 7, 12, 12}, {52, 51, 0, -39, -27, 1, -4, -21}};   /* (as games set them) */
+/* the chips' pitch grids: a note becomes the nearest the chip's own divider can make (the YM2149's 12-bit tone period
+ * at 2 MHz / 16, the DMG's 11-bit period at 131072 / (2048 - x)), as a phase step a 44.1 kHz sample */
+static uint32_t grid_div(uint32_t c16, uint32_t inc, uint32_t top)   /* the chip's divider for this step: c16 / inc, 1 .. top */
+{
+    uint32_t i = inc >> 4, d;
+    if (!i) return top;
+    d = (c16 + (i >> 1)) / i;
+    return d < 1u ? 1u : d > top ? top : d;
+}
+static int32_t box_hi(uint32_t a, uint32_t inc, uint32_t pw)   /* the part of the sample [a, a + inc) a pulse high below pw
+                                                   spends high, Q15: the chip's edges where they fall, not on our samples */
+{
+    uint32_t b = a + inc, m, s = 0;
+    if (!pw) return 0;
+    if (b >= a && (b <= pw || a >= pw)) return a < pw ? 32768 : 0;   /* (no edge in it: most samples) */
+    m = b >= a ? (b < pw ? b : pw) - (a < pw ? a : pw) : pw - (a < pw ? a : pw) + (b < pw ? b : pw);
+    while ((inc >> s) > 0xFFFFu) s++;
+    return (int32_t)(((m >> s) << 15) / ((inc >> s) | 1u));
+}
 static void eng_note(uint32_t start)            /* a new note: each chip from the start of its note */
 {
     uint32_t k;
-    for (k = 0; k < 4u; k++) { EN.ph[k] = 0; EN.men[k] = 32767; }
+    for (k = 0; k < 4u; k++) { EN.ph[k] = 0; EN.men[k] = 0; }
     EN.nacc = 0; EN.lfsr = 0x7FFFu; EN.eph = 0; EN.ecy = 0; EN.sph = 0; EN.mph = 0; EN.lph = 0x40000000u;
     EN.pos = start << 12; EN.mpos = start << 12; EN.dacc = 0; EN.o1 = EN.o2 = 0; EN.ecnt = EN.zcnt = 0;
     EN.vol[0] = EN.vol[1] = K.d_vol; EN.vol[2] = K.d_nvol;
     for (k = 0; k < 16u; k++) EN.bin[k] = EN.bout[k] = 0;
     for (k = 0; k < 4u; k++) EN.bh[k] = 0;
-    EN.bi = 0; EN.bprev = 0;
+    EN.bi = 0; EN.bprev = EN.bprev2 = 0; EN.qin = 0; EN.egcnt = 0;
 }
 static int32_t eng_smp(uint32_t *pos, uint32_t step, int32_t off)   /* the slot at pos (+ off), then on by step */
 {
@@ -1867,48 +1928,75 @@ static int32_t eng_smp(uint32_t *pos, uint32_t step, int32_t off)   /* the slot 
     } else if (i > len - 260 && i < len - 4) s = s * (len - 4 - i) >> 8;
     return s;
 }
+static uint32_t dmg_noise(uint32_t inc)        /* the noise's clock nearest 32 x the note: 524288 / (r * 2^s) Hz, r one of
+                                                   its eight dividers (Q16 steps a sample) */
+{
+    static const uint8_t RD[8] = {1, 2, 4, 6, 8, 10, 12, 14};   /* (2 r: r = 0 is a half) */
+    uint32_t t = inc >> 11, best = 0, be = 0xFFFFFFFFu, k, sh;
+    if (!t) t = 1;
+    for (k = 0; k < 8u; k++) {
+        uint32_t v0 = DMG_N24 / RD[k], v = v0 >> 8, e;   /* (shift 0: the fastest; each shift halves it) */
+        for (sh = 0; sh < 13u && (v >> 1) >= t; sh++) v >>= 1;
+        if (sh < 13u && v > t && (uint64_t)v * (v >> 1) > (uint64_t)t * t) v >>= 1;   /* (the nearer of the two, as ratios) */
+        e = v > t ? v * 64u / t : t * 64u / (v ? v : 1u);
+        if (e < be) { be = e; best = v; }
+    }
+    return best ? best : 1u;
+}
 static int32_t eng_dmg(uint32_t inc)
 {
     int32_t out = 0, k;
-    uint64_t na;
-    uint32_t n;
+    uint32_t n, a;
+    if (inc != EN.qin) {                        /* a new note: the nearest the 11-bit period can play, each channel */
+        EN.qin = inc;
+        EN.qout[0] = DMG_CLK16 / grid_div(DMG_CLK16, inc, 2048u) << 4;
+        EN.qout[1] = DMG_CLK16 / grid_div(DMG_CLK16, (uint32_t)(((uint64_t)inc * K.d_p2mul) >> 16), 2048u) << 4;
+        EN.qout[2] = (DMG_CLK16 >> 1) / grid_div(DMG_CLK16 >> 1, inc, 2048u) << 4;   /* (the wave: 65536 / (2048 - x)) */
+        EN.qn = dmg_noise(inc);
+    }
     if (K.d_eper && ++EN.ecnt >= K.d_eper) {    /* the volume envelope: a step every n / 64 s, pulses and noise */
         EN.ecnt = 0;
         for (k = 0; k < 3; k++) EN.vol[k] = clampi(EN.vol[k] + K.d_edir, 0, 15);
     }
     if (K.d_zper && ++EN.zcnt >= K.d_zper) { EN.zcnt = 0; EN.vol[0] = (EN.vol[0] + 1) & 15; EN.vol[1] = (EN.vol[1] + 1) & 15; }
-    EN.ph[0] += inc;
-    if (EN.ph[0] < K.c_pw) out += EN.vol[0];
-    if (K.d_p2) { EN.ph[1] += (uint32_t)(((uint64_t)inc * K.d_p2mul) >> 16); if (EN.ph[1] < K.c_pw) out += EN.vol[1]; }
-    if (K.d_wave && K.d_wsh < 4u) out += DMG_W[K.d_wave - 1u][(EN.ph[2] += inc) >> 27] >> K.d_wsh;
-    if (K.d_nvol) {                             /* the LFSR clocked at 32 x the note: 15 bits, or 7 (SHORT) */
-        na = (uint64_t)EN.nacc + ((uint64_t)inc << 5);
-        EN.nacc = (uint32_t)na;
-        for (n = (uint32_t)(na >> 32); n > 0u; n--) {
+    a = EN.ph[0]; EN.ph[0] = a + EN.qout[0];
+    out += EN.vol[0] * box_hi(a, EN.qout[0], K.d_pw);
+    if (K.d_p2) { a = EN.ph[1]; EN.ph[1] = a + EN.qout[1]; out += EN.vol[1] * box_hi(a, EN.qout[1], K.d_pw); }
+    if (K.d_wave && K.d_wsh < 4u) out += (DMG_W[K.d_wave - 1u][(EN.ph[2] += EN.qout[2]) >> 27] >> K.d_wsh) << 15;
+    if (K.d_nvol) {                             /* the LFSR: 15 bits, or 7 (SHORT) */
+        EN.nacc += EN.qn;
+        for (n = EN.nacc >> 16; n > 0u; n--) {
             uint32_t bit = (EN.lfsr ^ (EN.lfsr >> 1)) & 1u;
             EN.lfsr = (EN.lfsr >> 1) | (bit << 14);
-            if (K.c_short) EN.lfsr = (EN.lfsr & ~0x40u) | (bit << 6);
+            if (K.d_short) EN.lfsr = (EN.lfsr & ~0x40u) | (bit << 6);
         }
-        if (!(EN.lfsr & 1u)) out += EN.vol[2];
+        EN.nacc &= 0xFFFFu;
+        if (!(EN.lfsr & 1u)) out += EN.vol[2] << 15;
     }
-    out *= 1100;                                /* 4 bits a channel, added: unipolar, as the DACs were */
+    out = (int32_t)(((int64_t)out * 1100) >> 15);   /* 4 bits a channel, added: unipolar, as the DACs were */
     k = out - EN.hp_x + (int32_t)(((int64_t)EN.hp_y * 32640) >> 15);   /* the output capacitor */
     EN.hp_x = out; EN.hp_y = k;
     return k;
 }
 static int32_t eng_ym(uint32_t inc, uint32_t step)
 {
-    uint32_t k, s, old, lvl, m = K.y_mix;
+    uint32_t k, s, old, lvl, m = K.y_mix, n;
     int32_t out = 0;
-    uint64_t na = (uint64_t)EN.nacc + (((uint64_t)inc * K.y_ninc) >> 16), n;
-    EN.nacc = (uint32_t)na;
-    for (n = (na >> 32) & 63u; n > 0u; n--) { uint32_t bit = (EN.lfsr ^ (EN.lfsr >> 3)) & 1u; EN.lfsr = (EN.lfsr >> 1) | (bit << 16); }
+    if (inc != EN.qin) {                        /* a new note (or a bend): its tone periods, the noise's, the buzz's */
+        EN.qin = inc;
+        for (k = 0; k < K.y_nch; k++) EN.qout[k] = YM_CLK16 / grid_div(YM_CLK16, k ? (uint32_t)(((uint64_t)inc * K.y_mul[k]) >> 16) : inc, 4095u) << 4;
+        n = grid_div((uint32_t)K.y_np * (C4_INC >> 4), inc, 31u);   /* NOISE: its period over the note, whole */
+        EN.qn = YM_N16 / n;                     /* (Q16 steps a sample) */
+        EN.qout[3] = YM_CLK16 / grid_div(YM_CLK16 >> 4, (uint32_t)(((uint64_t)inc * K.y_bmul) >> 16), 65535u);   /* BUZZER: EP */
+    }
+    EN.nacc += EN.qn;
+    for (n = EN.nacc >> 16; n > 0u; n--) { uint32_t bit = (EN.lfsr ^ (EN.lfsr >> 3)) & 1u; EN.lfsr = (EN.lfsr >> 1) | (bit << 16); }
+    EN.nacc &= 0xFFFFu;
     old = EN.eph;
-    EN.eph += m >= 3u ? (uint32_t)(((uint64_t)inc * K.y_bmul) >> 16) : K.y_einc;
+    EN.eph += m >= 3u ? EN.qout[3] : K.y_einc;
     if (EN.eph < old) EN.ecy++;
     old = EN.ph[0];
-    EN.ph[0] += inc;
-    if (m == 4u && EN.ph[0] < old) { EN.eph = 0; EN.ecy = 0; }   /* SYNCBUZ: the tone restarts the envelope */
+    if (m == 4u && old + EN.qout[0] < old) { EN.eph = 0; EN.ecy = 0; }   /* SYNCBUZ: the tone restarts the envelope */
     s = EN.eph >> 27;
     switch (K.y_env) {                          /* the eight shapes of the YM's sixteen (32 steps each) */
     case 1: lvl = EN.ecy ? 0u : 31u - s; break;
@@ -1922,12 +2010,12 @@ static int32_t eng_ym(uint32_t inc, uint32_t step)
     default: lvl = 31u;
     }
     for (k = 0; k < K.y_nch; k++) {
-        uint32_t t, on;
-        int32_t a;
-        if (k) EN.ph[k] += (uint32_t)(((uint64_t)inc * K.y_mul[k]) >> 16);
-        t = EN.ph[k] >> 31;
-        on = m == 0u ? t : m == 1u ? (EN.lfsr & 1u) : m == 2u ? t & EN.lfsr : 1u;
-        a = on ? YM_LOG[lvl] : 0;
+        uint32_t a0 = EN.ph[k];
+        int32_t a, t;
+        EN.ph[k] = a0 + EN.qout[k];
+        t = m >= 3u ? 32768 : box_hi(a0 ^ 0x80000000u, EN.qout[k], 0x80000000u);   /* (the tone high for its second half) */
+        if (m == 1u || m == 2u) t = EN.lfsr & 1u ? (m == 1u ? 32768 : t) : 0;
+        a = (int32_t)YM_LOG[lvl] * t >> 15;
         if (!k && K.y_sid) { EN.sph += inc + (inc >> 9); if (EN.sph >> 31) a -= a * K.y_sid >> 15; }   /* SID: gated near the tone */
         out += a;
     }
@@ -1938,53 +2026,151 @@ static int32_t eng_ym(uint32_t inc, uint32_t step)
     EN.lv[0] = (int32_t)lvl;
     return dcblock((int32_t)(((int64_t)out * K.y_g) >> 15), &EN.hp_x, &EN.hp_y);
 }
+static int32_t opn_op(uint32_t ph, int32_t mod, int32_t att)   /* one operator: its phase's top 10 bits plus the
+                                                   modulation, the quarter sine as a log, the attenuation added, back
+                                                   through 2^x: 14 bits out, as the chip's */
+{
+    uint32_t p = ((ph >> 22) + (uint32_t)mod) & 1023u, q = p & 255u;
+    int32_t lv, o;
+    if (p & 256u) q ^= 255u;
+    lv = (int32_t)OPN_LOGSIN[q] + (att << 2);
+    if (lv >= 13 << 8) return 0;
+    o = (int32_t)(((uint32_t)OPN_EXP[(lv & 255) ^ 255] | 0x400u) << 2) >> (lv >> 8);
+    return p & 512u ? -o : o;
+}
+#define OPN_EGINC ((uint32_t)(53267ull * 4294967296ull / 3ull / 44100ull))   /* (the envelope's clock: 53267 / 3 Hz) */
+#define OPN_Q20 ((uint32_t)(44100ull * 4294967296ull / 53267ull / 4096ull))  /* (our phase step to the chip's 20-bit one) */
+#define OPN_QB ((uint32_t)(53267ull * 4096ull * 65536ull / 44100ull))        /* (and back, Q16) */
 static int32_t eng_opn(uint32_t inc, uint32_t step)
 {
+    static const uint8_t EGP[8][8] = {{0, 1, 0, 1, 0, 1, 0, 1}, {0, 1, 0, 1, 1, 1, 0, 1}, {0, 1, 1, 1, 0, 1, 1, 1}, {0, 1, 1, 1, 1, 1, 1, 1},
+                                      {1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 2, 1, 1, 1, 2}, {1, 2, 1, 2, 1, 2, 1, 2}, {1, 2, 2, 2, 1, 2, 2, 2}};
     int32_t y1, y2 = 0, y3 = 0, y4 = 0, fb, out, k;
-    uint32_t a = K.o_alg;
-    if (a == 8u) out = (eng_smp(&EN.pos, step, 0) >> 8) << 8;   /* DAC PCM: channel 6, 8 bits */
+    uint32_t a = K.o_alg, o;
+    if (a == 8u) out = (eng_smp(&EN.pos, step, 0) >> 8) * 2;   /* DAC PCM: channel 6, 8 bits, as 9 */
     else {
-        for (k = 0; k < 4; k++) {               /* the modulators' envelopes: a decay, or SSG-EG's loop */
-            if (OPN_CAR[a] >> k & 1u) continue;
-            if (K.o_ssg) {
-                uint32_t s = EN.sph >> 17;
-                switch (K.o_ssg) {
-                case 1: EN.men[k] = 32767 - (int32_t)s; break;
-                case 2: EN.men[k] = EN.ecy ? 0 : 32767 - (int32_t)s; break;
-                case 3: EN.men[k] = EN.ecy & 1u ? (int32_t)s : 32767 - (int32_t)s; break;
-                case 4: EN.men[k] = EN.ecy ? 32767 : 32767 - (int32_t)s; break;
-                case 5: EN.men[k] = (int32_t)s; break;
-                case 6: EN.men[k] = EN.ecy ? 32767 : (int32_t)s; break;
-                case 7: EN.men[k] = EN.ecy & 1u ? 32767 - (int32_t)s : (int32_t)s; break;
-                default: EN.men[k] = EN.ecy ? 0 : (int32_t)s;
-                }
-            } else EN.men[k] -= (int32_t)(((int64_t)EN.men[k] * K.o_dk) >> 16);
+        if (inc != EN.qin) {                    /* a new note: the nearest its F-NUMBER (11 bits) and BLOCK can play */
+            uint32_t f = (uint32_t)(((uint64_t)inc * OPN_Q20) >> 32), s = 0;
+            EN.qin = inc;
+            while ((f >> s) > 2047u) s++;
+            f = (f + (s ? 1u << (s - 1u) : 0u)) >> s << s;
+            EN.qout[0] = (uint32_t)(((uint64_t)f * OPN_QB) >> 16);
         }
-        if (K.o_ssg) { uint32_t o = EN.sph; EN.sph += K.o_sinc; if (EN.sph < o) EN.ecy++; }
-        fb = K.o_fb ? (EN.o1 + EN.o2) >> (8 - K.o_fb) : 0;   /* (FEEDBACK 7: 4 pi, as the chip's) */
-#define OP(k, mod) ((int32_t)((int64_t)isin((EN.ph[k] += (uint32_t)(((uint64_t)inc * K.o_mul[k]) >> 16)) + ((uint32_t)(mod) << 18)) * \
-                    (OPN_CAR[a] >> (k) & 1u ? K.o_cl : (EN.men[k] * K.o_ml >> 15)) >> 15))   /* (in: Q15 = 2 turns) */
+        if ((EN.egacc += OPN_EGINC) < OPN_EGINC) {   /* the envelope's clock: the modulators' DECAY (D1R), or SSG-EG */
+            uint32_t r = K.o_dr, c = ++EN.egcnt, d = 0;
+            if (r && r < 48u) { uint32_t sh = 11u - (r >> 2); if (!(c & ((1u << sh) - 1u))) d = EGP[r & 3u][(c >> sh) & 7u]; }
+            else if (r) d = (uint32_t)EGP[4u + (r & 3u)][c & 7u] << (r >= 60u ? 3u : (r >> 2) - 12u);
+            for (k = 0; k < 4; k++) {
+                if (OPN_CAR[a] >> k & 1u) continue;
+                if (K.o_ssg) {                  /* SSG-EG: the attenuation ramps, in dB, as the shape goes */
+                    uint32_t s = EN.sph >> 17, v;
+                    switch (K.o_ssg) {
+                    case 1: v = 32767u - s; break;
+                    case 2: v = EN.ecy ? 0u : 32767u - s; break;
+                    case 3: v = EN.ecy & 1u ? s : 32767u - s; break;
+                    case 4: v = EN.ecy ? 32767u : 32767u - s; break;
+                    case 5: v = s; break;
+                    case 6: v = EN.ecy ? 32767u : s; break;
+                    case 7: v = EN.ecy & 1u ? 32767u - s : s; break;
+                    default: v = EN.ecy ? 0u : s;
+                    }
+                    EN.men[k] = (int32_t)((32767u - v) >> 5);
+                } else if ((EN.men[k] += (int32_t)d) > 1023) EN.men[k] = 1023;
+            }
+        }
+        if (K.o_ssg) { o = EN.sph; EN.sph += K.o_sinc; if (EN.sph < o) EN.ecy++; }
+        fb = K.o_fb ? (EN.o1 + EN.o2) >> (10 - K.o_fb) : 0;   /* (FEEDBACK 7: 4 pi, as the chip's) */
+#define OP(k, mod) opn_op(EN.ph[k] += (uint32_t)(((uint64_t)EN.qout[0] * K.o_mul[k]) >> 16), (mod), \
+                          OPN_CAR[a] >> (k) & 1u ? K.o_ctl : clampi(EN.men[k] + K.o_tl, 0, 1023))
         y1 = OP(0, fb);
-        switch (a) {
-        case 0: y2 = OP(1, y1); y3 = OP(2, y2); out = OP(3, y3); break;
-        case 1: y2 = OP(1, 0); y3 = OP(2, y1 + y2); out = OP(3, y3); break;
-        case 2: y2 = OP(1, 0); y3 = OP(2, y2); out = OP(3, y1 + y3); break;
-        case 3: y2 = OP(1, y1); y3 = OP(2, 0); out = OP(3, y2 + y3); break;
-        case 4: y2 = OP(1, y1); y3 = OP(2, 0); y4 = OP(3, y3); out = y2 + y4; break;
-        case 5: out = OP(1, y1) + OP(2, y1) + OP(3, y1); break;
-        case 6: y2 = OP(1, y1); out = y2 + OP(2, 0) + OP(3, 0); break;
-        default: out = y1 + OP(1, 0) + OP(2, 0) + OP(3, 0);
+        switch (a) {                            /* (a modulator's 14 bits, halved, turns the phase: up to 4 turns) */
+        case 0: y2 = OP(1, y1 >> 1); y3 = OP(2, y2 >> 1); out = OP(3, y3 >> 1) >> 5; break;
+        case 1: y2 = OP(1, 0); y3 = OP(2, (y1 + y2) >> 1); out = OP(3, y3 >> 1) >> 5; break;
+        case 2: y2 = OP(1, 0); y3 = OP(2, y2 >> 1); out = OP(3, (y1 + y3) >> 1) >> 5; break;
+        case 3: y2 = OP(1, y1 >> 1); y3 = OP(2, 0); out = OP(3, (y2 + y3) >> 1) >> 5; break;
+        case 4: y2 = OP(1, y1 >> 1); y3 = OP(2, 0); y4 = OP(3, y3 >> 1); out = (y2 >> 5) + (y4 >> 5); break;
+        case 5: out = (OP(1, y1 >> 1) >> 5) + (OP(2, y1 >> 1) >> 5) + (OP(3, y1 >> 1) >> 5); break;
+        case 6: y2 = OP(1, y1 >> 1); out = (y2 >> 5) + (OP(2, 0) >> 5) + (OP(3, 0) >> 5); break;
+        default: out = (y1 >> 5) + (OP(1, 0) >> 5) + (OP(2, 0) >> 5) + (OP(3, 0) >> 5);
         }
 #undef OP
         EN.o2 = EN.o1; EN.o1 = y1;
-        EN.lv[0] = EN.men[0]; EN.lv[1] = EN.men[1]; EN.lv[2] = EN.men[2]; EN.lv[3] = EN.men[3];
+        for (k = 0; k < 4; k++) EN.lv[k] = (1023 - EN.men[k]) * 32;
     }
-    out = clampi(out, -32767, 32767) >> 7 << 7;   /* the 9-bit DAC, and its ladder: a step between - and + */
-    return out + (out < 0 ? -K.o_lad : K.o_lad);
+    out = clampi(out, -256, 255);               /* the channel's 9 bits; the DAC's ladder: no step between -1 and +1 */
+    return (out + (out >= 0)) * 128;
+}
+/* The S-DSP's own arithmetic (from snes_spc 0.9.0, SPC_DSP.cpp, (C) 2007 Shay Green, LGPL-2.1-or-later: the table and
+ * the formulas, bit for bit): its Gaussian kernel, read from the SNES, and the BRR decoder's four filters. The encoder
+ * is ours: each 16-sample block tried with the four filters, the smallest shift that fits each, the one that comes back
+ * nearest kept (GRIT: coarser shifts) */
+static const int16_t SPC_GAUSS[512] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,
+    3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12, 13, 13, 14,
+    14, 15, 15, 15, 16, 16, 17, 17, 18, 19, 19, 20, 20, 21, 21, 22, 23, 23, 24, 24, 25, 26, 27, 27, 28, 29, 29, 30,
+    31, 32, 32, 33, 34, 35, 36, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+    58, 59, 60, 61, 62, 64, 65, 66, 67, 69, 70, 71, 73, 74, 76, 77, 78, 80, 81, 83, 84, 86, 87, 89, 90, 92, 94, 95,
+    97, 99, 100, 102, 104, 106, 107, 109, 111, 113, 115, 117, 118, 120, 122, 124, 126, 128, 130, 132, 134, 137, 139,
+    141, 143, 145, 147, 150, 152, 154, 156, 159, 161, 163, 166, 168, 171, 173, 175, 178, 180, 183, 186, 188, 191,
+    193, 196, 199, 201, 204, 207, 210, 212, 215, 218, 221, 224, 227, 230, 233, 236, 239, 242, 245, 248, 251, 254,
+    257, 260, 263, 267, 270, 273, 276, 280, 283, 286, 290, 293, 297, 300, 304, 307, 311, 314, 318, 321, 325, 328,
+    332, 336, 339, 343, 347, 351, 354, 358, 362, 366, 370, 374, 378, 381, 385, 389, 393, 397, 401, 405, 410, 414,
+    418, 422, 426, 430, 434, 439, 443, 447, 451, 456, 460, 464, 469, 473, 477, 482, 486, 491, 495, 499, 504, 508,
+    513, 517, 522, 527, 531, 536, 540, 545, 550, 554, 559, 563, 568, 573, 577, 582, 587, 592, 596, 601, 606, 611,
+    615, 620, 625, 630, 635, 640, 644, 649, 654, 659, 664, 669, 674, 678, 683, 688, 693, 698, 703, 708, 713, 718,
+    723, 728, 732, 737, 742, 747, 752, 757, 762, 767, 772, 777, 782, 787, 792, 797, 802, 806, 811, 816, 821, 826,
+    831, 836, 841, 846, 851, 855, 860, 865, 870, 875, 880, 884, 889, 894, 899, 904, 908, 913, 918, 923, 927, 932,
+    937, 941, 946, 951, 955, 960, 965, 969, 974, 978, 983, 988, 992, 997, 1001, 1005, 1010, 1014, 1019, 1023, 1027,
+    1032, 1036, 1040, 1045, 1049, 1053, 1057, 1061, 1066, 1070, 1074, 1078, 1082, 1086, 1090, 1094, 1098, 1102, 1106,
+    1109, 1113, 1117, 1121, 1125, 1128, 1132, 1136, 1139, 1143, 1146, 1150, 1153, 1157, 1160, 1164, 1167, 1170, 1174,
+    1177, 1180, 1183, 1186, 1190, 1193, 1196, 1199, 1202, 1205, 1207, 1210, 1213, 1216, 1219, 1221, 1224, 1227, 1229,
+    1232, 1234, 1237, 1239, 1241, 1244, 1246, 1248, 1251, 1253, 1255, 1257, 1259, 1261, 1263, 1265, 1267, 1269, 1270,
+    1272, 1274, 1275, 1277, 1279, 1280, 1282, 1283, 1284, 1286, 1287, 1288, 1290, 1291, 1292, 1293, 1294, 1295, 1296,
+    1297, 1297, 1298, 1299, 1300, 1300, 1301, 1302, 1302, 1303, 1303, 1303, 1304, 1304, 1304, 1304, 1304, 1305, 1305};
+static int32_t spc_gauss(const int32_t *h, int32_t t)   /* the four last samples (h[3] the oldest), between h[2] and h[1] at t (Q15) */
+{
+    int32_t d = t >> 7, o;
+    o = (SPC_GAUSS[255 - d] * h[3]) >> 11;
+    o += (SPC_GAUSS[511 - d] * h[2]) >> 11;
+    o += (SPC_GAUSS[256 + d] * h[1]) >> 11;
+    o = (int16_t)o;
+    o += (SPC_GAUSS[d] * h[0]) >> 11;
+    return clampi(o, -32768, 32767) & ~1;
+}
+static int32_t brr_pred(int32_t f, int32_t p1, int32_t p2)   /* the filter's part, from the last two (p2 already halved) */
+{
+    int32_t s = 0;
+    if (f >= 2) { s = p1 - p2; s += f == 2 ? (p2 >> 4) + ((p1 * -3) >> 6) : ((p1 * -13) >> 7) + ((p2 * 3) >> 4); }
+    else if (f) s = (p1 >> 1) + ((-p1) >> 5);
+    return s;
+}
+static void brr_block(const int32_t *in, int32_t *out, int32_t *q1, int32_t *q2, int32_t grit)   /* 16 samples coded and
+                                                   decoded as the S-DSP would play them; q1, q2: the last two out */
+{
+    int32_t f, k, best = 0x7FFFFFFF, bf = 0, bsh = 0;
+    for (f = 0; f < 4; f++) {                   /* each filter: its shift from the open-loop residue, then the error */
+        int32_t m = 0, sh = 0, p1 = *q1, p2 = *q2, e = 0;
+        for (k = 0; k < 16; k++) { int32_t r = absi((in[k] >> 1) - brr_pred(f, p1, p2 >> 1)); if (r > m) m = r; p2 = p1; p1 = in[k]; }
+        while (sh < 12 && (m * 2 >> sh) > 7) sh++;
+        sh = clampi(sh + grit, 0, 12);
+        p1 = *q1; p2 = *q2;
+        for (k = 0; k < 16 && e < best; k++) {
+            int32_t pr = brr_pred(f, p1, p2 >> 1), n = clampi((((in[k] >> 1) - pr) * 2 + (sh ? 1 << (sh - 1) : 0)) >> sh, -8, 7);
+            int32_t v = (int16_t)(clampi(((n * (1 << sh)) >> 1) + pr, -32768, 32767) * 2);
+            e += absi(in[k] - v) >> 4;
+            p2 = p1; p1 = v;
+        }
+        if (e < best) { best = e; bf = f; bsh = sh; }
+    }
+    for (k = 0; k < 16; k++) {                  /* the one kept, decoded */
+        int32_t pr = brr_pred(bf, *q1, *q2 >> 1), n = clampi((((in[k] >> 1) - pr) * 2 + (bsh ? 1 << (bsh - 1) : 0)) >> bsh, -8, 7);
+        out[k] = (int16_t)(clampi(((n * (1 << bsh)) >> 1) + pr, -32768, 32767) * 2);
+        *q2 = *q1; *q1 = out[k];
+    }
 }
 static int32_t eng_spc(uint32_t inc, uint32_t step)
 {
-    int32_t y, t, t2, t3, u, u3, w0, w1, w2, w3, k;
+    int32_t y, t, k;
     if (K.s_pm) { EN.mph += inc >> 1; step += (uint32_t)(int32_t)(((int64_t)step * isin(EN.mph) * K.s_pm) >> 31); }   /* PMON */
     EN.dacc += step;
     while (EN.dacc >= K.s_d) {                  /* each stored sample (SRC RATE) through the BRR coder, 16 at a time */
@@ -1992,24 +2178,11 @@ static int32_t eng_spc(uint32_t inc, uint32_t step)
         EN.dacc -= K.s_d;
         EN.bh[3] = EN.bh[2]; EN.bh[2] = EN.bh[1]; EN.bh[1] = EN.bh[0]; EN.bh[0] = EN.bout[EN.bi];
         EN.bin[EN.bi] = x;
-        if (++EN.bi >= 16u) {                   /* filter 1 (p - p / 16), the smallest shift that fits, GRIT more */
-            int32_t m = 0, sh = 0, p = EN.bprev;
-            for (k = 0; k < 16; k++) { int32_t r = absi(EN.bin[k] - (p - (p >> 4))); if (r > m) m = r; p = EN.bin[k]; }
-            while (sh < 12 && (m >> sh) > 7) sh++;
-            sh = clampi(sh + (int32_t)K.s_brr, 0, 12);
-            p = EN.bprev;
-            for (k = 0; k < 16; k++) {
-                int32_t pr = p - (p >> 4), n4 = clampi((EN.bin[k] - pr + (sh ? 1 << (sh - 1) : 0)) >> sh, -8, 7);
-                p = clampi(pr + (n4 << sh), -32768, 32767);
-                EN.bout[k] = p;
-            }
-            EN.bprev = p; EN.bi = 0;
-        }
+        if (++EN.bi >= 16u) { brr_block(EN.bin, EN.bout, &EN.bprev, &EN.bprev2, (int32_t)K.s_brr); EN.bi = 0; }   /* (BRR:
+                                                   the best of the four filters, GRIT coarser) */
     }
     t = (int32_t)(((uint64_t)EN.dacc * K.s_rinv) >> 16);   /* (between two stored samples, Q15) */
-    t2 = t * t >> 15; t3 = t2 * t >> 15; u = 32768 - t; u3 = ((u * u >> 15) * u) >> 15;   /* the Gaussian: a B-spline */
-    w0 = u3 / 6; w3 = t3 / 6; w1 = (3 * t3 - 6 * t2 + 4 * 32768) / 6; w2 = 32768 - w0 - w1 - w3;
-    y = (int32_t)(((int64_t)EN.bh[3] * w0 + (int64_t)EN.bh[2] * w1 + (int64_t)EN.bh[1] * w2 + (int64_t)EN.bh[0] * w3) >> 15);
+    y = spc_gauss(EN.bh, t);                    /* the S-DSP's Gaussian, its own table */
     if (K.s_ev) {                               /* the echo: its line, its FIR on what comes back, the feedback */
         int32_t e = 0;
         for (k = 7; k > 0; k--) EN.fir[k] = EN.fir[k - 1];
@@ -2109,7 +2282,7 @@ static void stage_src(uint32_t n)               /* the envelope, the glide, 01 t
                 ratio = (uint32_t)(((uint64_t)ratio * V.c_mul) >> 16);
             }
             if (K.pass_mul != 65536u) ratio = (uint32_t)(((uint64_t)ratio * K.pass_mul) >> 16);   /* (12 PASS-BY) */
-            if (K.eng) {                        /* 03 CHIP ENGINE: the chip makes the voice */
+            if (K.eng) {                        /* 01 ENGINE: the chip makes the voice */
                 sig = eng_tick(ratio);
                 sig = (int32_t)(((int64_t)sig * (K.gfrz && V.stage == ST_OFF ? 32767 : env15) >> 15) * K.velg >> 15);
                 blk_e[i] = env15; blk_b[i] = sig;
@@ -2218,16 +2391,16 @@ static void stage_eq(uint32_t n)
     }
     if (K.eq_out != 4096) for (i = 0; i < n; i++) x[i] = (int32_t)(((int64_t)x[i] * K.eq_out) >> 12);
 }
-/* SOUND CHIPS (in flash, as 09: off, it costs nothing). The whole chain, printed through a console's sound chip: each
+/* PRINT, ENGINE C (in flash, as 09: off, it costs nothing). The whole chain, printed through a console's sound chip: each
  * takes the sound at its own sample clock (RATE, no anti-alias filter, as the hardware) and through its own DAC:
  *   YM2149  the volume register as a DAC (the Atari ST's digi-drums): 32 log steps, 16 with GRIT; 1.5 .. 6 dB apart
  *   YM2612  the Mega Drive's 8-bit DAC channel, 9 .. 6 bits out, and the ladder's step at zero (crossover grit)
- *   S-DSP   the SNES: BRR (4-bit ADPCM, 16-sample blocks, filter 1) at 32 kHz or less, Gaussian-like interpolation,
- *           the echo with its 8-tap FIR and feedback (E TIME in 16 ms steps)
- *   SCSP    the Saturn: linear PCM 16 .. 8 bits, linear interpolation, its DSP as a short diffuse echo
+ *   S-DSP   the SNES: BRR (4-bit ADPCM, 16-sample blocks, filter 1) at 32 kHz or less, Gaussian-like interpolation
+ *   SCSP    the Saturn: linear PCM 16 .. 8 bits, linear interpolation
  *   DMG     the Game Boy's wave channel: 4-bit samples, the volume shift, and the output capacitor's high-pass
- * TONE is the console's analog low-pass, MIX against the sound before it */
-static struct { uint32_t ph; int32_t h[4], hp_x, hp_y, lp, fir[8], bprev, bin[16], bout[16]; uint32_t bi, w; uint8_t last; } EMV;
+ * then the console's analog low-pass (the Mega Drive's); MIX against the sound before it. Its echo is the SPC700
+ * engine's own */
+static struct { uint32_t ph; int32_t h[4], hp_x, hp_y, lp, bprev, bprev2, bin[16], bout[16]; uint32_t bi; uint8_t last; } EMV;
 static int32_t emu_take(int32_t x)              /* one sample at the chip's clock: through its DAC */
 {
     int32_t y, q;
@@ -2239,26 +2412,13 @@ static int32_t emu_take(int32_t x)              /* one sample at the chip's cloc
         return (u - K.em_lv[lo] < K.em_lv[hi] - u ? K.em_lv[lo] : K.em_lv[hi]) - 32768;
     }
     case 2:
-        q = (x >> 8) << 8;                      /* the DAC channel: 8 bits in */
-        y = q >> (16 - K.em_bits) << (16 - K.em_bits);
-        return y + (y < 0 ? -K.em_lad : K.em_lad);
+        q = ((x >> 8) * 2) >> (9 - K.em_bits);  /* the DAC channel: 8 bits in, as 9; GRIT: fewer; the DAC's ladder (no
+                                                   step between -1 and +1) */
+        return (q + (q >= 0)) << (9 - K.em_bits) << 7;
     case 3: {                                   /* BRR: 16 in, then the block coded and played back, 16 out */
-        uint32_t k;
         EMV.bin[EMV.bi] = x;
         y = EMV.bout[EMV.bi];
-        if (++EMV.bi >= 16u) {
-            int32_t m = 0, sh = 0, p = EMV.bprev;
-            for (k = 0; k < 16u; k++) { int32_t r = absi(EMV.bin[k] - (p - (p >> 4))); if (r > m) m = r; p = EMV.bin[k]; }
-            while (sh < 12 && (m >> sh) > 7) sh++;
-            sh = clampi(sh + K.em_sh, 0, 12);
-            p = EMV.bprev;
-            for (k = 0; k < 16u; k++) {
-                int32_t pr = p - (p >> 4), r = EMV.bin[k] - pr, n4 = clampi((r + (sh ? 1 << (sh - 1) : 0)) >> sh, -8, 7);
-                p = clampi(pr + (n4 << sh), -32768, 32767);
-                EMV.bout[k] = p;
-            }
-            EMV.bprev = p; EMV.bi = 0;
-        }
+        if (++EMV.bi >= 16u) { brr_block(EMV.bin, EMV.bout, &EMV.bprev, &EMV.bprev2, K.em_sh); EMV.bi = 0; }
         return y;
     }
     case 4: return x >> (16 - K.em_bits) << (16 - K.em_bits);
@@ -2267,40 +2427,24 @@ static int32_t emu_take(int32_t x)              /* one sample at the chip's cloc
 }
 static void stage_emu(uint32_t n)
 {
-    static const int8_t FIR[8] = {12, 33, 43, 43, 19, -2, -13, -7};   /* the S-DSP's echo filter, a usual setting (/128) */
-    uint32_t i, k;
+    uint32_t i;
     int32_t *b = blk_b;
-    if (K.em != EMV.last) { for (i = 0; i < EM_N; i++) em_buf[i] = 0; for (k = 0; k < 8u; k++) EMV.fir[k] = 0; EMV.last = K.em; }
+    if (K.em != EMV.last) { EMV.hp_x = EMV.hp_y = 0; EMV.lp = 0; EMV.last = K.em; }
     for (i = 0; i < n; i++) {
         int32_t x = b[i], y, t;
         uint32_t ph = EMV.ph + K.em_inc;
         if (ph < EMV.ph) { EMV.h[3] = EMV.h[2]; EMV.h[2] = EMV.h[1]; EMV.h[1] = EMV.h[0]; EMV.h[0] = emu_take(x); }
         EMV.ph = ph;
         t = (int32_t)(ph >> 17);                /* (where between the chip's samples: 0 .. 32767) */
-        if (K.em == 3) {                        /* a cubic B-spline over four: smooth and a little dull, as the SNES */
-            int32_t t2 = t * t >> 15, t3 = t2 * t >> 15, u = 32768 - t, u3 = ((u * u >> 15) * u) >> 15;
-            int32_t w0 = u3 / 6, w3 = t3 / 6, w1 = (3 * t3 - 6 * t2 + 4 * 32768) / 6, w2 = 32768 - w0 - w1 - w3;
-            y = (int32_t)(((int64_t)EMV.h[3] * w0 + (int64_t)EMV.h[2] * w1 + (int64_t)EMV.h[1] * w2 + (int64_t)EMV.h[0] * w3) >> 15);
-        } else if (K.em == 4) y = EMV.h[1] + (int32_t)(((int64_t)(EMV.h[0] - EMV.h[1]) * t) >> 15);
+        if (K.em == 3) y = spc_gauss(EMV.h, t);   /* the S-DSP's Gaussian */
+        else if (K.em == 4) y = EMV.h[1] + (int32_t)(((int64_t)(EMV.h[0] - EMV.h[1]) * t) >> 15);
         else y = EMV.h[0];
         if (K.em == 1 || K.em == 5) {           /* (the unipolar DACs: their DC out; the Game Boy's capacitor, stronger) */
             int32_t a = K.em == 5 ? 32640 : 32740, hy = y - EMV.hp_x + (int32_t)(((int64_t)EMV.hp_y * a) >> 15);
             EMV.hp_x = y; EMV.hp_y = hy; y = hy;
         }
-        if (K.em_ev && !(K.eng == 3u && K.s_ev)) {   /* the echo (the SPC700 engine's own echo has the line) */
-            int32_t d = em_buf[(EMV.w - K.em_d) & (EM_N - 1u)], e = 0;
-            if (K.em == 3) {
-                for (k = 7; k > 0u; k--) EMV.fir[k] = EMV.fir[k - 1u];
-                EMV.fir[0] = d;
-                for (k = 0; k < 8u; k++) e += EMV.fir[k] * FIR[k];
-                e >>= 7;
-            } else e = (d + em_buf[(EMV.w - K.em_d * 3u / 4u) & (EM_N - 1u)] + em_buf[(EMV.w - K.em_d / 2u) & (EM_N - 1u)]) / 3;
-            em_buf[EMV.w] = sat16(y + (int32_t)(((int64_t)e * K.em_fb) >> 15));
-            EMV.w = (EMV.w + 1u) & (EM_N - 1u);
-            y += (int32_t)(((int64_t)e * K.em_ev) >> 15);
-        }
-        EMV.lp += (int32_t)(((int64_t)(y - EMV.lp) * K.em_lp) >> 15);   /* TONE */
-        b[i] = x + (int32_t)(((int64_t)(EMV.lp - x) * K.em_mix) >> 15);
+        if (K.em_lp < 32768) y = EMV.lp += (int32_t)(((int64_t)(y - EMV.lp) * K.em_lp) >> 15);   /* the console's low-pass */
+        b[i] = x + (int32_t)(((int64_t)(y - x) * K.em_mix) >> 15);
     }
 }
 static void dsp_block(int32_t *out, uint32_t n) /* one block of the chain */
@@ -2326,7 +2470,7 @@ static void dsp_block(int32_t *out, uint32_t n) /* one block of the chain */
     RAM_CALL(stage_fx)(n);
     if (!K.rv_wet) V.rv_off = 1;
     if (K.ott && K.opost) RAM_CALL(stage_ott)(n);         /* POST FX: on the tails too */
-    if (K.em) stage_emu(n);                     /* SOUND CHIPS: last, the print */
+    if (K.em) stage_emu(n);                     /* PRINT: last */
     if (!K.ott) tm_gd[0] = tm_gd[1] = tm_gd[2] = 0;
     RAM_CALL(stage_out)(out, n);
     if (rec_state == REC_ON)                    /* the recorder: to 22.05 kHz through a [1 2 1] / 4 low-pass, mu-law */
@@ -2439,6 +2583,7 @@ static void eng_pick(int32_t g)                 /* an engine, from its own start
     set_unlocked(P_ENG, g);
     if (P[P_ENG] != g) { say("ENGINE IS LOCKED"); return; }
     for (k = 0; k < 7u; k++) set_unlocked(P_E1 + k, EPD[g][k].def);
+    if (P[P_EMU] && g) set_unlocked(P_EMU, g);   /* (PRINT on: it follows to the same console) */
     touched();
 }
 static void eng_random(int noisy)               /* the engine's seven at random (a noise kind: its noise up front) */
@@ -2450,7 +2595,7 @@ static void eng_random(int noisy)               /* the engine's seven at random 
     case 2: if (P[P_E1] == 8) set_unlocked(P_E1, rnd_range(0, 7)); set_unlocked(P_E2, noisy ? 7 : rnd_range(0, 5)); break;
     case 3: set_unlocked(P_E4, rnd_range(0, 60)); set_unlocked(P_E6, rnd_range(0, 70)); break;
     case 4: set_unlocked(P_E5, rnd_range(0, 30)); set_unlocked(P_E6, rnd_range(0, 40)); break;
-    case 5: set_unlocked(P_E1, noisy ? 0 : rnd_range(10, 15)); set_unlocked(P_E5, noisy ? 15 : rnd_range(0, 99) < 70 ? 0 : rnd_range(2, 8));
+    case 5: set_unlocked(P_E1, noisy ? 0 : rnd_range(1, 4)); set_unlocked(P_E5, noisy ? rnd_range(1, 2) : rnd_range(0, 99) < 70 ? 0 : rnd_range(1, 2));
             set_unlocked(P_E7, rnd_range(0, 99) < 75 ? 0 : rnd_range(10, 80)); break;
     default: break;
     }
@@ -2471,8 +2616,8 @@ static void chip_preset(uint32_t kind)
     int32_t d;
     i = (uint32_t)rnd_range(R[k].w0, R[k].w1);
     set_unlocked(P_MODE, 0); set_unlocked(P_WAVE, (int32_t)i);
-    set_unlocked(P_CDUTY, rnd_range(0, 2)); set_unlocked(P_CNOISE, k == 3u ? rnd_range(0, 1) : 0);
-    set_unlocked(P_COLOR, i == W_CNSE ? rnd_range(10, 90) : 50);
+    set_unlocked(P_COLOR, i == W_CPLS ? 12 + rnd_range(0, 2) * 25 : i != W_CNSE ? 50 : k == 3u && rnd_range(0, 1) ? rnd_range(80, 95) : rnd_range(10, 70));   /* (the
+                                                   pulse: 12.5, 25 or 50 %; the noise: its clock, SHORT for some HITs) */
     set_unlocked(P_TUNE, rnd_range(R[k].t0, R[k].t1)); set_unlocked(P_CSWEEP, rnd_range(R[k].s0, R[k].s1));
     set_unlocked(P_CARP, rnd_range(R[k].a0, R[k].a1)); set_unlocked(P_CARPS, rnd_range(R[k].ar0, R[k].ar1));
     set_unlocked(P_CSTEP, R[k].st);
@@ -2526,9 +2671,11 @@ static void rnd_module(uint32_t m)
     case PG_LFO: set_unlocked(P_L1SHP, rnd_range(0, 6)); set_unlocked(P_L1RATE, rnd_range(10, 55)); set_unlocked(P_L1MIX, rnd_range(5, 45));
             set_unlocked(P_L1TGT, rnd_range(0, NTGT - 1)); set_unlocked(P_L2SHP, rnd_range(0, 6)); set_unlocked(P_L2RATE, rnd_range(5, 50));
             set_unlocked(P_L2MIX, rnd_range(5, 45)); set_unlocked(P_L2TGT, rnd_range(0, NTGT - 1)); break;
-    case PG_CHIP: chip_preset((uint32_t)rnd_range(0, 6)); break;
-    case PG_ASSET: set_unlocked(P_EMU, rnd_range(1, 5)); set_unlocked(P_ERATE, rnd_range(10, 90)); set_unlocked(P_EGRIT, rnd_range(0, 100));
-            set_unlocked(P_EECHO, rnd_range(0, 99) > 50 ? rnd_range(10, 60) : 0); set_unlocked(P_ETIME, rnd_range(2, 12)); set_unlocked(P_ETONE, rnd_range(30, 100)); break;
+    case PG_CHIP:                               /* the engine's own knobs; the print, if it is on */
+        if (P[P_ENG]) eng_random(0);
+        if (P[P_EMU]) { set_unlocked(P_ERATE, rnd_range(10, 90)); set_unlocked(P_EGRIT, rnd_range(0, 100)); }
+        break;
+    case PG_ASSET: chip_preset((uint32_t)rnd_range(0, 6)); break;
     case PG_SPC: set_unlocked(P_SDIST, rnd_range(0, 80)); set_unlocked(P_SOCCL, rnd_range(0, 99) > 60 ? rnd_range(20, 90) : 0); break;
     case PG_PAD: set_unlocked(P_XTGT, rnd_range(0, NTGT - 1)); set_unlocked(P_YTGT, rnd_range(0, NTGT - 1));
             set_unlocked(P_XAMT, rnd_range(-100, 100)); set_unlocked(P_YAMT, rnd_range(-100, 100)); break;
@@ -2541,13 +2688,27 @@ static int32_t tgt_of(uint32_t p) { uint32_t i; for (i = 0; i < NTGT; i++) if (T
 static int32_t pick(int32_t a, int32_t b, int32_t c, int32_t d) { int32_t v[4]; v[0] = a; v[1] = b; v[2] = c; v[3] = d; return v[rnd_range(0, 3)]; }
 #define RU(p, lo, hi) set_unlocked(p, rnd_range(lo, hi))
 #define RS(p, v) set_unlocked(p, v)
+static int eng_kept(uint32_t i)                 /* the ENGINE's choice and its print: an asset or a recipe plays on them */
+{
+    return (i >= P_ENG && i <= P_E7) || (i >= P_EMU && i <= P_ETONE);
+}
+static void eng_noisy(void)                     /* a noise asset on a chip: its noise up front (deterministic) */
+{
+    switch (P[P_ENG]) {
+    case 1: set_unlocked(P_E1, 1); break;       /* YM2149: the mixer to NOISE */
+    case 2: set_unlocked(P_E2, 7); break;       /* YM2612: the feedback all the way */
+    case 4: set_unlocked(P_E1, 4); set_unlocked(P_E2, 60); break;   /* SCSP: FM from the noise */
+    case 5: set_unlocked(P_E1, 0); set_unlocked(P_E5, 1); break;    /* DMG: the pulses off, the 15-bit noise */
+    default: break;
+    }
+}
 static void recipe(uint32_t kind)
 {
     uint32_t i;
     for (i = 0; i < NP; i++) {
         uint32_t m = PMOD[i];
         if (m == PG_LAB || m == PG_VAR || m == PG_BAT || m == PG_PHY || m == PG_PAD || m == PG_RTPC || m == PG_ASSET) continue;
-        if (i == P_SLOT || i == P_THEME || i == P_RECM || i == P_VOL) continue;
+        if (i == P_SLOT || i == P_THEME || i == P_RECM || i == P_VOL || eng_kept(i)) continue;
         set_unlocked(i, PD[i].def);
     }
     switch (kind) {
@@ -2636,7 +2797,7 @@ static void asset_load(uint32_t k)
     for (i = 0; i < NP; i++) {
         uint32_t m = PMOD[i];
         if (m == PG_LAB || m == PG_VAR || m == PG_BAT || m == PG_PAD || m == PG_ASSET) continue;
-        if (i == P_SLOT || i == P_THEME || i == P_RECM) continue;
+        if (i == P_SLOT || i == P_THEME || i == P_RECM || eng_kept(i)) continue;
         set_unlocked(i, PD[i].def);
     }
     RS(P_MODE, 0); RS(P_RFMODE, 0); RS(P_RFDEP, 0); RS(P_OSTYLE, 0); RS(P_DMIX, 0); RS(P_RMIX, 0);
@@ -2711,11 +2872,11 @@ static void asset_load(uint32_t k)
         RS(P_WAVE, 0); RS(P_TUNE, 19); RS(P_ATT, 0); RS(P_DEC, 6); RS(P_SUS, 0); RS(P_REL, 6); RS(P_RMIX, 4);
         RS(P_RECIPE, 3); RS(P_VARY, 15); break;
     case 12:                                    /* PICKUP: the coin: a 25 % pulse jumping up a fourth */
-        RS(P_WAVE, W_CPLS); RS(P_CDUTY, 1); RS(P_TUNE, 19); RS(P_CARP, 8); RS(P_CARPS, 4); RS(P_CSTEP, 1);
+        RS(P_WAVE, W_CPLS); RS(P_COLOR, 37); RS(P_TUNE, 19); RS(P_CARP, 8); RS(P_CARPS, 4); RS(P_CSTEP, 1);
         RS(P_ATT, 0); RS(P_DEC, 32); RS(P_SUS, 0); RS(P_REL, 33); RS(P_RMIX, 6);
         RS(P_RECIPE, 3); RS(P_VARY, 10); break;
     case 13:                                    /* POWERUP: a rising major arpeggio on the console pulse */
-        RS(P_WAVE, W_CPLS); RS(P_CDUTY, 2); RS(P_CSWEEP, 18); RS(P_CARP, 4); RS(P_CARPS, 2); RS(P_CSTEP, 1);
+        RS(P_WAVE, W_CPLS); RS(P_CSWEEP, 18); RS(P_CARP, 4); RS(P_CARPS, 2); RS(P_CSTEP, 1);
         RS(P_ATT, 0); RS(P_DEC, 40); RS(P_SUS, 0); RS(P_REL, 38); RS(P_DMIX, 12); RS(P_DTIME, 30); RS(P_DFB, 25); RS(P_RMIX, 8);
         RS(P_RECIPE, 3); RS(P_VARY, 10); break;
     case 14:                                    /* MAGIC: metallic FM in three voices, glass ringing, long echoes */
@@ -2753,6 +2914,7 @@ static void asset_load(uint32_t k)
         RS(P_RECIPE, 0); RS(P_VARY, 10);
     }
     RS(P_VOL, ASSET_VOL[k]);
+    if (P[P_WAVE] == 6 || P[P_WAVE] == W_CNSE) eng_noisy();
 }
 static const uint8_t HA_ORDER[NPAGE + 2] = {PG_SRC, PG_CHIP, PG_RES, PG_GRN, PG_LAB, PG_ENV, PG_TRN, PG_DST, PG_EQ, PG_FLT, PG_OTT, PG_DLY,
                                          PG_REV, PG_SPC, PG_ASSET, PG_VAR, PG_BAT, PG_PHY, PG_LFO, PG_RTPC, PG_PAD};
@@ -3248,7 +3410,7 @@ static void page_action(void)
     if (page == PG_ASSET && !sub) { asset_take((uint32_t)P[P_ASSET] % NASSET); return; }   /* load the asset, play it */
     if (page == PG_VAR && sub == 1u) { morph_store(var_store_b()); return; }   /* B: STORE A, then B (both kept: the side MORPH is nearer) */
     if (page == PG_VAR) { P[P_VSEED] = (int16_t)rnd_range(1, 999); say("NEW SEED"); ui_dirty |= 2 | 4; audition(); return; }
-    if (page == PG_CHIP) {                      /* a new sound of the PRESET's kind */
+    if (page == PG_ASSET) {                     /* B: a new sound of the PRESET's kind, on the engine */
         char t[24] = "NEW ";
         push_undo();
         chip_preset((uint32_t)P[P_CPRE]);
@@ -3457,11 +3619,14 @@ static void fmt_param(uint32_t p, int32_t v, char *s)
         case EF_NP: fmt_hz(s, 125000u / (uint32_t)(v ? v : 1)); break;
         case EF_YRATE:
             if (P[P_E1] >= 3) { static const char *const BM[5] = {"NOTE/4", "NOTE/2", "NOTE", "NOTEx2", "NOTEx4"}; cat(s, BM[v * 5 / 101]); }
-            else fmt_chz(s, (25u * exp2_q16(v * 256 / 10)) >> 16);
+            else {                              /* (as its period EP makes it: 2 MHz / 256 / EP) */
+                uint32_t c = (25u * exp2_q16(v * 256 / 10)) >> 16, ep = (781250u + (c >> 1)) / (c ? c : 1u);
+                fmt_chz(s, 781250u / (ep < 1u ? 1u : ep > 65535u ? 65535u : ep));
+            }
             break;
         case EF_DEC: if (!v) cat(s, "HOLD"); else fmt_ms(s, (3000u * exp2_q16(-v * 2099 / 100)) >> 16); break;
         case EF_MS16: fmt_num(s, v * 16, 0); cat(s, "ms"); break;
-        case EF_LHZ: fmt_chz(s, (20u * exp2_q16(v * 2491 / 100)) >> 16); break;
+        case EF_LHZ: fmt_chz(s, SCSP_LFOF[(v * 31 + 50) / 100]); break;
         case EF_CH3: if (!v) cat(s, "OFF"); else { fmt_num(s, v, 0); cat(s, "%"); } break;
         default: if (!ep->hi) cat(s, "-"); else fmt_num(s, v, 0);
         }
@@ -3508,7 +3673,7 @@ static int page_on(uint32_t m)                  /* is the module doing something
 {
     switch (m) {
     case PG_SRC: case PG_ENV: return 1;
-    case PG_CHIP: return K.c_on || (P[P_WAVE] >= W_CPLS && P[P_WAVE] <= W_CNSE && P[P_MODE] != 1);
+    case PG_CHIP: return P[P_ENG] || K.c_on || K.em || (P[P_WAVE] >= W_CPLS && P[P_WAVE] <= W_CNSE && P[P_MODE] != 1);
     case PG_RES: return P[P_ZMIX] != 0;
     case PG_GRN: return (P[P_GMODE] || P[P_GFRZ]) && P[P_MODE] != 0;
     case PG_DST: return K.x_on;
@@ -3521,7 +3686,7 @@ static int page_on(uint32_t m)                  /* is the module doing something
     case PG_BAT: return batch_on || ft_on;
     case PG_PHY: return P[P_PMODE] != 0;
     case PG_LAB: return SL[cur_slot].dirty != 0;
-    case PG_ASSET: return asset_cur != 255u || (P[P_EMU] && P[P_EMIX]);
+    case PG_ASSET: return asset_cur != 255u;
     case PG_LFO: return P[P_L1MIX] || P[P_L2MIX];
     case PG_RTPC: return (rt_on || P[P_QINT]) && (P[P_Q1A] || P[P_Q2A] || P[P_Q3A]);
     default: return pad_on || pad_held || g_act || (P[P_ATAMT] && (at_keys || at_midi));
@@ -3629,7 +3794,7 @@ static int32_t wave_shape(uint32_t w, uint32_t ph, int32_t m)   /* the oscillato
     case 7: return (((t - 32768) * (11469 + (m * 14746 >> 15))) >> 15) + (isin(ph) * 18022 >> 15) + ((isin(ph << 1) * m >> 15) * 11469 >> 15);
     case 8: return (isin((uint32_t)(((uint64_t)ph * (98304u + (uint32_t)m * 13u)) >> 16)) * (int32_t)T_HANN[ph >> 24] >> 15) + (isin(ph) >> 1);
     case 9: return isin(ph + (uint32_t)(int32_t)(((int64_t)isin(ph * (2u + (uint32_t)(m * 6 >> 15))) * (273426110u + (uint32_t)m * 75098u)) >> 15));
-    case W_CPLS: return ph < (P[P_CDUTY] == 3 ? 0xC0000000u : 0x20000000u << P[P_CDUTY]) ? 30000 : -30000;
+    case W_CPLS: return ph < pulse_w(P[P_COLOR] * 4 / 101 + 1) ? 30000 : -30000;
     case W_CTRI: { int32_t st = (int32_t)(ph >> 27); return ((st < 16 ? 15 - st : st - 16) * 2 - 15) * 2184; }
     case W_CNSE: return (xrand(&rng_main) >> 31) ? 26000 : -26000;
     case W_SHEP: return (isin(ph) + (isin(ph << 1) >> 1) + (isin(ph << 2) >> 2)) * 3 >> 3;
@@ -3906,8 +4071,8 @@ static void fx_frame(const theme_t *th)         /* the page's object: one frame,
             for (j = 0; j <= h; j += 2) cv_rect(182 + k * 3, 13 - j, 2, 1, vk_c(c3, 110 + j * 12));
         }
         break;
-    case PG_CHIP:                               /* C, D: the sound as 8-bit blocks, on the right; at rest a square wave walks */
-    if (sub < 2u) break;
+    case PG_CHIP:                               /* D: the sound as 8-bit blocks, on the right; at rest a square wave walks */
+    if (sub < 3u) break;
     {
         int32_t m = 2600;
         for (k = 0; k < 256; k++) if (absi(fx_s[k]) > m) m = absi(fx_s[k]);
@@ -4118,7 +4283,7 @@ static void solid(int32_t kind, int32_t cx, int32_t base, int32_t h, uint16_t c,
         cv_line(cx, top, cx - w + 6, base - dy, back);
     }
 }
-static void vis_chips(const theme_t *th)       /* ASSETS B, C: the SOUND CHIP as a part on a board, its pins busy with
+static void vis_chips(const theme_t *th)       /* ENGINE C: the PRINT as a part on a board, its pins busy with
                                                    the sound; the sound as it comes out of its DAC (steps, the DAC's
                                                    levels as a ruler); the five as cartridge labels */
 {
@@ -4169,14 +4334,13 @@ static void vis_chips(const theme_t *th)       /* ASSETS B, C: the SOUND CHIP as
         else if (i) cv_line(px, py, x, y, cl);
         px = x; py = y;
     }
-    if (K.em_ev && on) { fmt_num(t, P[P_ETIME] * 16, 0); s[0] = 0; cat(s, "ECHO "); cat(s, t); cat(s, "ms"); cv_text_fit(108, 72, 122, s, th->mut, 2); }
     for (k = 1; k <= 5; k++) {              /* the five, as cartridge labels */
         int32_t x = 4 + (k - 1) * 47, w = text_w(&FONT_A, E_EMU[k]);
         if (k == m) { cv_rect(x, 96, 45, 13, th->acc); cv_text(x + 23 - w / 2, 99 - FONT_A_CAP, &FONT_A, E_EMU[k], RGB(0, 0, 0)); }
         else { cv_frame(x, 96, 45, 13, C_DK); cv_text(x + 23 - w / 2, 99 - FONT_A_CAP, &FONT_A, E_EMU[k], C_MUTE); }
     }
     }
-static void vis_engine(const theme_t *th)      /* 03 CHIP ENGINE A, B: the chip at work, drawn as its manual drew it */
+static void vis_engine(const theme_t *th)      /* 01 ENGINE A, B: the chip at work, drawn as its manual drew it */
 {
     char s[40], t[16];
     int32_t g = ENG_G, i, k, play = tm_awake;
@@ -4302,11 +4466,11 @@ static void vis_engine(const theme_t *th)      /* 03 CHIP ENGINE A, B: the chip 
             int32_t v = DMG_W[K.d_wave - 1u][i], x = 108 + i * 4;
             cv_rect(x, 82 - v * 4, 3, v * 4 + 1, (uint32_t)i == (EN.ph[2] >> 27) && play ? C_TXT : ca);
         } else for (i = 0; i < 32; i++) {       /* no wave: the pulse's duty */
-            int32_t hi = (uint32_t)i * 0x08000000u < K.c_pw;
+            int32_t hi = (uint32_t)i * 0x08000000u < K.d_pw;
             cv_rect(108 + i * 4, hi ? 34 : 80, 4, 2, ca);
-            if (i && hi != ((uint32_t)(i - 1) * 0x08000000u < K.c_pw)) cv_rect(108 + i * 4, 34, 1, 48, ca);
+            if (i && hi != ((uint32_t)(i - 1) * 0x08000000u < K.d_pw)) cv_rect(108 + i * 4, 34, 1, 48, ca);
         }
-        cv_text_fit(108, 92, 126, K.d_wave ? EN_DWAV[K.d_wave] : E_CDUTY[clampi(P[P_CDUTY], 0, 3)], C_TXT, 2);
+        cv_text_fit(108, 92, 126, K.d_wave ? EN_DWAV[K.d_wave] : EN_DUTY[K.d_vol ? clampi(P[P_E1], 0, 4) : 0], C_TXT, 2);
         break;
     }
     default:                                    /* ND07: 02 makes the sound; the six to turn K1 through, as cartridges */
@@ -4370,7 +4534,7 @@ static void app_ota_show(uint32_t step, int32_t code)
 }
 /* ---- the start (1.8 s; a key, a knob or a note ends it): the monolith drawn edge by edge, turning once, two orbits
  * opening round it and the dust falling in; the name written under it; the scan and the progress line of the start */
-#define ND07_VER "1.7"
+#define ND07_VER "1.8"
 #define BOOT_MS 1800u
 static uint32_t boot_end;                       /* fm1_ms the start ends (0: over) */
 static void boot_paint(int32_t oy, uint32_t t)  /* one 240 x 80 strip, from y = oy (the canvas: 240 x 112 at most) */
@@ -4457,7 +4621,7 @@ static void draw_vis(void)
         int32_t md = P[P_MODE], px = 0, py = 0, on_o = md != 1, on_s = md != 0;
         uint16_t co = on_o ? th->acc : C_DK, cs = on_s ? th->cyan : C_DK;
         if (P[P_ENG]) {                         /* (another engine plays: this page lends it the sample, its loop) */
-            s[0] = 0; cat(s, "03 "); cat(s, E_ENG[ENG_G]); cat(s, " PLAYS");
+            s[0] = 0; cat(s, "01 "); cat(s, E_ENG[ENG_G]); cat(s, " PLAYS");
             cv_text_fit(8, 92, 226, s, th->mut, 1);
         }
         if (sub == 2u) {                        /* C: the loop on the whole sample (START > LOOP > STOP) */
@@ -4833,12 +4997,24 @@ static void draw_vis(void)
         if (!on) cv_text_fit(8, 18, 226, "A KEY PLAYS ONE HIT", C_MUTE, 1);
         break;
     }
-    case PG_ASSET: {                            /* A: the assets, four to a row; the one chosen, the one loaded. B, C: the chip */
+    case PG_ASSET: {                            /* A: the assets, four to a row; the one chosen, the one loaded. B: NEW SFX */
         uint32_t q, sel = (uint32_t)P[P_ASSET] % NASSET, ed = asset_cur != 255u && patch_sum() != asset_sum;
         s[0] = 0;
         if (asset_cur == 255u) cat(s, "SEL: LOAD AN ASSET");
         else { cat(s, E_ASSET[asset_cur]); cat(s, ed ? "  EDITED" : "  LOADED"); }
-        if (sub) { vis_chips(th); break; }
+        if (sub) {                              /* B: the seven kinds of NEW SFX, the one SEL makes; on which engine */
+            sel = (uint32_t)P[P_CPRE] % 7u;
+            s[0] = 0; cat(s, "SEL: NEW "); cat(s, E_CPRE[sel]);
+            cv_text_fit(8, 0, 226, s, th->acc, 0);
+            for (q = 0; q < 7u; q++) {
+                int32_t x = 4 + (int32_t)(q % 4u) * 58, y = 22 + (int32_t)(q / 4u) * 22, tw = text_w(&FONT_A, E_CPRE[q]);
+                if (q == sel) cv_rect(x, y, 56, 16, th->acc); else cv_frame(x, y, 56, 16, C_DK);
+                cv_text(x + (56 - tw) / 2, y + 4 - FONT_A_CAP, &FONT_A, E_CPRE[q], q == sel ? RGB(0, 0, 0) : C_TXT);
+            }
+            s[0] = 0; cat(s, "ON "); cat(s, E_ENG[ENG_G]); cat(s, "  "); cat(s, ENG_HOST[ENG_G]);
+            cv_text_fit(8, 76, 226, s, P[P_ENG] ? th->cyan : C_MUTE, 0);
+            break;
+        }
         cv_text_fit(8, 0, 226, s, asset_cur == 255u ? C_MUTE : ed ? th->haz : th->cyan, 0);
         for (q = 0; q < NASSET; q++) {
             int32_t x = 4 + (int32_t)(q % 4u) * 58, y = 18 + (int32_t)(q / 4u) * 18, w = 56, tw;
@@ -4999,8 +5175,8 @@ static void draw_vis(void)
         }
         break;
     }
-    case PG_CHIP: if (sub < 2u) { vis_engine(th); break; } {   /* C, D: the pitch over the first 48 frames (0.8 s): SWEEP and ARP,
-                                                   as played */
+    case PG_CHIP: if (sub < 2u) { vis_engine(th); break; } if (sub == 2u) { vis_chips(th); break; } {   /* D: the pitch over the
+                                                   first 48 frames (0.8 s): SWEEP and ARP, as played */
         int32_t sw = 0, csw = P[P_CSWEEP] * (P[P_CSWEEP] < 0 ? -P[P_CSWEEP] : P[P_CSWEEP]) * 16 / 150, ai = 0, n = 0;
         int32_t ar = P[P_CARP] % NARP, prev = -1, w = P[P_WAVE] >= W_CPLS && P[P_WAVE] <= W_CNSE;
         cv_rect(8, 4, 98, 1, C_DK); cv_rect(8, 54, 98, 1, C_DK); cv_rect(8, 104, 98, 1, C_DK);
@@ -5012,7 +5188,7 @@ static void draw_vis(void)
             sw = clampi(sw + csw, -5 * 4096, 4 * 4096);
             if (ar && ++n >= P[P_CARPS]) { n = 0; ai = (int32_t)arp_next((uint32_t)ar, (uint32_t)ai); }
         }
-        cv_text_fit(116, 0, 118, E_CPRE[P[P_CPRE] % 7], th->acc, 2);
+        cv_text_fit(116, 0, 118, "60 Hz DRIVER", th->acc, 2);
         cv_text_fit(116, 28, 118, P[P_ENG] ? E_ENG[ENG_G] : w ? E_WAVE[P[P_WAVE]] : "ANY WAVE", w || P[P_ENG] ? th->cyan : C_MUTE, 2);
         s[0] = 0; cat(s, "VOL "); cat(s, E_CSTEP[P[P_CSTEP] & 3]);
         cv_text_fit(116, 46, 118, s, P[P_CSTEP] ? C_TXT : C_MUTE, 2);
@@ -5283,7 +5459,6 @@ static const char *sel_hint(void)               /* what a tap on SEL does on thi
 {
     switch (pg_view()) {
     case PG_SRC: return rec_state == REC_IDLE ? "REC ARM" : rec_state == REC_ARMED ? "CANCEL" : "REC STOP";
-    case PG_CHIP: return "NEW SFX";
     case PG_SPC: return P[P_SPASS] ? "PLAY PASS" : "PLAY";
     case PG_VAR: return sub == 1u ? (var_store_b() ? "STORE B" : "STORE A") : "NEW SEED";
     case PG_BAT: return batch_on || ft_on ? "STOP" : sub == 1u ? "FIRE" : "BATCH";
@@ -5291,7 +5466,7 @@ static const char *sel_hint(void)               /* what a tap on SEL does on thi
     case PG_LAB: return "APPLY";
     case PG_PHY: return ph_on ? "STOP" : "PLAY";
     case PG_PAD: return g_rec ? "CANCEL" : "REC GEST";
-    case PG_ASSET: return sub ? "RANDOMIZE" : "LOAD";
+    case PG_ASSET: return sub ? "NEW SFX" : "LOAD";
     default: return "RANDOMIZE";
     }
 }
@@ -5364,7 +5539,7 @@ typedef struct { uint32_t ver; int16_t p[NP]; uint32_t lk[NLOCKW]; int16_t a[NP]
 _Static_assert(NP <= NLOCKW * 32, "the locks: a bit a parameter");
 _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session must fit the settings sector");
 _Static_assert(NPAGE <= 24, "a page's change flag (1 << PMOD) must stay below KG_NOTE");
-#define SESSION_VER (0x0D071000u + NP)
+#define SESSION_VER (0x0D071100u + NP)       /* (v1.8: 0x0D0711..; v1.6 / v1.7: 0x0D0710.. with the same layout) */
 _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session: one settings sector");
 _Static_assert(P_SECRET == NP - 1, "a new parameter goes last, and session_load learns the old layout");
 static void session_save(void)
@@ -5392,11 +5567,12 @@ static void session_load(void)
 {
     static union { session_t n; session_v11_t o; session_v13_t m; session_v15_t f; } u;   /* (static: 2.5 KB off the stack) */
     uint32_t i, np = NP;
+    int v17 = 0;
     const int16_t *pp, *pa, *pb;
     const uint32_t *lk;
     const uint8_t *tail;
     for (i = 0; i < NP; i++) P[i] = PD[i].def;
-    if (!settings_load(&u.n, sizeof u.n) && u.n.ver == SESSION_VER) { pp = u.n.p; pa = u.n.a; pb = u.n.b; lk = u.n.lk; tail = &u.n.ab; }
+    if (!settings_load(&u.n, sizeof u.n) && (u.n.ver == SESSION_VER || u.n.ver == 0x0D071000u + NP)) { pp = u.n.p; pa = u.n.a; pb = u.n.b; lk = u.n.lk; tail = &u.n.ab; v17 = u.n.ver != SESSION_VER; }
     else if (!settings_load(&u.f, sizeof u.f) && u.f.ver == 0x0D071000u + NP_V15) { np = NP_V15; pp = u.f.p; pa = u.f.a; pb = u.f.b; lk = u.f.lk; tail = &u.f.ab; }
     else if (!settings_load(&u.m, sizeof u.m) && u.m.ver == 0x0D071000u + NP_V13) { np = NP_V13; pp = u.m.p; pa = u.m.a; pb = u.m.b; lk = u.m.lk; tail = &u.m.ab; }
     else if (!settings_load(&u.o, sizeof u.o) && u.o.ver == 0x0D071000u + NP_V11) { np = NP_V11; pp = u.o.p; pa = u.o.a; pb = u.o.b; lk = u.o.lk; tail = &u.o.ab; }
@@ -5409,6 +5585,14 @@ static void session_load(void)
     for (i = 0; i < NLOCKW; i++) locks[i] = lk[i];
     if (np < NP)                                /* (before v1.6 these ten were VOWEL + SHIFT: the EQ starts flat, unlocked) */
         for (i = P_EQLO; i <= P_RSV2; i++) { P[i] = snapA[i] = snapB[i] = PD[i].def; locks[i >> 5] &= ~(1u << (i & 31u)); }
+    if (v17) {                                  /* (v1.6 / v1.7: the DMG engine's PULSE and NOISE were levels; DUTY and NOISE
+                                                   were knobs of their own) */
+        volatile int16_t *q[3] = {P, snapA, snapB};
+        for (i = 0; i < 3u; i++) if (q[i][P_ENG] == 5) {
+            q[i][P_E1] = (int16_t)(q[i][P_E1] ? clampi(q[i][P_CDUTY] + 1, 1, 4) : 0);
+            q[i][P_E5] = (int16_t)(q[i][P_E5] ? 1 + (q[i][P_CNOISE] != 0) : 0);
+        }
+    }
     has_ab = tail[0] & 3u; morph_on = has_ab == 3u && tail[1];   /* ab, mon, gn, gx[], gy[]: the same in both */
     for (i = 0; i < GEST_MAX; i++) { g_x[i] = tail[3 + i] & 127u; g_y[i] = tail[3 + GEST_MAX + i] & 127u; }
     g_n = tail[2] <= GEST_MAX ? tail[2] : 0u;
@@ -5632,6 +5816,8 @@ static void app_init(void)                      /* the session, the tables, the 
     for (i = 0; i < NP; i++) {                  /* the page of each parameter, the LFO targets */
         uint32_t m, s, k;
         for (m = NPAGE; m-- > 0;) if (m != PG_ASSET) for (s = 0; s < 4u; s++) for (k = 0; k < 4u; k++) if (PAGE_P[m][s][k] == i) PMOD[i] = (uint8_t)m;   /* (its module: ASSETS only repeats some) */
+        if (i == P_CPRE || i == P_ASSET || (i >= P_EECHO && i <= P_ETONE) || i == P_CDUTY || i == P_CNOISE) PMOD[i] = PG_ASSET;   /* (but
+                                                   NEW SFX and the asset are its own, and the knobs retired in v1.8 rest here) */
         {                                       /* not a mod target: what no modulation could move (lists of actions, the
                                                    seed, the batch, the meters) */
             static const uint8_t NT[] = {P_SLOT, P_THEME, P_RECM, P_VSEED, P_VKEYS, P_VLOCK, P_HAAMT, P_EVOLVE, P_BMODE, P_BCNT, P_BSPC,

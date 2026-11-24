@@ -1,6 +1,7 @@
 # 16 PHYSICS TRIGGER (SEQ x6: 14 A B, 15 A B C, 16): BOUNCE on slot 2 METAL, then DEBRIS, then SCATTER held 3 s
 # btn: 11 SEQ; enc: 2..5 = K1..K4, 6 PRESETS
-1 enc 0 1
+1 btn 10
+2 enc 0 -1
 100 enc 2 1
 120 enc 6 1
 200 btn 11

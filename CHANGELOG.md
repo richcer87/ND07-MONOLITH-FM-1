@@ -1,5 +1,23 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.8: el motor primero, los chips con sus propios números
+
+- **01 ENGINE abre el flujo.** Primero escoges con qué se hace el sonido (ND07 o el chip de una consola) y después el
+  asset o el synth: 01 ENGINE · 02 ASSETS · 03 OSC & SAMPLE. Cargar un asset, una receta o un HAPPY ACCIDENT ya no
+  cambia el motor; un asset de ruido le pide al chip su ruido.
+- **Sin chips repetidos.** SOUND CHIPS ya no vive en ASSETS: es **PRINT**, el juego C de ENGINE (PRINT, RATE, GRIT,
+  MIX), y cuando está encendido sigue al motor. El eco del PRINT se fue (el SPC700 trae el suyo); el TONE es ahora el
+  filtro de salida real de la consola (el del Mega Drive modelo 1). El driver de 60 Hz pasa al juego D.
+- **NEW SFX** (PRESET) es el juego B de 02 ASSETS. **DUTY** y **NOISE** viven dentro del motor DMG, donde están en el
+  hardware; en las ondas CHIP de ND07 los pone COLOR.
+- **Cada chip con su aritmética:** el DAC medido del YM2149 y sus periodos enteros de tono, ruido y envolvente; el
+  periodo de 11 bits y los divisores de ruido del DMG; las ROMs logsin y exp del YM2612, su tabla de tasas de
+  envolvente, el TOTAL LEVEL en pasos de 0.75 dB, el F-NUMBER y el DAC de 9 bits con su *ladder*; la tabla gaussiana
+  del SNES y los cuatro filtros del BRR (el codificador escoge el mejor por bloque, también en PRINT); las 32
+  velocidades del LFO del SCSP. Las cuadradas ponen sus flancos entre muestras: sin aliasing.
+- `tests/chips_test.c` compara los chips contra los números del hardware.
+- Las sesiones de la 1.6 y la 1.7 se cargan (el DMG traduce su PULSE y NOISE de antes).
+
 ## v1.7: arranque y actualización
 
 - **Pantalla de inicio:** el monolito se dibuja, dos órbitas lo rodean y se escribe "ND-07 // MONOLITH" con la versión. Dura 1.8 s y cualquier botón o perilla la salta.
