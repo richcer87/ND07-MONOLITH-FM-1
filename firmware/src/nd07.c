@@ -71,7 +71,9 @@ static int sense_led_ok(uint32_t col, uint32_t rowbit);
 #define FM1_INPUT_LED_OK(col, rowbit) sense_led_ok(col, rowbit)
 #endif
 static int app_sysex(const uint8_t *p, uint32_t n);
-#define APP_SYSEX app_sysex                     /* the web page's samples (web/index.html), before the updater sees them */
+#define APP_SYSEX app_sysex
+static void app_ota_show(uint32_t step, int32_t code);
+#define APP_OTA_SHOW app_ota_show                /* the update's own screen (platform.c: ota_show) */                     /* the web page's samples (web/index.html), before the updater sees them */
 #include "platform.c"
 #include "nd07_sense.h"
 #include "nd07_tables.h"
@@ -112,8 +114,8 @@ static int16_t rv_line[4][RV_N] __attribute__((section(".pool")));
 static int16_t rv_ap1[128] __attribute__((section(".pool")));
 static int16_t rv_ap2[256] __attribute__((section(".pool")));
 static int16_t smp16[SMP_MAX] __attribute__((section(".pool")));   /* the active slot when it holds a recording: 16-bit */
-#define SH_N 4096u                              /* 09 SHIFT's feedback line: 93 ms */
-static int16_t sh_buf[SH_N] __attribute__((section(".pool")));
+#define DSP_N 4096u                              /* the SCSP engine's DSP line (chorus, flanger, taps): 93 ms */
+static int16_t dsp_buf[DSP_N] __attribute__((section(".pool")));
 #define EM_N 16384u                             /* SOUND CHIPS' echo line: 371 ms */
 static int16_t em_buf[EM_N] __attribute__((section(".pool")));
 static smprec_t rec __attribute__((section(".pool")));       /* the recorder, and the flash staging (8-bit mu-law) */
@@ -1045,7 +1047,7 @@ static int32_t fc_coef(int32_t hz)              /* a one-pole low-pass at hz: 1 
 {
     return 32768 - (int32_t)(exp2_q16(-(hz * 5262 / 100000)) >> 1);
 }
-/* 12 SPACE + MOTION: DIST (level, air absorption, more reverb), OCCLUDE (a wall: muffled, quieter), PASS-BY (each note
+/* 13 C, SPACE: DIST (level, air absorption, more reverb), OCCLUDE (a wall: muffled, quieter), PASS-BY (each note
  * flies past: closest halfway through PASS-BY, the pitch falling by DOPPLER as it goes, the level and the air with it) */
 static uint32_t ps_t, ps_seq;
 /* 06 ENVELOPES, set C: the MOD ENV, one shot from each note: up in M ATK, down in M DEC (a curve), M AMT of the way
@@ -2046,22 +2048,22 @@ static int32_t eng_scsp(uint32_t inc, uint32_t step)
         int32_t a, b, fr, wet;
         EN.dph += K.sc_dinc;
         dp = (uint32_t)(D0[K.sc_dsp] * 256 + ((isin(EN.dph) * DD[K.sc_dsp]) >> 7));
-        i0 = (EN.sw - (dp >> 8)) & (SH_N - 1u); fr = (int32_t)(dp & 255u);
-        a = sh_buf[i0]; b = sh_buf[(i0 - 1u) & (SH_N - 1u)];
+        i0 = (EN.sw - (dp >> 8)) & (DSP_N - 1u); fr = (int32_t)(dp & 255u);
+        a = dsp_buf[i0]; b = dsp_buf[(i0 - 1u) & (DSP_N - 1u)];
         wet = a + (((b - a) * fr) >> 8);
         if (K.sc_dsp == 4) { EN.lp += (int32_t)(((int64_t)(y - EN.lp) * 2400) >> 15); y = EN.lp; }   /* (under water: ~600 Hz) */
-        sh_buf[EN.sw] = sat16(y + (K.sc_dsp == 2 ? wet * 5 >> 3 : 0));
+        dsp_buf[EN.sw] = sat16(y + (K.sc_dsp == 2 ? wet * 5 >> 3 : 0));
         y = (y + wet) * 5 >> 3;
         break;
     }
     case 3:                                     /* MULTITAP: 47, 71, 89 ms, the last fed back */
-        d = sh_buf[(EN.sw - 3925u) & (SH_N - 1u)];
-        sh_buf[EN.sw] = sat16(y + (d * 11 >> 5));
-        y += (sh_buf[(EN.sw - 2073u) & (SH_N - 1u)] >> 1) + (sh_buf[(EN.sw - 3131u) & (SH_N - 1u)] * 11 >> 5) + (d >> 2);
+        d = dsp_buf[(EN.sw - 3925u) & (DSP_N - 1u)];
+        dsp_buf[EN.sw] = sat16(y + (d * 11 >> 5));
+        y += (dsp_buf[(EN.sw - 2073u) & (DSP_N - 1u)] >> 1) + (dsp_buf[(EN.sw - 3131u) & (DSP_N - 1u)] * 11 >> 5) + (d >> 2);
         break;
     default: break;
     }
-    EN.sw = (EN.sw + 1u) & (SH_N - 1u);
+    EN.sw = (EN.sw + 1u) & (DSP_N - 1u);
     return y;
 }
 static int32_t __attribute__((noinline)) eng_tick(uint32_t ratio)
@@ -3609,14 +3611,6 @@ static void vis_crt(const theme_t *th)
     cv_frame(1, 1, 238, 110, RGB(12, 12, 14));
     cv_frame(0, 0, 240, 112, th->border);
 }
-static void vis_smp(uint16_t c, int32_t x0, int32_t w, int32_t y0, int32_t h)
-{
-    int32_t i, mid = y0 + h / 2;
-    for (i = 0; i < w; i++) {
-        int32_t a = smp_view[i * 228 / w] * h / 2 / 128;
-        if (a) cv_rect(x0 + i, mid - a, 1, 2 * a, c);
-    }
-}
 static int32_t meter_px(uint32_t v, int32_t h)
 {
     int32_t db = v ? ((ilog2_q8(v) - 15 * 256) * 1541) >> 8 : -48 * 256;
@@ -4325,6 +4319,119 @@ static void vis_engine(const theme_t *th)      /* 03 CHIP ENGINE A, B: the chip 
         cv_text_fit(8, 92, 224, "K1: PICK A CHIP", C_MUTE, 1);
     }
 }
+/* ---- the update (platform.c's ota_show, while the installer reads the package and before the loader takes over):
+ * the monolith filling step by step, the five steps listed, what not to do; a failure in orange with its code */
+static void ota_paint(int32_t oy, uint32_t step, int32_t code)
+{
+    static const char *const ST[5] = {"PACKAGE", "CHECK HEAD", "LOADER", "CONFIRM", "RESTART"};
+    int32_t k, fail = step >= 9u && code != 1, ok = step >= 9u && code == 1, done = step >= 9u ? (ok ? 5 : 0) : (int32_t)step - 1;
+    cv_begin(240, 80, EV_BG);
+    cv_oy = -oy;
+    cv_rect(0, 0, 240, 38, fail ? EV_ORG : EV_PUR);
+    cv_text(10, 8 - FONT_D_CAP, &FONT_D, fail ? "UPDATE FAILED" : ok ? "DRY RUN OK" : "UPDATE", EV_INK);
+    cv_text(230 - text_w(&FONT_A, APP_NAME), 14 - FONT_A_CAP, &FONT_A, APP_NAME, EV_INK);
+    vk_bg = EV_BG;
+    vk_view(58, 132, 0x18000000u, 0x0A000000u);
+    {                                           /* the slab, lime up to where the update is */
+        int32_t lvl = -50 + done * 20;
+        static const int8_t V[8][3] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}};
+        static const uint8_t ED[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+        for (k = -50; k < lvl; k += 3) vk_l3(-22, k, -6, 22, k, -6, vk_c(EV_LIM, 160), vk_c(EV_LIM, 160));
+        for (k = 0; k < 12; k++) {
+            const int8_t *a = V[ED[k][0]], *b = V[ED[k][1]];
+            vk_l3(a[0] * 22, a[1] * 50, a[2] * 6, b[0] * 22, b[1] * 50, b[2] * 6, fail ? EV_ORG : EV_PUR, vk_c(fail ? EV_ORG : EV_PUR, 110));
+        }
+    }
+    for (k = 0; k < 5; k++) {                   /* the steps: done, now, still to come */
+        int32_t y = 72 + k * 24, now = !fail && !ok && k == done;
+        char n[3] = {'0', (char)('1' + k), 0};
+        cv_text(112, y - FONT_A_CAP, &FONT_A, n, k < done ? EV_LIM : now ? EV_TXT : EV_LN);
+        cv_text(134, y - FONT_A_CAP, &FONT_A, ST[k], k < done ? EV_LIM : now ? EV_TXT : EV_MUT);
+        if (now) cv_rect(104, y - 1, 3, 12, EV_LIM);
+    }
+    if (fail) {
+        char t[16] = "CODE ";
+        fmt_num(t + 5, code, 0);
+        cv_text(10, 200 - FONT_M_CAP, &FONT_M, "INSTALL AGAIN", EV_ORG);
+        cv_text(10, 220 - FONT_A_CAP, &FONT_A, t, EV_MUT);
+    } else if (!ok) {
+        cv_text(10, 200 - FONT_M_CAP, &FONT_M, "DO NOT UNPLUG", EV_ORG);
+        cv_text(10, 220 - FONT_A_CAP, &FONT_A, step >= 5u ? "THE LOADER WRITES IT NOW" : "READING THE PACKAGE", EV_MUT);
+    }
+    cv_rect(0, 236, done * 48, 4, fail ? EV_ORG : EV_LIM);
+    cv_oy = 0;
+    cv_blit(0, (uint32_t)oy);
+}
+static void app_ota_show(uint32_t step, int32_t code)
+{
+    ota_paint(0, step, code);
+    ota_paint(80, step, code);
+    ota_paint(160, step, code);
+}
+/* ---- the start (1.8 s; a key, a knob or a note ends it): the monolith drawn edge by edge, turning once, two orbits
+ * opening round it and the dust falling in; the name written under it; the scan and the progress line of the start */
+#define ND07_VER "1.7"
+#define BOOT_MS 1800u
+static uint32_t boot_end;                       /* fm1_ms the start ends (0: over) */
+static void boot_paint(int32_t oy, uint32_t t)  /* one 240 x 80 strip, from y = oy (the canvas: 240 x 112 at most) */
+{
+    static const int8_t V[8][3] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}};
+    static const uint8_t ED[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+    int32_t k, r, w, x, e = (int32_t)(t * 12u / 760u), fr = (int32_t)(t * 12u % 760u) * 256 / 760;
+    uint32_t in = t < 900u ? t : 900u;
+    cv_begin(240, 80, EV_BG);
+    cv_oy = -oy;
+    vk_bg = EV_BG; vk_lo = EV_LN; vk_hi = EV_GRN;
+    vk_view(120, 92, t * 2386093u + 0x20000000u, 0x0A000000u);   /* (one turn over the start, tilted to the eye) */
+    for (k = 0; k < 2; k++) {                   /* the orbits, opening */
+        r = (int32_t)in * (78 - k * 18) / 900;
+        if (r > 3) vk_ring3(k ? 30 : -34, r, 40, t * 1193046u * (k ? 3u : 1u), 0, vk_c(EV_GRN, 150), vk_c(EV_GRN, 60));
+    }
+    for (k = 0; k < 28; k++) {                  /* the dust: from far out, in to its orbit */
+        uint32_t a = (uint32_t)k * 2654435761u + t * 900000u * (uint32_t)(1 + k % 3);
+        int32_t rr = 44 + (k * 7) % 30 + (int32_t)(900u - in) * 120 / 900, y = (k * 37) % 90 - 45, sx, sy;
+        int32_t d = vk_pt(rr * isin(a + 0x40000000u) >> 15, y, rr * isin(a) >> 15, &sx, &sy);
+        cv_rect(sx, sy, 2, 2, d >= 0 ? EV_LIM : vk_c(EV_LIM, 90));
+    }
+    for (k = 0; k < 12 && k <= e; k++) {        /* the slab (4 x 10 x 1), edge by edge, the last one still being drawn */
+        const int8_t *a = V[ED[k][0]], *b = V[ED[k][1]];
+        int32_t ax = a[0] * 22, ay = a[1] * 50, az = a[2] * 6, bx = b[0] * 22, by = b[1] * 50, bz = b[2] * 6;
+        if (k == e) { bx = ax + ((bx - ax) * fr >> 8); by = ay + ((by - ay) * fr >> 8); bz = az + ((bz - az) * fr >> 8); }
+        vk_l3(ax, ay, az, bx, by, bz, EV_PUR, vk_c(EV_PUR, 110));
+    }
+    if (t > 380u) {                             /* the name, written left to right */
+        w = text_w(&FONT_L, APP_NAME); x = 120 - w / 2;
+        cv_text(x, 152, &FONT_L, APP_NAME, EV_TXT);
+        k = (int32_t)(t - 380u) * w / 420;
+        if (k < w) cv_rect(x + k, 150, w - k + 4, 40, EV_BG), cv_rect(x + k, 152, 2, 32, EV_LIM);
+    }
+    if (t > 700u) {
+        static const char SUB[] = "// MONOLITH";
+        char b[sizeof SUB];
+        uint32_t n = (t - 700u) / 45u;
+        for (k = 0; k < (int32_t)sizeof SUB - 1 && k < (int32_t)n; k++) b[k] = SUB[k];
+        b[k] = 0;
+        cv_text(120 - text_w(&FONT_M, SUB) / 2, 192, &FONT_M, b, EV_PUR);
+    }
+    cv_text(10, 220 - FONT_A_CAP, &FONT_A, "FM-1  SFX STATION", EV_MUT);
+    cv_text(230 - text_w(&FONT_A, "v" ND07_VER), 220 - FONT_A_CAP, &FONT_A, "v" ND07_VER, EV_MUT);
+    for (k = 0; k < 4; k++) {                   /* crop marks */
+        int32_t cx = k & 1 ? 229 : 4, cy = k & 2 ? 229 : 4;
+        cv_rect(cx, cy + (k & 2 ? 6 : 0), 7, 1, EV_LN); cv_rect(cx + (k & 1 ? 6 : 0), cy, 1, 7, EV_LN);
+    }
+    k = (int32_t)(t * 240u / BOOT_MS);
+    cv_rect(0, k, 240, 1, vk_c(EV_LIM, 70));    /* the scan */
+    cv_rect(0, 238, k, 2, EV_PUR);              /* how far the start is */
+    cv_oy = 0;
+    cv_blit(0, (uint32_t)oy);
+}
+static void boot_frame(void)
+{
+    uint32_t t = BOOT_MS - (boot_end - fm1_ms);
+    boot_paint(0, t);
+    boot_paint(80, t);
+    boot_paint(160, t);
+}
 static void draw_vis(void)
 {
     const theme_t *th = &TH;
@@ -4635,8 +4742,14 @@ static void draw_vis(void)
         for (k = -2; k <= 2; k++) if (k) cv_rect(8, y0 - k * 6 * 36 / 15, 224, 1, RGB(22, 22, 26));   /* (+-6, +-12 dB) */
         cv_rect(8, y0, 224, 1, C_DK);
         cv_text(8, 0, &FONT_S, "SHELF // BELL // SHELF", on ? th->acc : C_MUTE);
-        for (i = 0; i <= 224; i++) {
-            int32_t li = i * 1023 / 224, db8 = out8, y, b;
+        {                                       /* (the curve only when a knob moved: 225 columns x 3 bands of divisions) */
+            static int16_t cy[225];
+            static uint32_t ck = 1;
+            uint32_t key = 2166136261u;
+            for (k = 0; k < 3; k++) key = ((key ^ (uint32_t)E[EP[k]]) * 16777619u ^ (uint32_t)E[EF[k]]) * 16777619u;
+            key = ((key ^ (uint32_t)E[P_EQQ]) * 16777619u ^ (uint32_t)out8) * 16777619u;
+            if (key != ck) for (ck = key, i = 0; i <= 224; i++) {
+            int32_t li = i * 1023 / 224, db8 = out8, b;
             for (b = 0; b < 3; b++) {
                 int32_t g8 = E[EP[b]] * 256, o8 = clampi((li - E[EF[b]]) * 65536 / LI_PER_OCT_Q8, -2048, 2048);
                 uint32_t lf;
@@ -4650,10 +4763,14 @@ static void draw_vis(void)
                 }
                 db8 += (int32_t)(((int64_t)g8 * lf) >> 16);
             }
-            y = clampi(y0 - db8 * 36 / (15 * 512), 18, 100);   /* (half dB: 15 dB is 36 px) */
+            cy[i] = (int16_t)clampi(y0 - db8 * 36 / (15 * 512), 18, 100);   /* (half dB: 15 dB is 36 px) */
+            }
+            for (i = 0; i <= 224; i++) {
+            int32_t y = cy[i];
             if (y != y0) cv_rect(8 + i, y < y0 ? y : y0, 1, absi(y - y0), on ? vk_c(th->cyan, 70) : RGB(26, 26, 30));
             if (i) cv_line(8 + px, py, 8 + i, y, on ? th->cyan : C_MUTE);
             px = i; py = y;
+            }
         }
         for (k = 0; k < 3; k++) {               /* the handles: where each band sits, how far it moves */
             int32_t x = 8 + E[EF[k]] * 224 / 1023, y = clampi(y0 - E[EP[k]] * 36 / 30, 18, 100), act = E[EP[k]] != 0;
@@ -5530,6 +5647,9 @@ static void app_init(void)                      /* the session, the tables, the 
     lcd_fill(0, 0, 240, 240, C_BLACK);
     k_update(KG_ALL);
     fx_clear();
+#if !defined(DINGHY_HOST) || defined(ND07_BOOT_SHOT)
+    boot_end = fm1_ms + BOOT_MS;                /* (the host tests start on the pages: their timing stays the same) */
+#endif
 }
 static uint32_t grp_first(uint32_t k) { uint32_t q = 0; while (PAGE_GRP[q] != k || pg_hidden(q)) q++; return q; }
 static void secret_toggle(void)                 /* SEL + LFO: RTPC and the CHAOS PAD shown (and at work) or hidden again */
@@ -5542,7 +5662,7 @@ static void secret_toggle(void)                 /* SEL + LFO: RTPC and the CHAOS
 }
 static void app_main(void)
 {
-    uint32_t prev_keys = 0, t_vis = 0, t_knob = 0, t_meter = 0, sel_used = 0, sel_down = 0, kpend = 0, i;
+    uint32_t prev_keys = 0, t_vis = 0, t_knob = 0, t_meter = 0, sel_used = 0, sel_down = 0, kpend = 0, act, i;
     uint16_t kpend_t[27] = {0};
     app_init();
     for (;;) {
@@ -5554,6 +5674,7 @@ static void app_main(void)
         if (rec_state == REC_DONE) rec_commit();
         /* buttons */
         b = fm1_input_edges(&rel);
+        act = b;                                /* (anything touched: the start screen ends) */
         if (b & (1u << BTN_SEL)) { sel_down = 1; sel_used = 0; sel_t = fm1_ms; help_n = 0; }
         for (k = 0; k < NGRP; k++)
             if (b & (1u << GRP_BTN[k])) {           /* its modules in turn, each one's knob sets in turn */
@@ -5596,21 +5717,24 @@ static void app_main(void)
         /* encoders: alone, as printed (SELECT the page, ALGORITHM the wave, PRESETS the sample); with SEL held, a step
            further: SELECT the knob set (A B C D), ALGORITHM the look (theme), PRESETS the asset (loaded and played) */
         if ((e = fm1_enc_take(ENC_SELECT)) != 0) {
+            act = 1;
             if (sel) { sub = (uint8_t)((sub + (e > 0 ? 1u : NSUB[page] - 1u)) % NSUB[page]); sel_used = 1; }
             else { do page = (uint8_t)((page + (e > 0 ? 1u : NPAGE - 1u)) % NPAGE); while (pg_hidden(page)); sub = 0; }
             ui_dirty = 0xFF;
         }
         if ((e = fm1_enc_take(ENC_ALGORITHM)) != 0) {
+            act = 1;
             if (sel) { P[P_THEME] = (int16_t)((P[P_THEME] + (e > 0 ? 1u : NTHEME - 1u)) % NTHEME); ui_dirty = 0xFF; sel_used = 1; say(E_THEME[P[P_THEME]]); }
             else { P[P_WAVE] = (int16_t)clampi(P[P_WAVE] + e, 0, NWAVE - 1); touched(); }
         }
         if ((e = fm1_enc_take(ENC_PRESETS)) != 0) {
+            act = 1;
             if (sel) { asset_take((uint32_t)(P[P_ASSET] + (e > 0 ? 1 : NASSET - 1))); sel_used = 1; }
             else { P[P_SLOT] = (int16_t)clampi(P[P_SLOT] + e, 0, 7); touched(); }
         }
         {
             static const uint8_t KN[4] = {ENC_KNOB1, ENC_KNOB2, ENC_KNOB3, ENC_KNOB4};
-            for (k = 0; k < 4u; k++) if ((e = fm1_enc_take(KN[k])) != 0) { turn(k, e, sel); if (sel) sel_used = 1; }
+            for (k = 0; k < 4u; k++) if ((e = fm1_enc_take(KN[k])) != 0) { turn(k, e, sel); if (sel) sel_used = 1; act = 1; }
         }
         if (aud_t && (int32_t)(fm1_ms - aud_t) >= 0) { aud_t = 0; note_off(60); }
         /* keys: F3..G5, chromatic, held = gate; with KEY VEL a press waits for its velocity (a few ms) */
@@ -5650,6 +5774,12 @@ static void app_main(void)
         fm1_led_key(BTN_OCT_UP, oct_shift > 0);
         for (k = 0; k < 27u; k++) fm1_led_key(KEY_LED(k), (int)(keys >> k & 1u));
         /* the screen */
+        if (boot_end) {                         /* the start, until its time is up or anything is touched or played */
+            if (act || down || tm_awake || (int32_t)(fm1_ms - boot_end) >= 0) { boot_end = 0; lcd_fill(0, 0, 240, 240, C_BLACK); ui_dirty = 0xFF; }
+            else if (fm1_ms - t_vis >= 33u) { boot_frame(); t_vis = fm1_ms; }
+            idle_ok = 0;
+            continue;
+        }
         if (map_bits() != map_drawn) ui_dirty |= 1;
         if (ui_dirty & 1) { draw_header(); ui_dirty &= (uint8_t)~1u; }
         if ((ui_dirty & 2) || fm1_ms - t_vis > ((tm_awake || tm_peak || rec_state || (page == PG_LFO && (P[P_L1MIX] || P[P_L2MIX])) ||
