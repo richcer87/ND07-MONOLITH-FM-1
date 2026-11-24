@@ -4399,9 +4399,22 @@ static void boot_paint(int32_t oy, uint32_t t)  /* one 240 x 80 strip, from y = 
         if (k == e) { bx = ax + ((bx - ax) * fr >> 8); by = ay + ((by - ay) * fr >> 8); bz = az + ((bz - az) * fr >> 8); }
         vk_l3(ax, ay, az, bx, by, bz, EV_PUR, vk_c(EV_PUR, 110));
     }
-    if (t > 380u) {                             /* the name, written left to right */
-        w = text_w(&FONT_L, APP_NAME); x = 120 - w / 2;
-        cv_text(x, 152, &FONT_L, APP_NAME, EV_TXT);
+    if (t > 380u) {                             /* the name in strokes, written left to right (no 24 KB font for 5 letters) */
+        static const uint8_t SEG[][4] = {{0, 0, 0, 32}, {20, 0, 20, 32}, {0, 0, 20, 32},   /* N */
+            {0, 0, 0, 32}, {0, 0, 13, 0}, {0, 32, 13, 32}, {13, 0, 20, 7}, {13, 32, 20, 25}, {20, 7, 20, 25},   /* D */
+            {2, 16, 13, 16},                    /* - */
+            {7, 0, 13, 0}, {13, 0, 20, 7}, {20, 7, 20, 25}, {20, 25, 13, 32}, {13, 32, 7, 32}, {7, 32, 0, 25}, {0, 25, 0, 7},
+            {0, 7, 7, 0}, {5, 24, 15, 8},       /* 0 */
+            {0, 0, 20, 0}, {20, 0, 7, 32}};     /* 7 */
+        static const uint8_t G0[6] = {0, 3, 9, 10, 19, 21}, GX[5] = {0, 32, 64, 88, 120};
+        int32_t g, j;
+        w = 144; x = 120 - w / 2;
+        for (g = 0; g < 5; g++) for (j = G0[g]; j < G0[g + 1]; j++) {
+            const uint8_t *q = SEG[j];
+            int32_t o, hz = q[1] == q[3];
+            for (o = 0; o < 4; o++)
+                cv_line(x + GX[g] + q[0] + (hz ? 0 : o), 152 + q[1] + (hz ? o : 0), x + GX[g] + q[2] + (hz ? 0 : o), 152 + q[3] + (hz ? o : 0), EV_TXT);
+        }
         k = (int32_t)(t - 380u) * w / 420;
         if (k < w) cv_rect(x + k, 150, w - k + 4, 40, EV_BG), cv_rect(x + k, 152, 2, 32, EV_LIM);
     }
