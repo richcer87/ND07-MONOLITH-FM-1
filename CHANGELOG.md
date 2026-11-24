@@ -1,5 +1,11 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.7: arranque y actualización
+
+- **Pantalla de inicio:** el monolito se dibuja, dos órbitas lo rodean y se escribe "ND-07 // MONOLITH" con la versión. Dura 1.8 s y cualquier botón o perilla la salta.
+- **Pantalla de actualización propia:** al instalar un `.fwsc` desde la página, el FM-1 muestra los cinco pasos (PACKAGE, CHECK HEAD, LOADER, CONFIRM, RESTART), el monolito llenándose y "DO NOT UNPLUG". Si algo falla dice UPDATE FAILED con su código.
+- **Más ligero:** la curva del 3-BAND EQ se calcula solo cuando cambia una perilla (antes, en cada cuadro); fuera código que ya no se usaba. Sin cambios de sonido.
+
 ## v1.6: el chip como motor
 
 - **03 CHIP ENGINE:** la voz puede salir del chip de una consola en lugar de 02: **YM2149** (tres cuadradas, ruido, la envolvente de 32 pasos, BUZZER y SYNCBUZ, SID, DIGI), **YM2612** (FM de 4 operadores, 8 algoritmos, feedback, CH3 con pitch por operador, SSG-EG, el canal DAC y el escalón del *ladder*), **SPC700** (BRR de 4 bits, interpolación gaussiana, PMON, eco con FIR de 8 tomas), **SCSP** (PCM de 16 bits con FM desde cualquier onda, PLFO, ALFO y programas del DSP) y **DMG** (dos pulsos, la wave RAM, el ruido de 15 o 7 bits, la envolvente por hardware y el *zombie mode*). **ND07** es el motor de siempre. Cada motor tiene sus siete perillas y su pantalla. Ver el README.

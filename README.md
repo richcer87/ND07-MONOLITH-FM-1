@@ -1,4 +1,4 @@
-# ND-07 // MONOLITH · FM-1 · v1.6
+# ND-07 // MONOLITH · FM-1 · v1.7
 
 Firmware para el **M-VAVE FM-1**: un sampler y sintetizador para diseñar efectos de sonido de videojuegos. Es la
 versión de bolsillo de la estación ND-07 // MONOLITH para REAPER, escrita en C entero para el chip JieLi AC79 (sin FPU).
@@ -11,8 +11,8 @@ Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-0
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.6.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
-> nuevo de la 1.0 a la 1.6 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
+> **Estado: 1.7.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
+> nuevo de la 1.0 a la 1.7 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
 > GitHub Actions con la toolchain de JieLi. Instalar firmware es bajo tu propio riesgo: el
 > [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-** al encender entra
 > al rescate USB. Las sesiones de la 1.1 en adelante se cargan.
@@ -170,6 +170,8 @@ ataques y el último segundo de ambos). Al girar una perilla, su celda se ilumin
 
 | Página | Objeto |
 | --- | --- |
+| Inicio | el monolito se dibuja por sus orillas, dos órbitas y polvo alrededor, "ND-07" escrito con cursor y la versión; cualquier botón la salta |
+| Actualización | los cinco pasos de la instalación, el monolito llenándose de verde y "DO NOT UNPLUG"; en naranja si falla, con su código |
 | ASSETS | un espectrómetro pequeño en la línea de estado; en B y C, el chip como pieza con sus pines, la salida en escalones y los cinco chips como etiquetas de cartucho |
 | OSC & SAMPLE | el oscilador como wavetable visto de lado: el ciclo al frente y detrás la misma onda con menos COLOR; el sample como tallos con punta; en D, un anillo de trazos por voz |
 | CHIP ENGINE | en A y B el chip como lo dibujaba su manual: los canales del YM2149 y la forma de su envolvente, el algoritmo del YM2612 con sus operadores encendidos por su envolvente, el bloque BRR y las tomas del FIR del SPC700, el slot y el programa del DSP del SCSP, los canales del DMG en segmentos de LCD y su wave RAM; en C y D el sonido en bloques de 8 bits |

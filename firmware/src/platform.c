@@ -181,6 +181,10 @@ static void ota_show(uint32_t step, int32_t code)
     static const char *const STEP[] = {"", "PACKAGE", "CHECK HEAD", "LOADER", "CONFIRM", "RESTART"};
 #endif
     if (recovery_active) return;
+#ifdef APP_OTA_SHOW
+    APP_OTA_SHOW(step, code);                   /* (the app's own screen for it) */
+    return;
+#endif
     lcd_fill(0, 0, 240, 240, C_BLACK);
     draw_text_box(0, 92, 240, &FONT_S, "UPDATE", C_WHITE, 1);
     if (step < 9u)
