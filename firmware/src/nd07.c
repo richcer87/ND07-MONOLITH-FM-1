@@ -117,7 +117,7 @@ static int16_t rv_ap2[256] __attribute__((section(".pool")));
 static int16_t smp16[SMP_MAX] __attribute__((section(".pool")));   /* the active slot when it holds a recording: 16-bit */
 #define DSP_N 4096u                              /* the SCSP engine's DSP line (chorus, flanger, taps): 93 ms */
 static int16_t dsp_buf[DSP_N] __attribute__((section(".pool")));
-#define EM_N 16384u                             /* SOUND CHIPS' echo line: 371 ms */
+#define EM_N 16384u                             /* the SPC700 engine's echo line: 371 ms */
 static int16_t em_buf[EM_N] __attribute__((section(".pool")));
 static smprec_t rec __attribute__((section(".pool")));       /* the recorder, and the flash staging (8-bit mu-law) */
 
@@ -4534,7 +4534,7 @@ static void app_ota_show(uint32_t step, int32_t code)
 }
 /* ---- the start (1.8 s; a key, a knob or a note ends it): the monolith drawn edge by edge, turning once, two orbits
  * opening round it and the dust falling in; the name written under it; the scan and the progress line of the start */
-#define ND07_VER "1.7"
+#define ND07_VER "1.8"
 #define BOOT_MS 1800u
 static uint32_t boot_end;                       /* fm1_ms the start ends (0: over) */
 static void boot_paint(int32_t oy, uint32_t t)  /* one 240 x 80 strip, from y = oy (the canvas: 240 x 112 at most) */

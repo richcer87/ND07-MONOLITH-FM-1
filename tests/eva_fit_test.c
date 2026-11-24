@@ -21,7 +21,7 @@ int main(void)
         int32_t w = text_w(&FONT_D, PAGE_NAME[m]) <= 194 ? text_w(&FONT_D, PAGE_NAME[m]) : text_w(&FONT_M, PAGE_NAME[m]);
         if (w > 194) { printf("page %u '%s' %d px > 194\n", m + 1, PAGE_NAME[m], w); bad++; }
     }
-    for (g = 0; g < NENG; g++) {                 /* (CHIP ENGINE's seven: their names and values, engine by engine) */
+    for (g = 0; g < NENG; g++) {                 /* (ENGINE.s seven: their names and values, engine by engine) */
         P[P_ENG] = (int16_t)g;
         for (p = 0; p < NP; p++) eva_big[p] = 0;
         for (m = 0; m < NPAGE; m++) for (k = 0; k < 4; k++) for (q = 0; q < 4; q++) {
