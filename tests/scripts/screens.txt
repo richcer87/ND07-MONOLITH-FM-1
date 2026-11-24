@@ -19,23 +19,23 @@
 2700 shot
 2850 btn 8
 3100 shot
-3250 btn 8
+3250 btn 10
 3500 shot
-3650 btn 8
+3650 btn 10
 3900 shot
 4050 btn 10
 4300 shot
-4450 btn 10
+4450 btn 4
 4700 shot
-4850 btn 10
+4850 btn 4
 5100 shot
 5250 btn 4
 5500 shot
 5650 btn 4
 5900 shot
-6050 btn 4
+6050 btn 6
 6300 shot
-6450 btn 4
+6450 btn 6
 6700 shot
 6850 btn 6
 7100 shot
@@ -49,17 +49,17 @@
 8700 shot
 8850 btn 6
 9100 shot
-9250 btn 6
+9250 btn 7
 9500 shot
-9650 btn 6
+9650 btn 7
 9900 shot
 10050 btn 7
 10300 shot
 10450 btn 7
 10700 shot
-10850 btn 7
+10850 btn 2
 11100 shot
-11250 btn 7
+11250 btn 2
 11500 shot
 11650 btn 2
 11900 shot
@@ -67,9 +67,9 @@
 12300 shot
 12450 btn 2
 12700 shot
-12850 btn 2
+12850 btn 5
 13100 shot
-13250 btn 2
+13250 btn 5
 13500 shot
 13650 btn 5
 13900 shot
@@ -83,9 +83,9 @@
 15500 shot
 15650 btn 5
 15900 shot
-16050 btn 5
+16050 btn 11
 16300 shot
-16450 btn 5
+16450 btn 11
 16700 shot
 16850 btn 11
 17100 shot
@@ -97,8 +97,4 @@
 18300 shot
 18450 btn 11
 18700 shot
-18850 btn 11
-19100 shot
-19250 btn 11
-19500 shot
-19650 end
+18850 end

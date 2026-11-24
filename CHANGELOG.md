@@ -1,5 +1,16 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.9: 01 ENGINE sin repeticiones
+
+- Cada cosa del chip en un solo lugar: el chip en K1, su consola arriba de la pantalla, sus perillas en A y B, su DAC
+  en C, el driver en D. Fuera el nombre repetido en la pantalla, los cartuchos de chips y la etiqueta del motor en el
+  driver.
+- **PRINT ya no escoge chip:** imprime por el DAC del motor. Sus perillas son PRINT (la mezcla, 0 % = apagado), RATE
+  y GRIT.
+- **Con ND07 la página tiene dos juegos:** A, con la onda o el sample de 03 tal cual suena, y el driver (B). No quedan
+  juegos vacíos.
+- Las sesiones anteriores se cargan; un PRINT que estaba apagado sigue apagado. Sin cambios de sonido en las pruebas.
+
 ## v1.8: el motor primero, los chips con sus propios números
 
 - **01 ENGINE abre el flujo.** Primero escoges con qué se hace el sonido (ND07 o el chip de una consola) y después el

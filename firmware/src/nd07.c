@@ -195,7 +195,6 @@ static const char *const E_CPRE[] = {"COIN", "JUMP", "LASER", "HIT", "POWERUP", 
 static const char *const E_BCNT[] = {"4", "8", "12", "16"};
 /* PRINT (ENGINE C): the sound printed through a console's chip; each with the machines it sounds like */
 static const char *const E_EMU[] = {"OFF", "YM2149", "YM2612", "S-DSP", "SCSP", "DMG"};
-static const char *const EMU_HOST[] = {"", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY"};
 /* 01 ENGINE: the voice itself made by a console's chip (ND07: the oscillators and samples of 02, as they are) */
 static const char *const E_ENG[] = {"ND07", "YM2149", "YM2612", "SPC700", "SCSP", "DMG"};
 #define NENG 6
@@ -295,8 +294,8 @@ static const pdesc_t PD[NP] = {
     [P_RSV1] = {"-", 0, 0, 0, 1, F_INT, 0},                 [P_RSV2] = {"-", 0, 0, 0, 1, F_INT, 0},   /* (VOWEL's last two) */
     [P_THEME] = {"THEME", 0, 4, 4, 1, F_ENUM, E_THEME},
     [P_ASSET] = {"ASSET", 0, NASSET - 1, 0, 1, F_ENUM, E_ASSET},
-    [P_EMU] = {"PRINT", 0, 5, 0, 1, F_ENUM, E_EMU},          [P_ERATE] = {"RATE", 0, 100, 50, 1, F_ERATE, 0},
-    [P_EGRIT] = {"GRIT", 0, 100, 30, 1, F_PCT, 0},          [P_EMIX] = {"MIX", 0, 100, 100, 1, F_PCT, 0},
+    [P_EMU] = {"CHIP", 0, 5, 0, 1, F_ENUM, E_EMU},          [P_ERATE] = {"RATE", 0, 100, 50, 1, F_ERATE, 0},
+    [P_EGRIT] = {"GRIT", 0, 100, 30, 1, F_PCT, 0},          [P_EMIX] = {"PRINT", 0, 100, 0, 1, F_PCT, 0},
     [P_EECHO] = {"ECHO", 0, 100, 0, 1, F_PCT, 0},           [P_ETIME] = {"E TIME", 1, 15, 5, 1, F_ETIME, 0},
     [P_ETONE] = {"TONE", 0, 100, 60, 1, F_ETONE, 0},
     [P_ENG] = {"ENGINE", 0, NENG - 1, 0, 1, F_ENUM, E_ENG},
@@ -399,8 +398,9 @@ enum { PG_CHIP, PG_ASSET, PG_SRC, PG_GRN, PG_LAB, PG_ENV, PG_RES, PG_DST, PG_EQ,
        PG_TRN = NPAGE, PG_SPC };                /* (not pages: the views of ENVELOPES D and MULTIBAND REVERB C) */
 #define NO 255u                                 /* (an empty knob) */
 static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
-    {{P_ENG, P_E1, P_E2, P_E3}, {P_E4, P_E5, P_E6, P_E7}, {P_EMU, P_ERATE, P_EGRIT, P_EMIX}, {P_CSWEEP, P_CARP, P_CARPS, P_CSTEP}},   /* (C: the
-                                                   print through a chip's DAC, last in the chain; D: the 60 Hz driver) */
+    {{P_ENG, P_E1, P_E2, P_E3}, {P_E4, P_E5, P_E6, P_E7}, {P_EMIX, P_ERATE, P_EGRIT, NO}, {P_CSWEEP, P_CARP, P_CARPS, P_CSTEP}},   /* (C: the
+                                                   whole sound printed through the engine's own DAC, last in the chain;
+                                                   D: the 60 Hz driver. ND07 has no chip: only A and D, as A and B) */
     {{P_ASSET, P_VARY, P_RECIPE, P_VOL}, {P_CPRE, NO, NO, NO}, {NO, NO, NO, NO}, {NO, NO, NO, NO}},   /* (VARY, HA KIND, OUT: here
                                                    too; B: a NEW SFX of a kind, on the engine) */
     {{P_MODE, P_WAVE, P_SLOT, P_BLEND}, {P_TUNE, P_COLOR, P_STR, P_RECM}, {P_SLOOP, P_LPOS, P_LLEN, P_LXF}, {P_VOICES, P_LPIT, P_LDET, P_LLVL}},
@@ -422,6 +422,8 @@ static const uint8_t PAGE_P[NPAGE][4][4] = {    /* [module][A B C D][knob] */
     {{P_BMODE, P_BCNT, P_BSPC, P_BGATE}, {P_TRATE, P_TPOOL, P_TORDER, NO}, {P_LMATCH, P_LTGT, NO, NO}, {NO, NO, NO, NO}},
 };
 static uint8_t NSUB[NPAGE];                     /* how many of A B C D a page has */
+static uint32_t nsub(uint32_t m);
+static uint32_t rsub(void);
 static const char *const PAGE_NAME[NPAGE] = {"ENGINE", "ASSETS", "OSC & SAMPLE", "GRAIN ENGINE", "SAMPLE LAB", "ENVELOPES",
                                              "RESONATOR", "DESTROY", "3-BAND EQ", "RES MOD FILTER", "OTT MULTIBAND",
                                              "DELAY + FLANGER", "MULTIBAND REVERB", "LFO 1 + 2", "RTPC", "CHAOS PAD + KEYS",
@@ -1000,7 +1002,7 @@ static void k_update(uint32_t chg)              /* the coefficients; the costly 
     }
     /* PRINT (ENGINE C) */
     if (chg & KG_EMU) {
-        int32_t g = ei(P_EGRIT), m = ei(P_EMU);
+        int32_t g = ei(P_EGRIT), m = clampi(ei(P_ENG), 0, NENG - 1);   /* (the engine's own console) */
         uint32_t j;
         K.em = (uint8_t)(ei(P_EMIX) ? m : 0);
         K.em_inc = emu_rate(m, e8(P_ERATE)) * 97391u;   /* (2^32 / 44100 a Hz) */
@@ -2534,6 +2536,14 @@ static void all_off(void) { nstk = 0; v_gate = 0; }
 
 /* ======================================================================== actions */
 static uint8_t page, sub, mutant, session_dirty;
+static uint32_t nsub(uint32_t m)                /* the knob sets a page shows (ENGINE on ND07: A and the driver) */
+{
+    return m == PG_CHIP && !P[P_ENG] ? 2u : NSUB[m];
+}
+static uint32_t rsub(void)                      /* the knob set shown, as PAGE_P holds it */
+{
+    return page == PG_CHIP && !P[P_ENG] && sub ? 3u : sub;
+}
 static int pg_hidden(uint32_t m)                /* RTPC and the CHAOS PAD: out of sight until SEL + LFO finds them */
 {
     return (m == PG_RTPC || m == PG_PAD) && !P[P_SECRET];
@@ -2583,7 +2593,6 @@ static void eng_pick(int32_t g)                 /* an engine, from its own start
     set_unlocked(P_ENG, g);
     if (P[P_ENG] != g) { say("ENGINE IS LOCKED"); return; }
     for (k = 0; k < 7u; k++) set_unlocked(P_E1 + k, EPD[g][k].def);
-    if (P[P_EMU] && g) set_unlocked(P_EMU, g);   /* (PRINT on: it follows to the same console) */
     touched();
 }
 static void eng_random(int noisy)               /* the engine's seven at random (a noise kind: its noise up front) */
@@ -2673,7 +2682,7 @@ static void rnd_module(uint32_t m)
             set_unlocked(P_L2MIX, rnd_range(5, 45)); set_unlocked(P_L2TGT, rnd_range(0, NTGT - 1)); break;
     case PG_CHIP:                               /* the engine's own knobs; the print, if it is on */
         if (P[P_ENG]) eng_random(0);
-        if (P[P_EMU]) { set_unlocked(P_ERATE, rnd_range(10, 90)); set_unlocked(P_EGRIT, rnd_range(0, 100)); }
+        if (P[P_EMIX]) { set_unlocked(P_ERATE, rnd_range(10, 90)); set_unlocked(P_EGRIT, rnd_range(0, 100)); }
         break;
     case PG_ASSET: chip_preset((uint32_t)rnd_range(0, 6)); break;
     case PG_SPC: set_unlocked(P_SDIST, rnd_range(0, 80)); set_unlocked(P_SOCCL, rnd_range(0, 99) > 60 ? rnd_range(20, 90) : 0); break;
@@ -3605,7 +3614,7 @@ static void fmt_param(uint32_t p, int32_t v, char *s)
     case F_XSR: if (!v) cat(s, "OFF"); else fmt_hz(s, (uint32_t)((44100u * exp2_q16(-(v * 31)) + 32768u) >> 16)); break;
     case F_XRHZ: fmt_hz(s, (20u * exp2_q16(v * 32)) >> 16); break;
     case F_BSPC: if (!v) cat(s, "AUTO"); else fmt_ms(s, (uint32_t)v * 500u); break;
-    case F_ERATE: if (!P[P_EMU]) cat(s, "--"); else fmt_hz(s, emu_rate(P[P_EMU], v * 256)); break;
+    case F_ERATE: if (!P[P_ENG]) cat(s, "--"); else fmt_hz(s, emu_rate(P[P_ENG], v * 256)); break;
     case F_ETIME: fmt_num(s, v * 16, 0); cat(s, "ms"); break;
     case F_ETONE: fmt_hz(s, (1500u * exp2_q16(v * 957 / 100)) >> 16); break;
     case F_ENG: {                               /* ENGINE's seven: as the engine reads them */
@@ -3699,7 +3708,7 @@ static uint32_t map_drawn;
 static void eva_header(void)
 {
     char s[4];
-    uint32_t m, k, n = NSUB[page];
+    uint32_t m, k, n = nsub(page);
     int32_t x = 42, w;
     cv_begin(240, 40, EV_BG);
     cv_rect(0, 0, 36, 38, mutant ? EV_LIM : EV_PUR);
@@ -3751,9 +3760,9 @@ static void draw_header(void)
     s[0] = (char)('0' + page_no(page) / 10u); s[1] = (char)('0' + page_no(page) % 10u); s[2] = 0;
     cv_rect(3, 23, 20, 14, mutant ? th->mut : th->acc);
     cv_text(5, 21, &FONT_S, s, RGB(10, 10, 12));
-    cv_text_fit(28, 21, 236 - 18 * (int32_t)NSUB[page] - 30, PAGE_NAME[page], C_TXT, 0);
-    for (k = 0; k < NSUB[page] && NSUB[page] > 1u; k++) {   /* A B (C D): which knob set */
-        int32_t tx = 240 - (int32_t)(NSUB[page] - k) * 18;
+    cv_text_fit(28, 21, 236 - 18 * (int32_t)nsub(page) - 30, PAGE_NAME[page], C_TXT, 0);
+    for (k = 0; k < nsub(page) && nsub(page) > 1u; k++) {   /* A B (C D): which knob set */
+        int32_t tx = 240 - (int32_t)(nsub(page) - k) * 18;
         char l[2];
         l[0] = (char)('A' + k); l[1] = 0;
         if (sub == k) cv_rect(tx, 23, 16, 14, C_TXT); else cv_frame(tx, 23, 16, 14, C_DK);
@@ -4072,7 +4081,7 @@ static void fx_frame(const theme_t *th)         /* the page's object: one frame,
         }
         break;
     case PG_CHIP:                               /* D: the sound as 8-bit blocks, on the right; at rest a square wave walks */
-    if (sub < 3u) break;
+    if (rsub() < 3u) break;
     {
         int32_t m = 2600;
         for (k = 0; k < 256; k++) if (absi(fx_s[k]) > m) m = absi(fx_s[k]);
@@ -4283,19 +4292,18 @@ static void solid(int32_t kind, int32_t cx, int32_t base, int32_t h, uint16_t c,
         cv_line(cx, top, cx - w + 6, base - dy, back);
     }
 }
-static void vis_chips(const theme_t *th)       /* ENGINE C: the PRINT as a part on a board, its pins busy with
-                                                   the sound; the sound as it comes out of its DAC (steps, the DAC's
-                                                   levels as a ruler); the five as cartridge labels */
+static void vis_chips(const theme_t *th)       /* ENGINE C: the PRINT, the engine's own DAC as a part on a board, its
+                                                   pins busy with the sound; the sound as it comes out of it (steps,
+                                                   the DAC's levels as a ruler) */
 {
     char s[40], t[16];
     int32_t i, k;
     static const char *const DEP[6] = {"", "LOG DAC", "9-BIT DAC", "BRR 4-BIT", "LINEAR PCM", "4-BIT WAVE"};
-    int32_t m = P[P_EMU], on = m && P[P_EMIX], qfp = m >= 3, np = qfp ? 8 : m == 1 ? 10 : 8, mx = 2600, px = 0, py = 0;
+    int32_t m = ENG_G, on = m && P[P_EMIX], qfp = m >= 3, np = qfp ? 8 : m == 1 ? 10 : 8, mx = 2600, px = 0, py = 0;
     uint16_t cb = on ? th->acc : C_MUTE, cl = on ? th->cyan : C_DK;
     uint32_t q;
-    cv_text(8, 0, &FONT_S, E_EMU[m], m ? th->acc : C_MUTE);
-    cv_text(14 + text_w(&FONT_S, E_EMU[m]), 5 - FONT_A_CAP, &FONT_A, EMU_HOST[m], C_MUTE);
-    if (m) { fmt_hz(t, emu_rate(m, P[P_ERATE] * 256)); cv_text_fit(160, 0, 74, t, th->cyan, 2); }
+    cv_text(8, 5 - FONT_A_CAP, &FONT_A, m ? (on ? "PRINTED THROUGH ITS DAC" : "PRINT: OFF") : "ND07: NO CHIP TO PRINT", on ? C_TXT : C_MUTE);
+    if (m) { fmt_hz(t, emu_rate(m, P[P_ERATE] * 256)); cv_text_fit(160, 0, 74, t, on ? th->cyan : C_MUTE, 2); }
     if (!m) {                               /* an empty socket */
         for (k = 0; k < 8; k++) { cv_rect(26, 24 + k * 7, 5, 2, C_DK); cv_rect(65, 24 + k * 7, 5, 2, C_DK); }
         vk_dash(32, 20, 64, 20, C_MUTE); vk_dash(32, 76, 64, 76, C_MUTE); vk_dash(32, 20, 32, 76, C_MUTE); vk_dash(64, 20, 64, 76, C_MUTE);
@@ -4334,19 +4342,13 @@ static void vis_chips(const theme_t *th)       /* ENGINE C: the PRINT as a part 
         else if (i) cv_line(px, py, x, y, cl);
         px = x; py = y;
     }
-    for (k = 1; k <= 5; k++) {              /* the five, as cartridge labels */
-        int32_t x = 4 + (k - 1) * 47, w = text_w(&FONT_A, E_EMU[k]);
-        if (k == m) { cv_rect(x, 96, 45, 13, th->acc); cv_text(x + 23 - w / 2, 99 - FONT_A_CAP, &FONT_A, E_EMU[k], RGB(0, 0, 0)); }
-        else { cv_frame(x, 96, 45, 13, C_DK); cv_text(x + 23 - w / 2, 99 - FONT_A_CAP, &FONT_A, E_EMU[k], C_MUTE); }
-    }
     }
 static void vis_engine(const theme_t *th)      /* 01 ENGINE A, B: the chip at work, drawn as its manual drew it */
 {
     char s[40], t[16];
     int32_t g = ENG_G, i, k, play = tm_awake;
     uint16_t ca = th->acc, cc = th->cyan, cm = th->mut;
-    cv_text(8, 0, &FONT_S, E_ENG[g], g ? ca : C_MUTE);
-    cv_text(14 + text_w(&FONT_S, E_ENG[g]), 5 - FONT_A_CAP, &FONT_A, ENG_HOST[g], C_MUTE);
+    cv_text(8, 5 - FONT_A_CAP, &FONT_A, ENG_HOST[g], C_MUTE);   /* (the chip itself: K1's value) */
     switch (g) {
     case 1: {                                   /* YM2149: A B C, each tone / noise and its level; the envelope's shape */
         static const char *const MX[5] = {"T", "N", "T+N", "BZ", "SYNC"};
@@ -4473,14 +4475,20 @@ static void vis_engine(const theme_t *th)      /* 01 ENGINE A, B: the chip at wo
         cv_text_fit(108, 92, 126, K.d_wave ? EN_DWAV[K.d_wave] : EN_DUTY[K.d_vol ? clampi(P[P_E1], 0, 4) : 0], C_TXT, 2);
         break;
     }
-    default:                                    /* ND07: 02 makes the sound; the six to turn K1 through, as cartridges */
-        for (k = 0; k < NENG; k++) {
-            int32_t x = 8 + (k % 3) * 76, y = 22 + (k / 3) * 34, w = text_w(&FONT_A, E_ENG[k]);
-            if (!k) cv_rect(x, y, 72, 28, ca); else cv_frame(x, y, 72, 28, C_DK);
-            if (k) { cv_rect(x + 6, y + 22, 60, 1, C_DK); cv_rect(x + 30, y, 12, 2, C_DK); }   /* (a cartridge: its label, its notch) */
-            cv_text(x + 36 - w / 2, y + 12 - FONT_A_CAP / 2, &FONT_A, E_ENG[k], k ? C_TXT : RGB(0, 0, 0));
+    default: {                                  /* ND07: no chip; 03 makes the sound: its wave (or its sample), as it is */
+        int32_t md = P[P_MODE], px = 0, py = 0;
+        if (md != 1) for (i = 0; i <= 112; i++) {
+            int32_t y = 56 - wave_shape((uint32_t)P[P_WAVE], (uint32_t)i * 76056990u, P[P_COLOR] * 327) * 26 / 32767;
+            if (i) cv_line(8 + px * 2, py, 8 + i * 2, y, ca);
+            px = i; py = y;
         }
-        cv_text_fit(8, 92, 224, "K1: PICK A CHIP", C_MUTE, 1);
+        s[0] = 0; cat(s, E_MODE[clampi(md, 0, 2)]); cat(s, "  ");
+        if (md != 1) cat(s, E_WAVE[clampi(P[P_WAVE], 0, NWAVE - 1)]);
+        if (md == 2) cat(s, " + ");
+        if (md != 0) { slot_name(t, (uint32_t)P[P_SLOT]); cat(s, t); }
+        cv_text_fit(8, 92, 224, s, md == 1 ? cc : C_TXT, 1);
+        break;
+    }
     }
 }
 /* ---- the update (platform.c's ota_show, while the installer reads the package and before the loader takes over):
@@ -4534,7 +4542,7 @@ static void app_ota_show(uint32_t step, int32_t code)
 }
 /* ---- the start (1.8 s; a key, a knob or a note ends it): the monolith drawn edge by edge, turning once, two orbits
  * opening round it and the dust falling in; the name written under it; the scan and the progress line of the start */
-#define ND07_VER "1.8"
+#define ND07_VER "1.9"
 #define BOOT_MS 1800u
 static uint32_t boot_end;                       /* fm1_ms the start ends (0: over) */
 static void boot_paint(int32_t oy, uint32_t t)  /* one 240 x 80 strip, from y = oy (the canvas: 240 x 112 at most) */
@@ -5175,10 +5183,10 @@ static void draw_vis(void)
         }
         break;
     }
-    case PG_CHIP: if (sub < 2u) { vis_engine(th); break; } if (sub == 2u) { vis_chips(th); break; } {   /* D: the pitch over the
+    case PG_CHIP: if (rsub() < 2u) { vis_engine(th); break; } if (rsub() == 2u) { vis_chips(th); break; } {   /* D: the pitch over the
                                                    first 48 frames (0.8 s): SWEEP and ARP, as played */
         int32_t sw = 0, csw = P[P_CSWEEP] * (P[P_CSWEEP] < 0 ? -P[P_CSWEEP] : P[P_CSWEEP]) * 16 / 150, ai = 0, n = 0;
-        int32_t ar = P[P_CARP] % NARP, prev = -1, w = P[P_WAVE] >= W_CPLS && P[P_WAVE] <= W_CNSE;
+        int32_t ar = P[P_CARP] % NARP, prev = -1;
         cv_rect(8, 4, 98, 1, C_DK); cv_rect(8, 54, 98, 1, C_DK); cv_rect(8, 104, 98, 1, C_DK);
         for (i = 0; i < 48; i++) {               /* 1 octave = 25 px; the middle line = the note */
             int32_t off = (sw >> 4) + (ar ? ARP_T[ar][ai % ARP_N[ar]] * 256 / 12 : 0), y = clampi(54 - off * 25 / 256, 4, 104);
@@ -5189,9 +5197,6 @@ static void draw_vis(void)
             if (ar && ++n >= P[P_CARPS]) { n = 0; ai = (int32_t)arp_next((uint32_t)ar, (uint32_t)ai); }
         }
         cv_text_fit(116, 0, 118, "60 Hz DRIVER", th->acc, 2);
-        cv_text_fit(116, 28, 118, P[P_ENG] ? E_ENG[ENG_G] : w ? E_WAVE[P[P_WAVE]] : "ANY WAVE", w || P[P_ENG] ? th->cyan : C_MUTE, 2);
-        s[0] = 0; cat(s, "VOL "); cat(s, E_CSTEP[P[P_CSTEP] & 3]);
-        cv_text_fit(116, 46, 118, s, P[P_CSTEP] ? C_TXT : C_MUTE, 2);
         cv_text_fit(116, 92, 118, "PITCH, 0.8s", C_MUTE, 2);
         break;
     }
@@ -5349,7 +5354,7 @@ static void eva_knobs(void)
     cv_begin(240, 64, EV_BG);
     cv_rect(0, 0, 240, 1, EV_MUT);
     for (k = 0; k < 4u; k++) {
-        uint32_t p = PAGE_P[page][sub][k], a;
+        uint32_t p = PAGE_P[page][rsub()][k], a;
         int32_t x = (int32_t)k * 60, cx = x + 12, cy = 14, lo, rng, norm, en, nopt, xx, yy;
         if (p != NO && !p_hi(p) && p >= P_E1 && p <= P_E7) p = NO;   /* (ND07's engine: no knob there) */
         int src, locked, list, act, off = 0;
@@ -5412,7 +5417,7 @@ static void draw_knobs(void)
     if (EVA) { eva_knobs(); return; }
     cv_begin(240, 64, th->panel);
     for (k = 0; k < 4u; k++) {
-        uint32_t p = PAGE_P[page][sub][k], a;
+        uint32_t p = PAGE_P[page][rsub()][k], a;
         int32_t x = 2 + (int32_t)k * 60, cx = x + 28, cy = 16, lo, rng, norm, en, nopt;
         if (p != NO && !p_hi(p) && p >= P_E1 && p <= P_E7) p = NO;   /* (ND07's engine: no knob there) */
         int src, locked, list;
@@ -5539,7 +5544,7 @@ typedef struct { uint32_t ver; int16_t p[NP]; uint32_t lk[NLOCKW]; int16_t a[NP]
 _Static_assert(NP <= NLOCKW * 32, "the locks: a bit a parameter");
 _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session must fit the settings sector");
 _Static_assert(NPAGE <= 24, "a page's change flag (1 << PMOD) must stay below KG_NOTE");
-#define SESSION_VER (0x0D071100u + NP)       /* (v1.8: 0x0D0711..; v1.6 / v1.7: 0x0D0710.. with the same layout) */
+#define SESSION_VER (0x0D071200u + NP)       /* (v1.9: 0x0D0712..; v1.8: 0x0D0711..; v1.6 / v1.7: 0x0D0710..: the same layout) */
 _Static_assert(sizeof(session_t) <= SECTOR_MAX, "the session: one settings sector");
 _Static_assert(P_SECRET == NP - 1, "a new parameter goes last, and session_load learns the old layout");
 static void session_save(void)
@@ -5567,12 +5572,14 @@ static void session_load(void)
 {
     static union { session_t n; session_v11_t o; session_v13_t m; session_v15_t f; } u;   /* (static: 2.5 KB off the stack) */
     uint32_t i, np = NP;
-    int v17 = 0;
+    int v17 = 0, v18 = 0;
     const int16_t *pp, *pa, *pb;
     const uint32_t *lk;
     const uint8_t *tail;
     for (i = 0; i < NP; i++) P[i] = PD[i].def;
-    if (!settings_load(&u.n, sizeof u.n) && (u.n.ver == SESSION_VER || u.n.ver == 0x0D071000u + NP)) { pp = u.n.p; pa = u.n.a; pb = u.n.b; lk = u.n.lk; tail = &u.n.ab; v17 = u.n.ver != SESSION_VER; }
+    if (!settings_load(&u.n, sizeof u.n) && (u.n.ver == SESSION_VER || u.n.ver == 0x0D071100u + NP || u.n.ver == 0x0D071000u + NP)) {
+        pp = u.n.p; pa = u.n.a; pb = u.n.b; lk = u.n.lk; tail = &u.n.ab; v17 = u.n.ver == 0x0D071000u + NP; v18 = u.n.ver != SESSION_VER;
+    }
     else if (!settings_load(&u.f, sizeof u.f) && u.f.ver == 0x0D071000u + NP_V15) { np = NP_V15; pp = u.f.p; pa = u.f.a; pb = u.f.b; lk = u.f.lk; tail = &u.f.ab; }
     else if (!settings_load(&u.m, sizeof u.m) && u.m.ver == 0x0D071000u + NP_V13) { np = NP_V13; pp = u.m.p; pa = u.m.a; pb = u.m.b; lk = u.m.lk; tail = &u.m.ab; }
     else if (!settings_load(&u.o, sizeof u.o) && u.o.ver == 0x0D071000u + NP_V11) { np = NP_V11; pp = u.o.p; pa = u.o.a; pb = u.o.b; lk = u.o.lk; tail = &u.o.ab; }
@@ -5592,6 +5599,11 @@ static void session_load(void)
             q[i][P_E1] = (int16_t)(q[i][P_E1] ? clampi(q[i][P_CDUTY] + 1, 1, 4) : 0);
             q[i][P_E5] = (int16_t)(q[i][P_E5] ? 1 + (q[i][P_CNOISE] != 0) : 0);
         }
+    }
+    if (v18) {                                  /* (before v1.9 PRINT chose its own chip, MIX 100 % by default: it prints
+                                                   now only if a chip was chosen) */
+        volatile int16_t *q[3] = {P, snapA, snapB};
+        for (i = 0; i < 3u; i++) if (!q[i][P_EMU]) q[i][P_EMIX] = 0;
     }
     has_ab = tail[0] & 3u; morph_on = has_ab == 3u && tail[1];   /* ab, mon, gn, gx[], gy[]: the same in both */
     for (i = 0; i < GEST_MAX; i++) { g_x[i] = tail[3 + i] & 127u; g_y[i] = tail[3 + GEST_MAX + i] & 127u; }
@@ -5783,7 +5795,7 @@ static void midi_in(void)
 static void app_idle(void) { if (idle_ok) midi_in(); }
 static void turn(uint32_t knob, int32_t e, int sel_held)
 {
-    uint32_t p = PAGE_P[page][sub][knob];
+    uint32_t p = PAGE_P[page][rsub()][knob];
     int32_t step;
     if (p == NO) return;
     step = PD[p].step * (absi(e) > 1 ? 3 : 1);
@@ -5879,7 +5891,7 @@ static void app_main(void)
             if (b & (1u << GRP_BTN[k])) {           /* its modules in turn, each one's knob sets in turn */
                 if (sel && GRP_BTN[k] == BTN_LFO) { secret_toggle(); sel_used = 1; continue; }
                 if (PAGE_GRP[page] != k) page = (uint8_t)grp_first(k), sub = 0;
-                else if (sub + 1u < NSUB[page]) sub++;
+                else if (sub + 1u < nsub(page)) sub++;
                 else {
                     uint32_t q = page + 1u;
                     while (q < NPAGE && PAGE_GRP[q] == k && pg_hidden(q)) q++;
@@ -5917,7 +5929,7 @@ static void app_main(void)
            further: SELECT the knob set (A B C D), ALGORITHM the look (theme), PRESETS the asset (loaded and played) */
         if ((e = fm1_enc_take(ENC_SELECT)) != 0) {
             act = 1;
-            if (sel) { sub = (uint8_t)((sub + (e > 0 ? 1u : NSUB[page] - 1u)) % NSUB[page]); sel_used = 1; }
+            if (sel) { sub = (uint8_t)((sub + (e > 0 ? 1u : nsub(page) - 1u)) % nsub(page)); sel_used = 1; }
             else { do page = (uint8_t)((page + (e > 0 ? 1u : NPAGE - 1u)) % NPAGE); while (pg_hidden(page)); sub = 0; }
             ui_dirty = 0xFF;
         }
@@ -5973,6 +5985,7 @@ static void app_main(void)
         fm1_led_key(BTN_OCT_UP, oct_shift > 0);
         for (k = 0; k < 27u; k++) fm1_led_key(KEY_LED(k), (int)(keys >> k & 1u));
         /* the screen */
+        if (sub >= nsub(page)) { sub = (uint8_t)(nsub(page) - 1u); ui_dirty = 0xFF; }   /* (ENGINE back on ND07: fewer sets) */
         if (boot_end) {                         /* the start, until its time is up or anything is touched or played */
             if (act || down || tm_awake || (int32_t)(fm1_ms - boot_end) >= 0) { boot_end = 0; lcd_fill(0, 0, 240, 240, C_BLACK); ui_dirty = 0xFF; }
             else if (fm1_ms - t_vis >= 33u) { boot_frame(); t_vis = fm1_ms; }
