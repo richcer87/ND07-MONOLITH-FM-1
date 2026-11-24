@@ -1,3 +1,4 @@
+1 enc 0 1
 # the controls: a button alone does its job, with SEL held its second job, the same on every page
 # btn: 3 SEL, 0 OCT-, 1 OCT+, 12 PLAY, 13 REC, 8 HOME, 10 ARP, 11 SEQ; enc: 0 SELECT, 1 ALGORITHM, 6 PRESETS, 2..5 K1..K4
 # SEL + PRESETS: the next asset, loaded and played (from ASSETS here, from any page)

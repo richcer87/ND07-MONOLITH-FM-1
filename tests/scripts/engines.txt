@@ -1,9 +1,7 @@
-# 03 CHIP ENGINE (SELECT x2), each engine at C4 (held 0.6 s), A and B shot while it plays:
+# 01 ENGINE (the first page), each engine at C4 (held 0.6 s), A and B shot while it plays:
 #  YM2149 (then BUZZER, ENV SAW DN); YM2612 (ALG 5, then ALG 1 with FEEDBACK 7, CH3 60 %); SPC700 (the slot, BRR, echo);
 #  SCSP (FM SINE x2, DSP CHORUS, then UNDERWTR); DMG (pulse, then the WAVE BASS and NOISE)
 # btn: 3 SEL; enc: 0 SELECT, 2..5 = K1..K4
-1 enc 0 1
-2 enc 0 1
 100 enc 2 1
 200 keys 0x80
 500 shot
