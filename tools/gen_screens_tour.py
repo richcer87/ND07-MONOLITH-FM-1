@@ -15,6 +15,7 @@ grp = [int(x) for x in re.search(r'PAGE_GRP\[NPAGE\] = \{([^}]*)\}', src).group(
 btn = {"BTN_HOME": 8, "BTN_ARP": 10, "BTN_ENV": 4, "BTN_EDIT": 6, "BTN_GLO": 7, "BTN_FX": 2, "BTN_SEQ": 11, "BTN_LFO": 5}
 gb = [btn[x.strip()] for x in re.search(r'GRP_BTN\[NGRP\] = \{([^}]*)\}', src).group(1).split(",")]
 assert len(nsub) == len(grp), (len(nsub), len(grp))
+nsub[0] = 2                                 # (01 ENGINE on ND07, as it starts: A and the driver)
 t, out = 300, ["50 btndown 3", "60 btn 5", "70 btnup 3", "80 btn 8", "100 keys 0x80"]   # (SEL + LFO: RTPC and the pad shown too)
 for pg, n in enumerate(nsub):
     for sb in range(n):

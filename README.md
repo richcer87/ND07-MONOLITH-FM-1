@@ -1,4 +1,4 @@
-# ND-07 // MONOLITH · FM-1 · v1.8
+# ND-07 // MONOLITH · FM-1 · v1.9
 
 Firmware para el **M-VAVE FM-1**: un sampler y sintetizador para diseñar efectos de sonido de videojuegos. Es la
 versión de bolsillo de la estación ND-07 // MONOLITH para REAPER, escrita en C entero para el chip JieLi AC79 (sin FPU).
@@ -11,8 +11,8 @@ Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-0
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.8.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
-> nuevo de la 1.0 a la 1.8 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
+> **Estado: 1.9.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
+> nuevo de la 1.0 a la 1.9 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
 > GitHub Actions con la toolchain de JieLi. Instalar firmware es bajo tu propio riesgo: el
 > [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-** al encender entra
 > al rescate USB. Las sesiones de la 1.1 en adelante se cargan.
@@ -93,7 +93,7 @@ escoges con qué se hace el sonido, luego el asset o el synth.
 
 | # | Página | Perillas A | Perillas B (C, D) |
 | --- | --- | --- | --- |
-| 01 | **ENGINE** | ENGINE y las tres primeras del motor | B: las otras cuatro del motor · C (PRINT): PRINT, RATE, GRIT, MIX · D: SWEEP, ARP, ARP SPD, STEPS |
+| 01 | **ENGINE** | ENGINE y las tres primeras del motor | B: las otras cuatro del motor · C: PRINT, RATE, GRIT · D: SWEEP, ARP, ARP SPD, STEPS (con ND07 solo A y el driver, como B) |
 | 02 | **ASSETS** | ASSET, VARY, HA KIND, OUT | B: PRESET (SEL: un NEW SFX de ese tipo con el motor) |
 | 03 | OSC & SAMPLE | SOURCE, WAVE (15 ondas), SAMPLE, BLEND | B: TUNE, COLOR, STRETCH, REC · C: LOOP, L POS, L LEN, XFADE · D: VOICES, L PITCH, DETUNE, L LEVEL |
 | 04 | GRAIN ENGINE | POS, SIZE, DENS, SPRAY | REVERSE, GRAIN, FREEZE, RND PIT |
@@ -122,6 +122,10 @@ que escogiste y no lo cambian; un asset de ruido (EXPLODE, HIT, DEBRIS...) le pi
 sus siete perillas (A y B; al cambiar de motor empiezan en un punto que ya suena), y 03 le sigue prestando el sample,
 sus puntos de loop y el SUSTAIN. La envolvente de 06 sigue siendo el VCA, así que con SUSTAIN al 100 % oyes la
 envolvente del chip tal cual.
+
+Cada cosa del chip está en un solo lugar: el chip en K1, su consola arriba de la pantalla, sus perillas en A y B, su
+DAC en C y el driver en D. Con **ND07** no hay chip: la página muestra solo A (con la onda o el sample de 03, tal
+cual suena) y el driver, que pasa a ser B.
 
 | Motor | Consola | Perillas | Qué hace |
 | --- | --- | --- | --- |
@@ -155,12 +159,12 @@ ciclo a ciclo. Y una nota honesta: no puedo escuchar audio; la fidelidad sale de
 código de los emuladores hechos a partir del silicio y de mediciones, y de pruebas (`tests/chips_test.c`) que
 comparan contra sus números. El oído final es el tuyo.
 
-**C (PRINT):** imprime todo lo que suena (también un motor de chip) por el convertidor de una consola, al final de
-la cadena, como si el juego corriera ahí: la frecuencia de muestreo del chip (sin filtro antialias, como el hardware),
-su DAC y su filtro de salida. Apagado por defecto; cuando está encendido sigue al motor que escojas. Para oírlo bien
-empieza con el asset **SYNTH**.
+**C (PRINT):** imprime todo lo que suena, efectos incluidos, por el DAC del mismo chip, al final de la cadena: como
+si el SFX terminado se guardara en la consola y sonara de ahí. Usa la frecuencia de muestreo del chip (sin filtro
+antialias, como el hardware), su DAC y su filtro de salida. **PRINT** es la mezcla (0 % = apagado, por defecto),
+**RATE** la frecuencia y **GRIT** el DAC más grueso. No hay que escoger chip: es el del motor.
 
-| PRINT | Consolas | Qué emula | GRIT |
+| DAC | Consolas | Qué emula | GRIT |
 | --- | --- | --- | --- |
 | **YM2149** | Atari ST, MSX | El registro de volumen usado como DAC (los *digi-drums* del ST), con los niveles medidos | 32 pasos de la envolvente → 16 del registro de volumen |
 | **YM2612** | Mega Drive / Genesis | El canal DAC de 8 bits por el DAC de 9 bits con su *ladder*, y el filtro de salida del modelo 1 (~6.4 kHz) | 9 → 6 bits |
@@ -169,7 +173,7 @@ empieza con el asset **SYNTH**.
 | **DMG** | Game Boy | El canal de onda: samples de 4 bits, el volumen 100 / 50 / 25 % y el capacitor de salida (pasa-altos) | 16 → 8 → 4 niveles |
 
 - **RATE:** la frecuencia del chip, en el rango que usaban sus juegos (YM2149 4–22 kHz, YM2612 4–26 kHz, S-DSP 8–32
-  kHz, SCSP 11–44 kHz, DMG 2–16 kHz). Bajo = más aliasing, más época. **MIX:** contra el sonido antes del chip.
+  kHz, SCSP 11–44 kHz, DMG 2–16 kHz). Bajo = más aliasing, más época.
 - **D:** el *driver* de 60 Hz (SWEEP, ARP, ARP SPD, STEPS), como lo hacían los drivers de música de los juegos; sirve
   con cualquier motor.
 
@@ -187,7 +191,7 @@ ataques y el último segundo de ambos). Al girar una perilla, su celda se ilumin
 | --- | --- |
 | Inicio | el monolito se dibuja por sus orillas, dos órbitas y polvo alrededor, "ND-07" escrito con cursor y la versión; cualquier botón la salta |
 | Actualización | los cinco pasos de la instalación, el monolito llenándose de verde y "DO NOT UNPLUG"; en naranja si falla, con su código |
-| ENGINE | en A y B el chip como lo dibujaba su manual: los canales del YM2149 y la forma de su envolvente, el algoritmo del YM2612 con sus operadores encendidos por su envolvente, el bloque BRR y las tomas del FIR del SPC700, el slot y el programa del DSP del SCSP, los canales del DMG en segmentos de LCD y su wave RAM; en C (PRINT) el chip como pieza con sus pines, la salida en escalones y los cinco chips como etiquetas de cartucho; en D el pitch de los primeros 0.8 s y el sonido en bloques de 8 bits |
+| ENGINE | en A y B el chip como lo dibujaba su manual: los canales del YM2149 y la forma de su envolvente, el algoritmo del YM2612 con sus operadores encendidos por su envolvente, el bloque BRR y las tomas del FIR del SPC700, el slot y el programa del DSP del SCSP, los canales del DMG en segmentos de LCD y su wave RAM; con ND07, la onda o el sample de 03 tal cual; en C (PRINT) el DAC como pieza con sus pines y la salida en escalones; en D el pitch de los primeros 0.8 s y el sonido en bloques de 8 bits |
 | ASSETS | un espectrómetro pequeño en la línea de estado; en B los siete tipos de NEW SFX y el motor en el que va a sonar |
 | OSC & SAMPLE | el oscilador como wavetable visto de lado: el ciclo al frente y detrás la misma onda con menos COLOR; el sample como tallos con punta; en D, un anillo de trazos por voz |
 | GRAIN ENGINE | cada grano un aro que nace donde lee, sube y se encoge; las orillas del SPRAY punteadas |
