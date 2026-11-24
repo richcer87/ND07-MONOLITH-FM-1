@@ -4749,27 +4749,27 @@ static void draw_vis(void)
             for (k = 0; k < 3; k++) key = ((key ^ (uint32_t)E[EP[k]]) * 16777619u ^ (uint32_t)E[EF[k]]) * 16777619u;
             key = ((key ^ (uint32_t)E[P_EQQ]) * 16777619u ^ (uint32_t)out8) * 16777619u;
             if (key != ck) for (ck = key, i = 0; i <= 224; i++) {
-            int32_t li = i * 1023 / 224, db8 = out8, b;
-            for (b = 0; b < 3; b++) {
-                int32_t g8 = E[EP[b]] * 256, o8 = clampi((li - E[EF[b]]) * 65536 / LI_PER_OCT_Q8, -2048, 2048);
-                uint32_t lf;
-                if (!g8) continue;
-                if (b == 1) {                   /* Q (f/f0 - f0/f), its square: the bell's width */
-                    int32_t d = (int32_t)exp2_q16(o8) - (int32_t)exp2_q16(-o8), qd = clampi((int32_t)(((int64_t)q16 * d) >> 16), -1000000, 1000000);
-                    lf = 0xFFFFFFFFu / (65536u + (uint32_t)(((int64_t)qd * qd) >> 16));
-                } else {
-                    lf = 0xFFFFFFFFu / (65536u + exp2_q16(2 * o8));   /* 1 / (1 + (f / fc)^2) */
-                    if (b == 2) lf = 65536u - lf;
+                int32_t li = i * 1023 / 224, db8 = out8, b;
+                for (b = 0; b < 3; b++) {
+                    int32_t g8 = E[EP[b]] * 256, o8 = clampi((li - E[EF[b]]) * 65536 / LI_PER_OCT_Q8, -2048, 2048);
+                    uint32_t lf;
+                    if (!g8) continue;
+                    if (b == 1) {                   /* Q (f/f0 - f0/f), its square: the bell's width */
+                        int32_t d = (int32_t)exp2_q16(o8) - (int32_t)exp2_q16(-o8), qd = clampi((int32_t)(((int64_t)q16 * d) >> 16), -1000000, 1000000);
+                        lf = 0xFFFFFFFFu / (65536u + (uint32_t)(((int64_t)qd * qd) >> 16));
+                    } else {
+                        lf = 0xFFFFFFFFu / (65536u + exp2_q16(2 * o8));   /* 1 / (1 + (f / fc)^2) */
+                        if (b == 2) lf = 65536u - lf;
+                    }
+                    db8 += (int32_t)(((int64_t)g8 * lf) >> 16);
                 }
-                db8 += (int32_t)(((int64_t)g8 * lf) >> 16);
-            }
-            cy[i] = (int16_t)clampi(y0 - db8 * 36 / (15 * 512), 18, 100);   /* (half dB: 15 dB is 36 px) */
+                cy[i] = (int16_t)clampi(y0 - db8 * 36 / (15 * 512), 18, 100);   /* (half dB: 15 dB is 36 px) */
             }
             for (i = 0; i <= 224; i++) {
-            int32_t y = cy[i];
-            if (y != y0) cv_rect(8 + i, y < y0 ? y : y0, 1, absi(y - y0), on ? vk_c(th->cyan, 70) : RGB(26, 26, 30));
-            if (i) cv_line(8 + px, py, 8 + i, y, on ? th->cyan : C_MUTE);
-            px = i; py = y;
+                int32_t y = cy[i];
+                if (y != y0) cv_rect(8 + i, y < y0 ? y : y0, 1, absi(y - y0), on ? vk_c(th->cyan, 70) : RGB(26, 26, 30));
+                if (i) cv_line(8 + px, py, 8 + i, y, on ? th->cyan : C_MUTE);
+                px = i; py = y;
             }
         }
         for (k = 0; k < 3; k++) {               /* the handles: where each band sits, how far it moves */
