@@ -1,4 +1,4 @@
-# ND-07 // MONOLITH · FM-1 · v1.9.2
+# ND-07 // MONOLITH · FM-1 · v1.9.3
 
 Firmware para el **M-VAVE FM-1**: un sampler y sintetizador para diseñar efectos de sonido de videojuegos. Es la
 versión de bolsillo de la estación ND-07 // MONOLITH para REAPER, escrita en C entero para el chip JieLi AC79 (sin FPU).
@@ -11,8 +11,8 @@ Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-0
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.9.2.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
-> nuevo de la 1.0 a la 1.9.2 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
+> **Estado: 1.9.3.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
+> nuevo de la 1.0 a la 1.9.3 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
 > GitHub Actions con la toolchain de JieLi. Instalar firmware es bajo tu propio riesgo: el
 > [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-** al encender entra
 > al rescate USB. Las sesiones de la 1.1 en adelante se cargan.
@@ -93,7 +93,7 @@ escoges con qué se hace el sonido, luego el asset o el synth.
 
 | # | Página | Perillas A | Perillas B (C, D) |
 | --- | --- | --- | --- |
-| 01 | **ENGINE** | ENGINE y las tres primeras del motor | B: las otras cuatro del motor · C: PRINT, RATE, GRIT · D: SWEEP, ARP, ARP SPD, STEPS (con ND07 solo A y el driver, como B) |
+| 01 | **ENGINE** | ENGINE y las tres primeras del motor | B: las otras cuatro del motor · C: PRINT, RATE, GRIT · D (los macros): MACRO, STEP, el valor, LENGTH (con ND07 solo A y los macros, como B) |
 | 02 | **ASSETS** | ASSET, VARY, HA KIND, OUT | B: PRESET (SEL: un NEW SFX de ese tipo con el motor) |
 | 03 | OSC & SAMPLE | SOURCE, WAVE (15 ondas), SAMPLE, BLEND | B: TUNE, COLOR, STRETCH, REC · C: LOOP, L POS, L LEN, XFADE · D: VOICES, L PITCH, DETUNE, L LEVEL |
 | 04 | GRAIN ENGINE | POS, SIZE, DENS, SPRAY | REVERSE, GRAIN, FREEZE, RND PIT |
@@ -189,8 +189,13 @@ antialias, como el hardware), su DAC y su filtro de salida. **PRINT** es la mezc
 
 - **RATE:** la frecuencia del chip, en el rango que usaban sus juegos (YM2149 4–22 kHz, YM2612 4–26 kHz, S-DSP 8–32
   kHz, SCSP 11–44 kHz, DMG 2–16 kHz). Bajo = más aliasing, más época.
-- **D:** el *driver* de 60 Hz (SWEEP, ARP, ARP SPD, STEPS), como lo hacían los drivers de música de los juegos; sirve
-  con cualquier motor.
+- **D: los macros del driver de 60 Hz**, cuadro por cuadro, como los hacían los drivers de los juegos (y como los
+  editan Furnace o FamiTracker). Tres macros de 16 pasos: **VOL** (0–15, por la envolvente: los 16 niveles de los
+  chips), **PITCH** (±12 semitonos: los arpegios) y **TIMBRE** (lo de cada motor: el duty o el ruido del DMG y de las
+  ondas CHIP, el MIXER del YM2149, el nivel de los moduladores del YM2612 en pasos de 3 dB); más **SWEEP**.
+  K1 escoge el macro, K2 el paso, K3 su valor, K4 el largo: OFF, de 1 a 16 una vez (se queda en el último) o en
+  loop. La pantalla los dibuja como barras: el largo encendido, el loop con su corchete, el paso que se edita
+  enmarcado y el que suena en blanco. Sirven con cualquier motor; se guardan con el patch.
 
 **02 ASSETS B (NEW SFX):** PRESET escoge el tipo (COIN, JUMP, LASER, HIT, POWERUP, EXPLODE, BLIP) y SEL genera uno
 nuevo con el motor que tengas. En 03 OSC & SAMPLE, las ondas CHIP del motor ND07 toman de COLOR el ancho del pulso
