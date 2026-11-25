@@ -1,5 +1,16 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.9.3: los macros del driver
+
+- **ENGINE D es el editor de macros**, cuadro por cuadro a 60 Hz: VOL, PITCH y TIMBRE de 16 pasos cada uno, con su
+  largo (una vez o en loop), y SWEEP. K1 el macro, K2 el paso, K3 el valor, K4 el largo; la pantalla los dibuja como
+  barras y marca el paso que suena.
+- **TIMBRE** es de cada motor: el duty o el ruido (DMG y las ondas CHIP de ND07), el MIXER (YM2149), el nivel de los
+  moduladores en pasos de 3 dB (YM2612).
+- ARP y STEPS ya no son perillas: son macros. Las sesiones anteriores, los assets y los NEW SFX los convierten solos
+  (el mismo arpegio, el mismo paso de volumen); STEPS a 30 y 15 Hz queda a 60 Hz.
+- El formato de la sesión crece (los macros se guardan); las de la 1.6 a la 1.9.2 se cargan.
+
 ## v1.9.2: medir contra lo real
 
 - `tools/compare.py`: dos grabaciones de las mismas notas, lado a lado. Encuentra las notas solo (sirve para una

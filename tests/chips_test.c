@@ -71,6 +71,17 @@ int main(void)
     }
     near("YM2612 envelope: full amplitude, attenuation", opn_att(32767), 0, 0);
     near("YM2612 envelope: half amplitude, attenuation", opn_att(16384), 64, 0);
+    {                                           /* 1.9.3: an ARP (MAJOR, 3 frames a note) and STEPS become the macros */
+        static int16_t q[NP];
+        int32_t j, okp = 1;
+        static const int8_t W[9] = {0, 0, 0, 4, 4, 4, 7, 7, 7};
+        q[P_CARP] = 4; q[P_CARPS] = 3; q[P_CSTEP] = 1;
+        drv_macros(q);
+        for (j = 0; j < 9; j++) if (q[P_MP0 + j] != W[j]) okp = 0;
+        near("driver: ARP MAJOR x3 as PITCH steps", okp, 1, 0);
+        near("driver: its length, looped (16 + 9)", q[P_MLP], 25, 0);
+        near("driver: STEPS as a one-step VOL", q[P_MLV], 1, 0);
+    }
     printf("bad=%d\n", bad);
     return bad != 0;
 }
