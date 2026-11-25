@@ -4594,7 +4594,7 @@ static void app_ota_show(uint32_t step, int32_t code)
 }
 /* ---- the start (1.8 s; a key, a knob or a note ends it): the monolith drawn edge by edge, turning once, two orbits
  * opening round it and the dust falling in; the name written under it; the scan and the progress line of the start */
-#define ND07_VER "1.9.1"
+#define ND07_VER "1.9.2"
 #define BOOT_MS 1800u
 static uint32_t boot_end;                       /* fm1_ms the start ends (0: over) */
 static void boot_paint(int32_t oy, uint32_t t)  /* one 240 x 80 strip, from y = oy (the canvas: 240 x 112 at most) */
