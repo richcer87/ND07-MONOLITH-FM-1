@@ -1,5 +1,19 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.9.1: lo que pasaba después del chip
+
+- **YM2149:** las tres salidas amarradas, como en el Atari ST y el MSX: una red de resistencias (el modelo de MAME,
+  con los resistores medidos), no una suma. Tres canales arriba dan 1.89 veces uno; el acorde y los *digi-drums* se
+  aprietan como en el ST.
+- **YM2612:** la envolvente de la nota viaja dentro del chip como atenuación de los portadores, así que una nota que
+  se apaga pasa por el DAC de 9 bits y su *ladder* como en la consola; después, el pasa-bajos del Mega Drive modelo
+  1 (~3.9 kHz, el de Genesis Plus GX).
+- **SPC700:** el S-DSP a sus 32 kHz (cada muestra calculada y sostenida), el eco a 32 kHz con el FIR en el orden del
+  hardware y su redondeo, y el filtro de salida del SNES (dos polos a 16 kHz). El eco llega ahora a 512 ms.
+- **PRINT:** los mismos filtros de salida, con el del Mega Drive corregido (antes ~6.4 kHz).
+- `tests/chips_test.c`: la red del YM2149, los dos filtros y la atenuación del YM2612.
+- Con ENGINE ND07, el sonido idéntico al de la 1.9.
+
 ## v1.9: 01 ENGINE sin repeticiones
 
 - Cada cosa del chip en un solo lugar: el chip en K1, su consola arriba de la pantalla, sus perillas en A y B, su DAC

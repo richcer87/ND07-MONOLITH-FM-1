@@ -1,4 +1,4 @@
-# ND-07 // MONOLITH · FM-1 · v1.9
+# ND-07 // MONOLITH · FM-1 · v1.9.1
 
 Firmware para el **M-VAVE FM-1**: un sampler y sintetizador para diseñar efectos de sonido de videojuegos. Es la
 versión de bolsillo de la estación ND-07 // MONOLITH para REAPER, escrita en C entero para el chip JieLi AC79 (sin FPU).
@@ -11,8 +11,8 @@ Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-0
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.9.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
-> nuevo de la 1.0 a la 1.9 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
+> **Estado: 1.9.1.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
+> nuevo de la 1.0 a la 1.9.1 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
 > GitHub Actions con la toolchain de JieLi. Instalar firmware es bajo tu propio riesgo: el
 > [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-** al encender entra
 > al rescate USB. Las sesiones de la 1.1 en adelante se cargan.
@@ -151,6 +151,20 @@ cual suena) y el driver, que pasa a ser B.
 - **SCSP:** el LFO en sus 32 velocidades (0.17–172 Hz) y PLFO / ALFO en sus 8 profundidades.
 - Las cuadradas (YM2149, DMG) ponen sus flancos donde caen, entre muestras, y no en la muestra más cercana: el chip
   no tiene aliasing a 44.1 kHz y aquí tampoco.
+
+**Y lo que pasaba después del chip** (la 1.9.1), porque eso también es el sonido que recuerdas:
+
+- **YM2149:** las tres salidas amarradas en un solo cable, como en el Atari ST y el MSX. Es una red de resistencias y
+  no una suma: tres canales arriba suenan 1.89 veces uno, no 3. Usa el modelo de MAME con los resistores medidos de
+  fpgaarcade. Por eso las notas juntas se aprietan y los *digi-drums* del ST distorsionan como en el ST.
+- **YM2612:** la envolvente de la nota va dentro del chip, como atenuación de los portadores (en pasos de 0.094 dB),
+  en lugar de un VCA después. Una nota que se apaga cruza el DAC de 9 bits y su *ladder* como en la consola, con su
+  aspereza a volumen bajo. Después, el pasa-bajos del Mega Drive modelo 1 (~3.9 kHz), el de las placas con YM2612
+  discreto.
+- **SPC700:** el S-DSP corre a sus 32 kHz: cada muestra se calcula a 32 kHz y se sostiene, el eco gira a 32 kHz con
+  su FIR en el orden del hardware (FIR 0 a la más vieja), siete tomas que dan la vuelta a 16 bits y la última
+  recortada, y la salida pasa por el filtro del SNES después del DAC (dos polos a 16 kHz).
+- **PRINT** usa los mismos filtros de salida (Mega Drive, SNES).
 
 Lo que queda fuera, con franqueza: el motor es **mono** (una voz de cada chip), así que el paneo duro del DMG y la
 inversión de fase L/R del S-DSP no aplican. Del SCSP no están los 32 slots ni el DSP programable completo: son una voz
