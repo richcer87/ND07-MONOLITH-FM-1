@@ -38,7 +38,7 @@ run "ND-07: MOD ENV, the HAPPY ACCIDENT's recipes" sh tests/run_host.sh tests/sc
 run "ND-07: the pad's GESTURE recorded and replayed" sh tests/run_host.sh tests/scripts/gesture.txt
 run "ND-07: 3-BAND EQ: LOW, MID, HIGH on noise" sh tests/run_host.sh tests/scripts/eq.txt
 run "ND-07: the slot back out as a WAV (SysEx LEN / READ)" sh tests/run_host.sh tests/scripts/export.txt
-run "ND-07: the controls: SEL + a button is its second job on every page (stop all, undo, reset, randomize, theme, asset, knob set, store A/B, LAB FACTORY)" sh tests/run_host.sh tests/scripts/controls.txt
+run "ND-07: the controls: SEL + a button is its second job on every page (stop all, undo, reset, clean all, randomize, theme, asset, knob set, store A/B, LAB FACTORY)" sh tests/run_host.sh tests/scripts/controls.txt
 run "ND-07: 15 ASSETS: pick, SEL loads and plays, HAPPY ACCIDENT in the family, a PHYSICS asset" sh tests/run_host.sh tests/scripts/assets.txt
 run "ND-07 EVA-01 theme: every page and knob set on screen" sh tests/run_host.sh tests/scripts/screens.txt
 run "ND-07 EVA-01 theme: a knob just turned, a lock, HAPPY ACCIDENT, modulated" sh tests/run_host.sh tests/scripts/eva_states.txt

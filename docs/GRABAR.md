@@ -14,9 +14,9 @@ que encuentra las notas solo: no hace falta tocar a tiempo, solo las mismas nota
 
 Es la misma que hace `tests/scripts/ref.txt` en el simulador. Comprueba que el FM-1 suena igual que el código.
 
-1. **03 OSC & SAMPLE**: SAMPLE en **BOOM**, el primero, el de fábrica. Cargar un asset no cambia el slot, y SPC700 y
-   SCSP tocan ese sample: con otro slot, o si ahí dice **USER 1** (un sample tuyo encima), esas dos notas no se
-   parecen al simulador.
+1. **03 OSC & SAMPLE**: SAMPLE en **PUNCH**, el primero, el de fábrica (antes de la 1.9.5, BOOM). Cargar un asset no
+   cambia el slot, y SPC700 y SCSP tocan ese sample: con otro slot, o si ahí dice **USER 1** (un sample tuyo encima;
+   **05 SAMPLE LAB → FACTORY** lo regresa), esas dos notas no se parecen al simulador.
 2. **02 ASSETS A**: ASSET en **SYNTH**, VARY en 0 %, SEL para cargarlo (suena una vez; déjalo en la grabación).
 3. **01 ENGINE A**, K1 en **ND07**. Toca **C4** un segundo, suelta, medio segundo, **C5** un segundo.
 4. K1 un paso a la derecha (**YM2149**) y las mismas dos notas. Luego **YM2612**, **SPC700**, **SCSP**, **DMG** y

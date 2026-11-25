@@ -3145,7 +3145,7 @@ static void undo(void)
 static void reset_module(uint32_t m)
 {
     uint32_t s, k, kept = 0;
-    char t[24] = "RESET ", n[4];
+    char t[32] = "RESET ", n[4];
     push_undo();
     morph_on = 0;
     for (s = 0; s < 4u; s++) for (k = 0; k < 4u; k++) {
@@ -3156,6 +3156,7 @@ static void reset_module(uint32_t m)
     n[0] = (char)('0' + page_no(m) / 10u); n[1] = (char)('0' + page_no(m) % 10u); n[2] = 0;
     cat(t, n);
     if (kept) { cat(t, " L"); n[0] = (char)('0' + kept % 10u); n[1] = 0; cat(t, n); }
+    cat(t, ", AGAIN: ALL");                     /* (a second SEL + OCT- within 1 s: clean_all) */
     touched();
     say(t);
 }
@@ -3546,6 +3547,18 @@ static void stop_all(void)                      /* SEL + PLAY: everything that p
     all_off();
     say("ALL STOPPED");
     ui_dirty |= 2 | 8;
+}
+static void clean_all(void)                     /* SEL + OCT- twice: every parameter to its default, locked or not, on
+                                                   every page; what SEL + REC brings back (the first tap's undo step), so
+                                                   the sample slot, the theme, the hidden pages, locks and A / B stay */
+{
+    uint32_t i;
+    stop_all();
+    morph_on = 0;
+    for (i = 0; i < NP; i++) if (i != P_SLOT && i != P_THEME && i != P_SECRET) P[i] = PD[i].def;
+    touched();
+    say("CLEAN ALL: SEL+REC UNDO");               /* (23 characters: the toast's width) */
+    ui_dirty = 0xFF;
 }
 static void module_random(void)                 /* SEL + OCT+: this page's module at random (ASSETS: an asset at random) */
 {
@@ -4744,7 +4757,7 @@ static void app_ota_show(uint32_t step, int32_t code)
 }
 /* ---- the start (1.8 s; a key, a knob or a note ends it): the monolith drawn edge by edge, turning once, two orbits
  * opening round it and the dust falling in; the name written under it; the scan and the progress line of the start */
-#define ND07_VER "1.9.4"
+#define ND07_VER "1.9.5"
 #define BOOT_MS 1800u
 static uint32_t boot_end;                       /* fm1_ms the start ends (0: over) */
 static void boot_paint(int32_t oy, uint32_t t)  /* one 240 x 80 strip, from y = oy (the canvas: 240 x 112 at most) */
@@ -6098,6 +6111,7 @@ static void secret_toggle(void)                 /* SEL + LFO: RTPC and the CHAOS
 static void app_main(void)
 {
     uint32_t prev_keys = 0, t_vis = 0, t_knob = 0, t_meter = 0, sel_used = 0, sel_down = 0, kpend = 0, act, i;
+    uint32_t rst_t = 0;                         /* (the last SEL + OCT-: a second one within 1 s is CLEAN ALL) */
     uint16_t kpend_t[27] = {0};
     app_init();
     for (;;) {
@@ -6124,14 +6138,19 @@ static void app_main(void)
                 ui_dirty = 0xFF;
             }
         /* one rule on every page: a button alone does its job; with SEL held, its second job (the same everywhere):
-           PLAY note / STOP ALL, REC HAPPY ACCIDENT / UNDO, SAVE session / unlock all, OCT- octave / RESET the module,
-           OCT+ octave / RANDOMIZE the module; a tap on SEL alone is the page's own action (the footer says which) */
+           PLAY note / STOP ALL, REC HAPPY ACCIDENT / UNDO, SAVE session / unlock all, OCT- octave / RESET the module
+           (twice within 1 s: CLEAN ALL, every page), OCT+ octave / RANDOMIZE the module; a tap on SEL alone is the
+           page's own action (the footer says which) */
         if (b & (1u << BTN_PLAY)) { if (sel) { stop_all(); sel_used = 1; } else note_on(60, 32767); }
         if (rel & (1u << BTN_PLAY)) note_off(60);
         if (b & (1u << BTN_REC)) { if (sel) { undo(); sel_used = 1; } else happy_accident(); }
         if (b & (1u << BTN_SAVE)) { if (sel) { for (i = 0; i < NLOCKW; i++) locks[i] = 0; say("ALL LOCKS CLEARED"); ui_dirty |= 4; sel_used = 1; } else session_save(); }
         if (b & (1u << BTN_OCT_DOWN)) {
-            if (sel) { reset_module(page); sel_used = 1; }
+            if (sel) {                          /* (the escalation pushes no undo step: one SEL + REC undoes both taps) */
+                if (rst_t && fm1_ms - rst_t < 1000u) { clean_all(); rst_t = 0; }
+                else { reset_module(page); rst_t = fm1_ms ? fm1_ms : 1u; }
+                sel_used = 1;
+            }
             else if (oct_shift > -3) { oct_shift--; ui_dirty |= 8; }
         }
         if (b & (1u << BTN_OCT_UP)) {
@@ -6144,10 +6163,10 @@ static void app_main(void)
             sel_down = 0; help_n = 0;
         }
         if (sel && sel_down && !sel_used && fm1_ms - sel_t >= 700u + help_n * 900u) {   /* SEL held: its second jobs, in turn */
-            static const char *const HELP[9] = {"SEL+K1..K4: LOCK", "SEL+REC: UNDO", "SEL+PLAY: STOP ALL", "SEL+OCT-: RESET MODULE",
-                                                "SEL+OCT+: RANDOMIZE", "SEL+SAVE: UNLOCK ALL", "SEL+SELECT: KNOB SET",
-                                                "SEL+ALGORITHM: THEME", "SEL+PRESETS: ASSET"};
-            say(HELP[help_n % 9u]); help_n++;
+            static const char *const HELP[10] = {"SEL+K1..K4: LOCK", "SEL+REC: UNDO", "SEL+PLAY: STOP ALL", "SEL+OCT-: RESET MODULE",
+                                                 "SEL+OCT- x2: CLEAN ALL", "SEL+OCT+: RANDOMIZE", "SEL+SAVE: UNLOCK ALL",
+                                                 "SEL+SELECT: KNOB SET", "SEL+ALGORITHM: THEME", "SEL+PRESETS: ASSET"};
+            say(HELP[help_n % 10u]); help_n++;
         }
         /* encoders: alone, as printed (SELECT the page, ALGORITHM the wave, PRESETS the sample); with SEL held, a step
            further: SELECT the knob set (A B C D), ALGORITHM the look (theme), PRESETS the asset (loaded and played) */
