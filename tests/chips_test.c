@@ -82,6 +82,8 @@ int main(void)
         near("driver: its length, looped (16 + 9)", q[P_MLP], 25, 0);
         near("driver: STEPS as a one-step VOL", q[P_MLV], 1, 0);
     }
+    near("2A03 C4: its period (1789773 / 16 / 428)", grid_div(NES_P16, inc_of(261.63), 2048u), 428, 0);
+    near("2A03 C4: what it plays (Hz)", hz(NES_P16 / 428u << 4), 1789772.5 / 16 / 428, 0.05);
     printf("bad=%d\n", bad);
     return bad != 0;
 }
