@@ -1,4 +1,4 @@
-# ND-07 // MONOLITH · FM-1 · v1.9.1
+# ND-07 // MONOLITH · FM-1 · v1.9.2
 
 Firmware para el **M-VAVE FM-1**: un sampler y sintetizador para diseñar efectos de sonido de videojuegos. Es la
 versión de bolsillo de la estación ND-07 // MONOLITH para REAPER, escrita en C entero para el chip JieLi AC79 (sin FPU).
@@ -11,8 +11,8 @@ Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-0
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.9.1.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
-> nuevo de la 1.0 a la 1.9.1 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
+> **Estado: 1.9.2.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
+> nuevo de la 1.0 a la 1.9.2 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
 > GitHub Actions con la toolchain de JieLi. Instalar firmware es bajo tu propio riesgo: el
 > [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-** al encender entra
 > al rescate USB. Las sesiones de la 1.1 en adelante se cargan.
@@ -171,7 +171,8 @@ inversión de fase L/R del S-DSP no aplican. Del SCSP no están los 32 slots ni 
 y cuatro programas fijos. Del YM2612, un canal y no seis, y corre a 44.1 kHz y no a sus 53 kHz. No es un emulador
 ciclo a ciclo. Y una nota honesta: no puedo escuchar audio; la fidelidad sale de la documentación del hardware y del
 código de los emuladores hechos a partir del silicio y de mediciones, y de pruebas (`tests/chips_test.c`) que
-comparan contra sus números. El oído final es el tuyo.
+comparan contra sus números. El oído final es el tuyo: `docs/GRABAR.md` dice cómo grabar el FM-1 y
+`tools/compare.py` mide la grabación contra el simulador o contra el chip de verdad.
 
 **C (PRINT):** imprime todo lo que suena, efectos incluidos, por el DAC del mismo chip, al final de la cadena: como
 si el SFX terminado se guardara en la consola y sonara de ahí. Usa la frecuencia de muestreo del chip (sin filtro

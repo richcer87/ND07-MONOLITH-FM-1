@@ -1,5 +1,14 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.9.2: medir contra lo real
+
+- `tools/compare.py`: dos grabaciones de las mismas notas, lado a lado. Encuentra las notas solo (sirve para una
+  toma tocada a mano) y dice por cada par el tono en cents, el nivel, el brillo, los armónicos 1 a 8, el ruido, el
+  ataque y el decaimiento; marca lo que se separa y puede dibujar los espectros.
+- `tests/scripts/ref.txt`: la toma de referencia (SYNTH, luego cada motor en C4 y C5), igual en el simulador y en
+  el FM-1. `docs/GRABAR.md`: cómo grabarla con el SSL2 y Reaper, y la toma contra los chips de verdad.
+- Sin cambios de sonido.
+
 ## v1.9.1: lo que pasaba después del chip
 
 - **YM2149:** las tres salidas amarradas, como en el Atari ST y el MSX: una red de resistencias (el modelo de MAME,

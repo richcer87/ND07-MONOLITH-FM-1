@@ -1,0 +1,36 @@
+# the reference take (docs/GRABAR.md): 02 ASSETS: SYNTH loaded (it plays once, as on the FM-1); then 01 ENGINE A, each
+# engine in turn (K1), C4 then C5, 1 s each, half a second apart. Record the FM-1 doing the same; tools/compare.py
+1 enc 0 1
+100 enc 2 18
+300 btn 3
+1800 enc 0 -1
+2300 midi 0x90 60 100
+3300 midi 0x80 60 0
+3800 midi 0x90 72 100
+4800 midi 0x80 72 0
+5300 enc 2 1
+5600 midi 0x90 60 100
+6600 midi 0x80 60 0
+7100 midi 0x90 72 100
+8100 midi 0x80 72 0
+8600 enc 2 1
+8900 midi 0x90 60 100
+9900 midi 0x80 60 0
+10400 midi 0x90 72 100
+11400 midi 0x80 72 0
+11900 enc 2 1
+12200 midi 0x90 60 100
+13200 midi 0x80 60 0
+13700 midi 0x90 72 100
+14700 midi 0x80 72 0
+15200 enc 2 1
+15500 midi 0x90 60 100
+16500 midi 0x80 60 0
+17000 midi 0x90 72 100
+18000 midi 0x80 72 0
+18500 enc 2 1
+18800 midi 0x90 60 100
+19800 midi 0x80 60 0
+20300 midi 0x90 72 100
+21300 midi 0x80 72 0
+22300 end
