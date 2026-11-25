@@ -32,8 +32,8 @@ Las mismas notas de dos sonidos muy simples, en el FM-1 y en la referencia: una 
 
 | Chip | En el FM-1 | En la referencia |
 | --- | --- | --- |
-| YM2149 | MIXER TONE, NOISE 1, CHORD OFF, ENV OFF, SID 0, DIGI 0 | un canal, tono, volumen 15, sin envolvente |
-| DMG | DUTY 50 %, PULSE 2 OFF, WAVE OFF, NOISE OFF, ENV 0 (fijo), ZOMBIE OFF | canal 1, duty 50 %, volumen 15, sin envolvente |
+| YM2149 | MIXER TONE, CHORD OFF, ENV OFF, SID 0, DIGI 0 | un canal, tono, volumen 15, sin envolvente |
+| DMG | DUTY 50 %, PULSE 2 OFF, WAVE OFF, NOISE OFF, ENV OFF, ZOMBIE OFF | canal 1, duty 50 %, volumen 15, sin envolvente |
 
 En 06 ENVELOPES deja ATTACK 0, SUSTAIN 100 %, RELEASE corto, para que la envolvente no tape la del chip.
 `python3 tools/compare.py referencia.wav fm1.wav --png toma2.png`
