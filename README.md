@@ -1,4 +1,4 @@
-# ND-07 // MONOLITH · FM-1 · v1.9.3
+# ND-07 // MONOLITH · FM-1 · v1.9.5
 
 Firmware para el **M-VAVE FM-1**: un sampler y sintetizador para diseñar efectos de sonido de videojuegos. Es la
 versión de bolsillo de la estación ND-07 // MONOLITH para REAPER, escrita en C entero para el chip JieLi AC79 (sin FPU).
@@ -11,8 +11,8 @@ Además: HAPPY ACCIDENT, locks de parámetros, 16 pasos de UNDO y 5 temas (EVA-0
 Construido sobre [Dinghy](https://github.com/zvenson/dinghy) (zvenson): USB, MIDI, actualizaciones, rescate USB,
 pantalla y flash. Licencia GPL-3.0-only.
 
-> **Estado: 1.9.3.** La 0.9 corre en un FM-1 "New" (con todos los módulos encendidos y el Chaos Pad, ~30 % de CPU); lo
-> nuevo de la 1.0 a la 1.9.3 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
+> **Estado: 1.9.5.** La 1.9.4 corre en un FM-1 (los siete motores, 3–16 % de CPU, y cinco de ellos medidos contra el
+> simulador: el mismo tono y nivel); lo nuevo de la 1.9.5 está probado en el simulador de host (audio WAV y capturas). El `.fwsc` se compila en
 > GitHub Actions con la toolchain de JieLi. Instalar firmware es bajo tu propio riesgo: el
 > [FM-1 Firmware Hub](https://thefirmwarehub.com) te regresa al firmware oficial, y mantener **OCT-** al encender entra
 > al rescate USB. Las sesiones de la 1.1 en adelante se cargan.
@@ -254,7 +254,7 @@ el pie muestra los segundos trabajos uno tras otro, y al soltar no pasa nada.
 | **PLAY** | un C4 sostenido | **STOP ALL**: detiene BATCH, FIRE TEST, PHYSICS, el barrido RTPC y toda nota |
 | **REC** | ☢ HAPPY ACCIDENT (en la familia de HA KIND) | **UNDO** |
 | **SAVE** | guardar sesión (con A y B, y el sample grabado) | borrar todos los locks |
-| **OCT− / OCT+** | octava | **RESET** / **RANDOMIZE** el módulo de la página (en ASSETS: un asset al azar) |
+| **OCT− / OCT+** | octava | **RESET** / **RANDOMIZE** el módulo de la página (en ASSETS: un asset al azar). **OCT−** otra vez antes de 1 s: **CLEAN ALL**, todos los parámetros de todas las páginas a su valor de fábrica, con lock o sin él; el slot de sample, el tema, los locks y A / B se quedan, y un **UNDO** lo regresa todo |
 | Teclas **F3..G5** | tocar (sostener = nota sostenida, monofónico, última nota gana, glide legato) | |
 | **SEL (toque)** | la acción de la página: **01** A: cargar y tocar el asset, B y C: un chip al azar · **02** REC ARM / STOP · **03** NEW SFX: un sonido nuevo del PRESET con el motor · **05** aplicar la herramienta · **13** C: tocar una pasada · **15** A: semilla nueva, B: guardar A, luego B · **16** tocar el patrón · **17** BATCH (A, C) o FIRE TEST (B) / detener · las demás: aleatorizar el módulo (respeta locks) | |
 
@@ -268,7 +268,11 @@ el pie muestra los segundos trabajos uno tras otro, y al soltar no pasa nada.
 Pon `01_NOMBRE.wav` … `08_NOMBRE.wav` en `samples/` (cualquier frecuencia, mono o estéreo, PCM 8/16/24-bit; NOMBRE
 hasta 8 letras), corre `python3 tools/gen_samples.py` y haz push. Se convierten a 22.05 kHz y 16 bits, máximo 1.48 s,
 y se guardan empacados sin pérdida (el script comprueba que se desempacan igual). Los sonidos afinados deben estar en
-C4. Los actuales se generan por síntesis y sus WAV están en `samples/` para escucharlos.
+C4. Los actuales se generan por síntesis y sus WAV están en `samples/` para escucharlos: **PUNCH**, METAL, ZAP,
+GLITCH, **SWORD**, VOX AH, BELL y DRONE.
+
+Un slot con un sample tuyo (grabado o importado) tapa al de fábrica hasta que lo regresas con **05 SAMPLE LAB →
+FACTORY**: después de actualizar, hazlo en los slots 1 y 5 si ahí tenías algo tuyo y quieres oír PUNCH y SWORD.
 
 ## CPU
 

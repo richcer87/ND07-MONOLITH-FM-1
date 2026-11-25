@@ -1,4 +1,4 @@
-# 05 SAMPLE LAB (ARP x3: 04 A B, 05): slot 1 BOOM REVERSEd (SEL), played; then HALF SPD, played; then REVERT
+# 05 SAMPLE LAB (ARP x3: 04 A B, 05): slot 1 PUNCH REVERSEd (SEL), played; then HALF SPD, played; then REVERT
 # btn: 3 SEL, 10 ARP; enc: 2..5 = K1..K4
 1 btn 10
 2 enc 0 -1

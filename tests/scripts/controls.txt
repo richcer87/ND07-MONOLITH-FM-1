@@ -62,4 +62,15 @@
 8100 enc 2 8
 8300 btn 3
 8400 shot
-8600 end
+# SEL + OCT- twice within 1 s: CLEAN ALL, every parameter to its default; one SEL + REC undoes both taps
+8500 btndown 3
+8550 btn 0
+8600 shot
+8700 btn 0
+8800 btnup 3
+8900 shot
+9000 btndown 3
+9050 btn 13
+9100 btnup 3
+9200 shot
+9400 end

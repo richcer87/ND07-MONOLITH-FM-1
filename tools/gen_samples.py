@@ -18,7 +18,7 @@ SR = 22050
 MAXN = 32700                                     # samples: as long as a 32 KiB mu-law user slot
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "firmware" / "src" / "nd07_samples.h"
-NAMES = ["BOOM", "METAL", "ZAP", "GLITCH", "WHOOSH", "VOX AH", "BELL", "DRONE"]
+NAMES = ["PUNCH", "METAL", "ZAP", "GLITCH", "SWORD", "VOX AH", "BELL", "DRONE"]
 C4 = 261.6256
 rng = np.random.default_rng(707)
 
@@ -35,11 +35,43 @@ def onepole_lp(x, fc):
     return y
 
 
-def boom():
-    t = t_of(0.9); f = 38 + 140 * np.exp(-t * 28)
-    body = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 4.0)
-    click = rng.standard_normal(len(t)) * np.exp(-t * 90) * 0.5
-    return np.tanh(1.8 * (body + click))
+def bandpass(x, fc, q):
+    """A 2-pole resonant band-pass (RBJ, constant peak gain) at a fixed fc."""
+    w = 2 * math.pi * fc / SR; al = math.sin(w) / (2 * q); a0 = 1 + al
+    b0, b2, a1, a2 = al / a0, -al / a0, -2 * math.cos(w) / a0, (1 - al) / a0
+    y = np.empty_like(x); x1 = x2 = y1 = y2 = 0.0
+    for i, v in enumerate(x):
+        y0 = b0 * v + b2 * x2 - a1 * y1 - a2 * y2; x2, x1, y2, y1 = x1, v, y1, y0; y[i] = y0
+    return y
+
+
+def punch():
+    """A melee hit: the body (a sine falling 140 -> 55 Hz), the skin's slap (noise at 1.6 kHz, 25 ms) and a crack on
+    top; short, so it sits under footsteps, combos and UI 'confirm' hits."""
+    t = t_of(0.5); f = 55 + 85 * np.exp(-t * 35)
+    body = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 11)
+    n = rng.standard_normal(len(t))
+    slap = bandpass(n, 1600, 1.2) * np.exp(-t * 40) * 1.4
+    crack = n * np.exp(-t * 300) * 0.35
+    return np.tanh(1.6 * (body + slap + crack))
+
+
+def sword():
+    """A blade drawn and swung: a fast swish (noise through a band that sweeps up) into the 'shing', inharmonic partials
+    over C4 that ring out with a scrape of noise on them; pitched on C4 so the keyboard plays it."""
+    t = t_of(1.2); n = rng.standard_normal(len(t))
+    sw_len = int(0.16 * SR); fc = 500 + 5500 * (np.arange(sw_len) / sw_len) ** 2
+    swish = np.zeros_like(t); s1 = s2 = 0.0
+    for i in range(sw_len):                                  # (the band-ish sweep of whoosh(), shorter and rising)
+        a = 1 - math.exp(-2 * math.pi * fc[i] / SR); s1 += a * (n[i] - s1); s2 += a * (s1 - s2); swish[i] = s1 - s2 * 0.6
+    swish *= np.sin(np.pi * np.minimum(t / (sw_len / SR), 1.0)) ** 2 * 1.3
+    tr = np.maximum(0, t - 0.12)                             # the ring starts as the swish peaks
+    ring = np.zeros_like(t)
+    for k, (r, d) in enumerate([(1.0, 0.9), (2.0, 0.6), (4.07, 0.45), (6.84, 0.32), (10.3, 0.22), (13.9, 0.15)]):
+        ring += np.sin(2 * np.pi * C4 * r * tr + k * 0.7) * np.exp(-tr / d) / (1 + k * 0.5)
+    ring *= np.minimum(1, tr / 0.003) * (t >= 0.12)
+    scrape = bandpass(n, 5200, 2.0) * np.exp(-tr * 9) * (t >= 0.12) * 0.5
+    return swish + 0.8 * ring + scrape
 
 
 def metal():
@@ -69,15 +101,6 @@ def glitch():
     return x * np.exp(-t * 2.5)
 
 
-def whoosh():
-    t = t_of(1.4); n = rng.standard_normal(len(t))
-    sweep = 300 + 5000 * np.sin(np.pi * t / t[-1]) ** 2
-    y = np.empty_like(n); s1 = s2 = 0.0
-    for i, v in enumerate(n):                                # swept 2-pole band-ish
-        a = 1 - math.exp(-2 * math.pi * sweep[i] / SR); s1 += a * (v - s1); s2 += a * (s1 - s2); y[i] = s1 - s2 * 0.6
-    return y * np.sin(np.pi * t / t[-1]) ** 1.5
-
-
 def vox():
     t = t_of(1.48); f0 = C4 * (1 + 0.006 * np.sin(2 * np.pi * 5.2 * t))
     ph = np.cumsum(f0) / SR; src = np.zeros_like(t)
@@ -102,7 +125,7 @@ def drone():
     return onepole_lp(x, 1800) * np.minimum(1, t / 0.15)
 
 
-SYNTH = [boom, metal, zap, glitch, whoosh, vox, bell, drone]
+SYNTH = [punch, metal, zap, glitch, sword, vox, bell, drone]
 
 
 def read_wav(path):

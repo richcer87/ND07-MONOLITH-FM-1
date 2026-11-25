@@ -1,5 +1,19 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.9.5: dos samples nuevos y CLEAN ALL
+
+- **Samples de fábrica:** el slot 1 es **PUNCH** (un golpe cuerpo a cuerpo: el cuerpo de 140 a 55 Hz, la palmada en
+  1.6 kHz y un chasquido encima) y el 5 es **SWORD** (el swish de una espada que sube y su "shing" metálico afinado en
+  C4, con raspón). Reemplazan a BOOM y WHOOSH; los demás suenan igual. Si tenías un sample tuyo en esos slots, sigue
+  ahí: **05 SAMPLE LAB → FACTORY** trae el nuevo.
+- **CLEAN ALL:** **SEL + OCT−** dos veces antes de 1 s. La primera resetea el módulo de la página (como siempre, y el
+  aviso dice "AGAIN: ALL"); la segunda manda todos los parámetros de todas las páginas a su valor de fábrica, con lock
+  o sin él, y detiene todo lo que suena. Se quedan el slot de sample, el tema, las páginas escondidas, los locks y A /
+  B. Un solo **SEL + REC** lo deshace todo. La ayuda de SEL sostenido lo muestra.
+- `docs/GRABAR.md`: la toma 1 con el slot 1 de fábrica (PUNCH) y el motor 2A03; la toma 2 con LFO 1 y GLIDE en 0, el
+  mismo duty en los dos lados y medio segundo entre notas.
+- Los motores suenan igual que en la 1.9.4.
+
 ## v1.9.4: la NES
 
 - **ENGINE 2A03** (NES / Famicom): dos pulsos con su duty y su sweep, el triángulo de 32 pasos, el ruido de 15 bits

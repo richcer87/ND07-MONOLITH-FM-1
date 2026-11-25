@@ -191,7 +191,7 @@ def main():
     ap.add_argument("b")
     ap.add_argument("--png", help="a picture: each note's spectrum, A over B")
     ap.add_argument("--names", help="labels for the notes, comma separated (e.g. the engines, two notes each)")
-    ap.add_argument("--ref", action="store_true", help="the reference take of tests/scripts/ref.txt: its 13 notes named")
+    ap.add_argument("--ref", action="store_true", help="the reference take of tests/scripts/ref.txt: its 15 notes named")
     ap.add_argument("--cents", type=float, default=10.0, help="pitch margin (default 10 cents)")
     ap.add_argument("--db", type=float, default=3.0, help="level and harmonic margin (default 3 dB)")
     o = ap.parse_args()
@@ -215,7 +215,7 @@ def main():
     rb = max((d["rms"] for d in db), default=0)
     names = o.names.split(",") if o.names else []
     if o.ref and not names:
-        names = ["SYNTH (asset)"] + [f"{e} {n}" for e in ("ND07", "YM2149", "YM2612", "SPC700", "SCSP", "DMG") for n in ("C4", "C5")]
+        names = ["SYNTH (asset)"] + [f"{e} {n}" for e in ("ND07", "YM2149", "YM2612", "SPC700", "SCSP", "DMG", "2A03") for n in ("C4", "C5")]
     names = names[skip_a:]
     flags = 0
     for i, (p, q) in enumerate(zip(da, db)):
