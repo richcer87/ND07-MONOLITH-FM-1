@@ -117,7 +117,7 @@ static int16_t rv_ap2[256] __attribute__((section(".pool")));
 static int16_t smp16[SMP_MAX] __attribute__((section(".pool")));   /* the active slot when it holds a recording: 16-bit */
 #define DSP_N 4096u                              /* the SCSP engine's DSP line (chorus, flanger, taps): 93 ms */
 static int16_t dsp_buf[DSP_N] __attribute__((section(".pool")));
-#define EM_N 16384u                             /* the SPC700 engine's echo line: 371 ms */
+#define EM_N 16384u                             /* the SPC700 engine's echo line: 512 ms at its 32 kHz */
 static int16_t em_buf[EM_N] __attribute__((section(".pool")));
 static smprec_t rec __attribute__((section(".pool")));       /* the recorder, and the flash staging (8-bit mu-law) */
 
@@ -761,7 +761,9 @@ static uint8_t eva_big[NP];                     /* (the knob row: a knob's value
 static struct {
     uint32_t ph[4], nacc, lfsr, eph, ecy, sph, mph, lph, dph, pos, mpos, dacc, w, sw, bi;   /* (w: the echo's line, sw: the DSP's) */
     int32_t vol[3], ecnt, zcnt, o1, o2, men[4], bin[16], bout[16], bprev, bprev2, bh[4], fir[8], hp_x, hp_y, lp, lv[4];
-    uint32_t qin, qout[4], qn, egacc, egcnt;    /* the chip's own pitch grid: the note it was given, what it plays */
+    uint32_t qin, qout[4], qn, egacc, egcnt, tk;   /* the chip's own pitch grid: the note it was given, what it plays */
+    int32_t held, sz[4], catt;                  /* (the S-DSP: its last 32 kHz sample, its output filter; the YM2612's
+                                                   carriers: the envelope as their attenuation) */
 } EN;
 #define YM_CLK16 ((uint32_t)(125000ull * 4294967296ull / 44100ull >> 4))   /* (125 kHz as a phase step, / 16) */
 #define YM_N16 ((uint32_t)(125000ull * 65536ull / 44100ull))   /* (125 kHz as steps a sample, Q16) */
@@ -770,6 +772,21 @@ static struct {
 static const uint16_t YM_LOG[32] = {0, 0, 152, 253, 359, 457, 557, 656, 798, 973, 1149, 1323, 1590, 1911, 2230, 2548, 3031,
                                     3640, 4251, 4865, 5789, 6932, 8073, 9211, 10935, 13121, 15315, 17512, 20813, 24838, 28833, 32767};   /* (the
                                                    YM2149's DAC as measured, ayumi's table: a fixed volume v is step 2v + 1) */
+static const uint16_t YM_G16[32] = {155, 217, 304, 426, 498, 583, 659, 746, 867, 1009, 1142, 1293, 1523, 1793, 2055, 2354, 2812,
+                                    3359, 3907, 4544, 5500, 6658, 7832, 9211, 11453, 14248, 17297, 20997, 27682, 36530, 48193, 63745};   /* (the
+                                                   YM2149's 32 output resistors as conductances, 16 / R: MAME's measured
+                                                   ym2149_param_env, from fpgaarcade) */
+#define MD_LP 13976                             /* (the model 1's analog low-pass: one pole, ~3.9 kHz; Genesis Plus GX's
+                                                   60 %, the measured sound of the boards with a discrete YM2612) */
+#define SNES_TICK 3116529557u                  /* (the S-DSP's 32 kHz as a phase step a 44.1 kHz sample) */
+static int32_t snes_lp(int32_t *z, int32_t x)   /* the SNES's output filter after its DAC: two poles at 16 kHz (z: x1 x2 y1 y2) */
+{
+    int32_t y = (int32_t)(((int64_t)8800 * (x + 2 * z[0] + z[1]) - (int64_t)13880 * z[2] - (int64_t)4938 * z[3]) >> 14);
+    z[1] = z[0]; z[0] = x; z[3] = z[2]; z[2] = y;
+    return y;
+}
+#define YM_S0 76655                             /* (the three pull-ups at 630 ohm and three channels at level 0, 16 / R) */
+#define YM_G0 75925                             /* (the pull-downs at 801 ohm and the 1 k load the ST ties them into) */
 static uint32_t pulse_w(int32_t d)               /* a pulse's duty: off, 12.5, 25, 50, 75 % (75: the 25 upside down) */
 {
     return d <= 0 ? 0u : d >= 4 ? 0xC0000000u : 0x10000000u << d;
@@ -788,7 +805,7 @@ static void eng_coef(void)                      /* 01 ENGINE: the seven knobs, a
     if (g != K.eng) {                           /* another chip: its filters from rest (each keeps its state its own way) */
         for (k = 0; k < 7; k++) eva_big[P_E1 + k] = 0;   /* (new names, new values: their sizes again) */
         EN.hp_x = EN.hp_y = EN.lp = 0; EN.lv[0] = EN.lv[1] = EN.lv[2] = EN.lv[3] = 0;
-        EN.qin = 0;
+        EN.qin = 0; EN.held = 0; EN.sz[0] = EN.sz[1] = EN.sz[2] = EN.sz[3] = 0;
     }
     K.eng = (uint8_t)g;
     switch (g) {
@@ -824,7 +841,7 @@ static void eng_coef(void)                      /* 01 ENGINE: the seven knobs, a
         K.s_d = 4096u * 22050u / SR[e[0]];
         K.s_rinv = 0x80000000u / K.s_d;
         K.s_brr = (uint8_t)e[1]; K.s_pm = e[2] * 327; K.s_ev = e[3] * 327; K.s_fb = e[5] * 327; K.s_fir = (uint8_t)e[6];
-        K.s_ed = (uint32_t)(e[4] ? e[4] * 706 : 16);
+        K.s_ed = (uint32_t)(e[4] ? e[4] * 512 : 16);   /* (EDL: 16 ms, 512 of its samples, a step) */
         break;
     case 4: {                                   /* SCSP */
         static const uint32_t FMR[8] = {32768, 65536, 98304, 131072, 196608, 262144, 327680, 458752};
@@ -1012,8 +1029,8 @@ static void k_update(uint32_t chg)              /* the coefficients; the costly 
         K.em_bits = (uint8_t)(m == 2 ? 9 - g * 3 / 100 : 16 - g * 8 / 100);   /* YM2612: 9 .. 6 bits; SCSP: 16 .. 8 */
         K.em_sh = m == 5 ? g * 3 / 101 : g / 40;   /* DMG: wave volume 100 / 50 / 25 %; S-DSP: BRR 0 .. 2 shifts coarser */
         K.em_mix = e8(P_EMIX) * 327 >> 8;
-        K.em_lp = m == 2 ? 19661 : 32768;       /* the console's own low-pass after its DAC: the Mega Drive (model 1)
-                                                   a pole that keeps 40 % a sample, ~6.4 kHz; the others: none */
+        K.em_lp = m == 2 ? MD_LP : 32768;       /* the console's own low-pass after its DAC: the Mega Drive (model 1),
+                                                   ~3.9 kHz; the SNES: its 16 kHz pair of poles (below); the others: none */
     }
     /* 09 DELAY + FLANGER */
     if (chg & KG_DLY) {
@@ -2011,22 +2028,44 @@ static int32_t eng_ym(uint32_t inc, uint32_t step)
     case 8: lvl = EN.ecy & 1u ? 31u - s : s; break;
     default: lvl = 31u;
     }
-    for (k = 0; k < K.y_nch; k++) {
+    for (k = 0; k < K.y_nch; k++) {            /* each channel: how long its output is on this sample, its resistor */
         uint32_t a0 = EN.ph[k];
-        int32_t a, t;
+        int32_t g, t;
         EN.ph[k] = a0 + EN.qout[k];
         t = m >= 3u ? 32768 : box_hi(a0 ^ 0x80000000u, EN.qout[k], 0x80000000u);   /* (the tone high for its second half) */
         if (m == 1u || m == 2u) t = EN.lfsr & 1u ? (m == 1u ? 32768 : t) : 0;
-        a = (int32_t)YM_LOG[lvl] * t >> 15;
-        if (!k && K.y_sid) { EN.sph += inc + (inc >> 9); if (EN.sph >> 31) a -= a * K.y_sid >> 15; }   /* SID: gated near the tone */
-        out += a;
+        g = (int32_t)(((int64_t)(YM_G16[lvl] - YM_G16[0]) * t) >> 15);
+        if (!k && K.y_sid) { EN.sph += inc + (inc >> 9); if (EN.sph >> 31) g -= (int32_t)(((int64_t)g * K.y_sid) >> 15); }   /* SID: gated near the tone */
+        out += g;
     }
-    if (K.y_digi) {                             /* the sample, 4 bits, through the volume register */
+    if (K.y_digi) {                             /* the sample, 4 bits, through a volume register */
         int32_t v = eng_smp(&EN.pos, step, 0);
-        out += (int32_t)YM_LOG[((uint32_t)(clampi(v, -32768, 32767) + 32768) >> 12) * 2u + 1u] * K.y_digi >> 15;
+        out += (int32_t)(((int64_t)(YM_G16[((uint32_t)(clampi(v, -32768, 32767) + 32768) >> 12) * 2u + 1u] - YM_G16[0]) * K.y_digi) >> 15);
     }
+    /* the three outputs tied together, as on the Atari ST and the MSX: a resistor network, not a sum. Two channels
+     * up come out 1.9 x one, not 2 x; it is why the ST's sample players needed their tables (MAME's model) */
+    out = (int32_t)(((((uint32_t)out * 16306u) >> 15) << 15) / (uint32_t)(YM_S0 + YM_G0 + out));
+    out = out * 1749 >> 8;                      /* (one channel at full: as loud as before) */
     EN.lv[0] = (int32_t)lvl;
     return dcblock((int32_t)(((int64_t)out * K.y_g) >> 15), &EN.hp_x, &EN.hp_y);
+}
+static const uint8_t LOG2F[256] = {   /* (log2(1 + i / 256), Q6: an amplitude to the chip's attenuation) */
+    0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12,
+    12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 19, 20, 20,
+    20, 21, 21, 21, 21, 22, 22, 22, 23, 23, 23, 23, 24, 24, 24, 25, 25, 25, 25, 26, 26, 26, 26, 27, 27, 27, 28, 28,
+    28, 28, 29, 29, 29, 29, 30, 30, 30, 30, 31, 31, 31, 31, 32, 32, 32, 32, 33, 33, 33, 34, 34, 34, 34, 35, 35, 35,
+    35, 35, 36, 36, 36, 36, 37, 37, 37, 37, 38, 38, 38, 38, 39, 39, 39, 39, 40, 40, 40, 40, 41, 41, 41, 41, 41, 42,
+    42, 42, 42, 43, 43, 43, 43, 43, 44, 44, 44, 44, 45, 45, 45, 45, 45, 46, 46, 46, 46, 47, 47, 47, 47, 47, 48, 48,
+    48, 48, 49, 49, 49, 49, 49, 50, 50, 50, 50, 50, 51, 51, 51, 51, 51, 52, 52, 52, 52, 52, 53, 53, 53, 53, 54, 54,
+    54, 54, 54, 55, 55, 55, 55, 55, 56, 56, 56, 56, 56, 56, 57, 57, 57, 57, 57, 58, 58, 58, 58, 58, 59, 59, 59, 59,
+    59, 60, 60, 60, 60, 60, 61, 61, 61, 61, 61, 61, 62, 62, 62, 62, 62, 63, 63, 63, 63, 63, 63, 64, 64};
+static int32_t opn_att(int32_t a)              /* an amplitude (Q15) as attenuation: 64 steps an octave (0.094 dB), 0 .. 1023 */
+{
+    int32_t p = 14;
+    if (a <= 0) return 1023;
+    if (a > 32767) a = 32767;
+    while (!(a >> p)) p--;
+    return clampi(15 * 64 - (p * 64 + LOG2F[((uint32_t)a << (15 - p) >> 7) & 255u]), 0, 1023);
 }
 static int32_t opn_op(uint32_t ph, int32_t mod, int32_t att)   /* one operator: its phase's top 10 bits plus the
                                                    modulation, the quarter sine as a log, the attenuation added, back
@@ -2083,7 +2122,7 @@ static int32_t eng_opn(uint32_t inc, uint32_t step)
         if (K.o_ssg) { o = EN.sph; EN.sph += K.o_sinc; if (EN.sph < o) EN.ecy++; }
         fb = K.o_fb ? (EN.o1 + EN.o2) >> (10 - K.o_fb) : 0;   /* (FEEDBACK 7: 4 pi, as the chip's) */
 #define OP(k, mod) opn_op(EN.ph[k] += (uint32_t)(((uint64_t)EN.qout[0] * K.o_mul[k]) >> 16), (mod), \
-                          OPN_CAR[a] >> (k) & 1u ? K.o_ctl : clampi(EN.men[k] + K.o_tl, 0, 1023))
+                          OPN_CAR[a] >> (k) & 1u ? EN.catt : clampi(EN.men[k] + K.o_tl, 0, 1023))
         y1 = OP(0, fb);
         switch (a) {                            /* (a modulator's 14 bits, halved, turns the phase: up to 4 turns) */
         case 0: y2 = OP(1, y1 >> 1); y3 = OP(2, y2 >> 1); out = OP(3, y3 >> 1) >> 5; break;
@@ -2100,7 +2139,8 @@ static int32_t eng_opn(uint32_t inc, uint32_t step)
         for (k = 0; k < 4; k++) EN.lv[k] = (1023 - EN.men[k]) * 32;
     }
     out = clampi(out, -256, 255);               /* the channel's 9 bits; the DAC's ladder: no step between -1 and +1 */
-    return (out + (out >= 0)) * 128;
+    out = (out + (out >= 0)) * 128;
+    return EN.lp += (int32_t)(((int64_t)(out - EN.lp) * MD_LP) >> 15);   /* the Mega Drive's own low-pass after it (model 1) */
 }
 /* The S-DSP's own arithmetic (from snes_spc 0.9.0, SPC_DSP.cpp, (C) 2007 Shay Green, LGPL-2.1-or-later: the table and
  * the formulas, bit for bit): its Gaussian kernel, read from the SNES, and the BRR decoder's four filters. The encoder
@@ -2183,19 +2223,26 @@ static int32_t eng_spc(uint32_t inc, uint32_t step)
         if (++EN.bi >= 16u) { brr_block(EN.bin, EN.bout, &EN.bprev, &EN.bprev2, (int32_t)K.s_brr); EN.bi = 0; }   /* (BRR:
                                                    the best of the four filters, GRIT coarser) */
     }
-    t = (int32_t)(((uint64_t)EN.dacc * K.s_rinv) >> 16);   /* (between two stored samples, Q15) */
-    y = spc_gauss(EN.bh, t);                    /* the S-DSP's Gaussian, its own table */
-    if (K.s_ev) {                               /* the echo: its line, its FIR on what comes back, the feedback */
-        int32_t e = 0;
-        for (k = 7; k > 0; k--) EN.fir[k] = EN.fir[k - 1];
-        EN.fir[0] = em_buf[(EN.w - K.s_ed) & (EM_N - 1u)];
-        for (k = 0; k < 8; k++) e += EN.fir[k] * SPC_FIR[K.s_fir][k];
-        e >>= 7;
-        em_buf[EN.w] = sat16(y + (int32_t)(((int64_t)e * K.s_fb) >> 15));
-        EN.w = (EN.w + 1u) & (EM_N - 1u);
-        y += (int32_t)(((int64_t)e * K.s_ev) >> 15);
+    if ((EN.tk += SNES_TICK) < SNES_TICK) {     /* the DSP's own clock, 32 kHz: a sample read, the echo turned, held */
+        t = (int32_t)(((uint64_t)EN.dacc * K.s_rinv) >> 16);   /* (between two stored samples, Q15) */
+        y = spc_gauss(EN.bh, t);                /* the S-DSP's Gaussian, its own table */
+        if (K.s_ev) {                           /* the echo: its line (16 ms a step), its FIR on what comes back, the
+                                                   feedback, rounded as the DSP rounds */
+            int32_t e = 0;
+            const int8_t *c = SPC_FIR[K.s_fir];
+            for (k = 7; k > 0; k--) EN.fir[k] = EN.fir[k - 1];
+            EN.fir[0] = em_buf[(EN.w - K.s_ed) & (EM_N - 1u)];
+            for (k = 7; k > 0; k--) e += (EN.fir[k] * c[7 - k]) >> 7;   /* (FIR 0 the oldest; seven taps that wrap at 16
+                                                   bits, the last one clamped) */
+            e = (int16_t)e;
+            e = clampi(e + ((EN.fir[0] * c[7]) >> 7), -32768, 32767) & ~1;
+            em_buf[EN.w] = clampi(y + (int32_t)(((int64_t)e * K.s_fb) >> 15), -32768, 32767) & ~1;
+            EN.w = (EN.w + 1u) & (EM_N - 1u);
+            y = clampi(y + (int32_t)(((int64_t)e * K.s_ev) >> 15), -32768, 32767);
+        }
+        EN.held = y;
     }
-    return y;
+    return snes_lp(EN.sz, EN.held);
 }
 static int32_t eng_scsp(uint32_t inc, uint32_t step)
 {
@@ -2285,8 +2332,12 @@ static void stage_src(uint32_t n)               /* the envelope, the glide, 01 t
             }
             if (K.pass_mul != 65536u) ratio = (uint32_t)(((uint64_t)ratio * K.pass_mul) >> 16);   /* (12 PASS-BY) */
             if (K.eng) {                        /* 01 ENGINE: the chip makes the voice */
-                sig = eng_tick(ratio);
-                sig = (int32_t)(((int64_t)sig * (K.gfrz && V.stage == ST_OFF ? 32767 : env15) >> 15) * K.velg >> 15);
+                int32_t a = (int32_t)((int64_t)(K.gfrz && V.stage == ST_OFF ? 32767 : env15) * K.velg >> 15);
+                if (K.eng == 2u && K.o_alg != 8u) {   /* (the YM2612: the envelope rides on the carriers' attenuation,
+                                                   inside the chip, so a fading note meets its 9-bit DAC as it did) */
+                    EN.catt = clampi(K.o_ctl + opn_att(a), 0, 1023);
+                    sig = eng_tick(ratio);
+                } else sig = (int32_t)(((int64_t)eng_tick(ratio) * a) >> 15);
                 blk_e[i] = env15; blk_b[i] = sig;
                 continue;
             }
@@ -2402,7 +2453,7 @@ static void stage_eq(uint32_t n)
  *   DMG     the Game Boy's wave channel: 4-bit samples, the volume shift, and the output capacitor's high-pass
  * then the console's analog low-pass (the Mega Drive's); MIX against the sound before it. Its echo is the SPC700
  * engine's own */
-static struct { uint32_t ph; int32_t h[4], hp_x, hp_y, lp, bprev, bprev2, bin[16], bout[16]; uint32_t bi; uint8_t last; } EMV;
+static struct { uint32_t ph; int32_t h[4], hp_x, hp_y, lp, sz[4], bprev, bprev2, bin[16], bout[16]; uint32_t bi; uint8_t last; } EMV;
 static int32_t emu_take(int32_t x)              /* one sample at the chip's clock: through its DAC */
 {
     int32_t y, q;
@@ -2431,7 +2482,7 @@ static void stage_emu(uint32_t n)
 {
     uint32_t i;
     int32_t *b = blk_b;
-    if (K.em != EMV.last) { EMV.hp_x = EMV.hp_y = 0; EMV.lp = 0; EMV.last = K.em; }
+    if (K.em != EMV.last) { EMV.hp_x = EMV.hp_y = 0; EMV.lp = 0; EMV.sz[0] = EMV.sz[1] = EMV.sz[2] = EMV.sz[3] = 0; EMV.last = K.em; }
     for (i = 0; i < n; i++) {
         int32_t x = b[i], y, t;
         uint32_t ph = EMV.ph + K.em_inc;
@@ -2446,6 +2497,7 @@ static void stage_emu(uint32_t n)
             EMV.hp_x = y; EMV.hp_y = hy; y = hy;
         }
         if (K.em_lp < 32768) y = EMV.lp += (int32_t)(((int64_t)(y - EMV.lp) * K.em_lp) >> 15);   /* the console's low-pass */
+        else if (K.em == 3) y = snes_lp(EMV.sz, y);
         b[i] = x + (int32_t)(((int64_t)(y - x) * K.em_mix) >> 15);
     }
 }
@@ -4542,7 +4594,7 @@ static void app_ota_show(uint32_t step, int32_t code)
 }
 /* ---- the start (1.8 s; a key, a knob or a note ends it): the monolith drawn edge by edge, turning once, two orbits
  * opening round it and the dust falling in; the name written under it; the scan and the progress line of the start */
-#define ND07_VER "1.9"
+#define ND07_VER "1.9.1"
 #define BOOT_MS 1800u
 static uint32_t boot_end;                       /* fm1_ms the start ends (0: over) */
 static void boot_paint(int32_t oy, uint32_t t)  /* one 240 x 80 strip, from y = oy (the canvas: 240 x 112 at most) */

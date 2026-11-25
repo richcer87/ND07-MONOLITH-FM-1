@@ -5,7 +5,9 @@
  *   YM2612  the two ROMs (the first and last words as decapped), an operator's 6 dB at 64 steps of attenuation, the
  *           DAC's ladder (no step between -1 and +1)
  *   S-DSP   the Gaussian's four taps add up to 2048 (+-1) wherever it reads; BRR filter 1 decodes 15/16 of the last;
- *           a block of a sine coded and decoded comes back within its 4 bits
+ *           a block of a sine coded and decoded comes back within its 4 bits; its 16 kHz output filter at -3 dB
+ *   1.9.1   the YM2149's three outputs tied (three channels up: 1.89 x one, MAME's resistor model); the Mega Drive's
+ *           model 1 low-pass at ~3.9 kHz; the YM2612's envelope as attenuation (half the amplitude: 64 steps)
  * cc -DDINGHY_HOST -Ifirmware/hal -Ifirmware/src -Ifirmware/gen tests/chips_test.c */
 #define main host_main
 #include "../firmware/src/nd07.c"
@@ -49,6 +51,26 @@ int main(void)
     brr_block(in, out, &q1, &q2, 0);
     for (k = 0, d = 0; k < 16; k++) if (absi(out[k] - in[k]) > d) d = absi(out[k] - in[k]);
     near("S-DSP BRR: a sine block's worst error", d, 0, 12000 / 8);
+    {                                           /* the YM2149's resistor network: one channel against three */
+        int32_t one = YM_G16[31] - YM_G16[0], y1, y3;
+        y1 = (int32_t)(((((uint32_t)one * 16306u) >> 15) << 15) / (uint32_t)(YM_S0 + YM_G0 + one));
+        y3 = (int32_t)(((((uint32_t)(3 * one) * 16306u) >> 15) << 15) / (uint32_t)(YM_S0 + YM_G0 + 3 * one));
+        near("YM2149 tied outputs: three channels / one", y3 / (double)y1, 1.889, 0.01);
+    }
+    {                                           /* two filters measured by their gain at one frequency */
+        int32_t z[4] = {0, 0, 0, 0}, lp = 0, n;
+        double pk = 0, pm = 0;
+        for (n = 0; n < 4410; n++) {
+            int32_t x16 = (int32_t)(10000.0 * sin(2 * M_PI * 16000.0 * n / 44100.0)), x4 = (int32_t)(10000.0 * sin(2 * M_PI * 3902.0 * n / 44100.0));
+            int32_t y16 = snes_lp(z, x16);
+            lp += (int32_t)(((int64_t)(x4 - lp) * MD_LP) >> 15);
+            if (n > 2000) { if (absi(y16) > pk) pk = absi(y16); if (absi(lp) > pm) pm = absi(lp); }
+        }
+        near("SNES output filter at 16 kHz (dB)", 20 * log10(pk / 10000.0), -3.0, 0.6);
+        near("Mega Drive model 1 low-pass at 3.9 kHz (dB)", 20 * log10(pm / 10000.0), -3.0, 0.8);
+    }
+    near("YM2612 envelope: full amplitude, attenuation", opn_att(32767), 0, 0);
+    near("YM2612 envelope: half amplitude, attenuation", opn_att(16384), 64, 0);
     printf("bad=%d\n", bad);
     return bad != 0;
 }
