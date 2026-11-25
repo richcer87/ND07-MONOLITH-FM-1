@@ -198,10 +198,10 @@ static const char *const E_CNOISE[] = {"LONG", "SHORT 93"};
 static const char *const E_CPRE[] = {"COIN", "JUMP", "LASER", "HIT", "POWERUP", "EXPLODE", "BLIP"};
 static const char *const E_BCNT[] = {"4", "8", "12", "16"};
 /* PRINT (ENGINE C): the sound printed through a console's chip; each with the machines it sounds like */
-static const char *const E_EMU[] = {"OFF", "YM2149", "YM2612", "S-DSP", "SCSP", "DMG"};
+static const char *const E_EMU[] = {"OFF", "YM2149", "YM2612", "S-DSP", "SCSP", "DMG", "DMC"};
 /* 01 ENGINE: the voice itself made by a console's chip (ND07: the oscillators and samples of 02, as they are) */
-static const char *const E_ENG[] = {"ND07", "YM2149", "YM2612", "SPC700", "SCSP", "DMG"};
-#define NENG 6
+static const char *const E_ENG[] = {"ND07", "YM2149", "YM2612", "SPC700", "SCSP", "DMG", "2A03"};
+#define NENG 7
 /* 15 ASSETS: base sounds for game audio, three to a row (the screen's grid): hits, weapons, motion, UI, rewards, beings */
 static const char *const E_ASSET[] = {"EXPLODE", "IMPACT", "HIT", "DEBRIS", "GUNSHOT", "LASER", "ZAP", "WHOOSH", "RISER",
                                       "UI OK", "UI ERR", "UI TICK", "PICKUP", "POWERUP", "MAGIC", "MONSTER", "ALARM", "ENGINE", "SYNTH"};
@@ -298,7 +298,7 @@ static const pdesc_t PD[NP] = {
     [P_RSV1] = {"-", 0, 0, 0, 1, F_INT, 0},                 [P_RSV2] = {"-", 0, 0, 0, 1, F_INT, 0},   /* (VOWEL's last two) */
     [P_THEME] = {"THEME", 0, 4, 4, 1, F_ENUM, E_THEME},
     [P_ASSET] = {"ASSET", 0, NASSET - 1, 0, 1, F_ENUM, E_ASSET},
-    [P_EMU] = {"CHIP", 0, 5, 0, 1, F_ENUM, E_EMU},          [P_ERATE] = {"RATE", 0, 100, 50, 1, F_ERATE, 0},
+    [P_EMU] = {"CHIP", 0, 6, 0, 1, F_ENUM, E_EMU},          [P_ERATE] = {"RATE", 0, 100, 50, 1, F_ERATE, 0},
     [P_EGRIT] = {"GRIT", 0, 100, 30, 1, F_PCT, 0},          [P_EMIX] = {"PRINT", 0, 100, 0, 1, F_PCT, 0},
     [P_EECHO] = {"ECHO", 0, 100, 0, 1, F_PCT, 0},           [P_ETIME] = {"E TIME", 1, 15, 5, 1, F_ETIME, 0},
     [P_ETONE] = {"TONE", 0, 100, 60, 1, F_ETONE, 0},
@@ -320,6 +320,8 @@ enum { EF_NUM, EF_PCT, EF_EN, EF_ENV7, EF_ZHZ, EF_NP, EF_YRATE, EF_DEC, EF_MS16,
 typedef struct { const char *name; uint8_t hi, def, fmt; const char *const *en; } eparam_t;
 static const char *const EN_DUTY[] = {"OFF", "12.5%", "25%", "50%", "75%"};
 static const char *const EN_DNS[] = {"OFF", "LONG", "SHORT"};
+static const char *const EN_TRI[] = {"OFF", "NOTE", "OCT DN"};
+static const char *const EN_NOUT[] = {"NES", "FAMICOM"};
 static const char *const EN_P2[] = {"OFF", "DETUNE", "OCT UP", "5TH UP", "OCT DN"};
 static const char *const EN_DWAV[] = {"OFF", "SAW", "TRI", "SINE", "PULSE", "BASS", "VOX", "BELL", "GRIT"};
 static const char *const EN_WVOL[] = {"0%", "25%", "50%", "100%"};
@@ -348,6 +350,8 @@ static const eparam_t EPD[NENG][7] = {
      {"PLFO", 100, 0, EF_PCT, 0}, {"ALFO", 100, 0, EF_PCT, 0}, {"DSP", 4, 1, EF_EN, EN_DSP}},
     {{"DUTY", 4, 3, EF_EN, EN_DUTY}, {"PULSE 2", 4, 0, EF_EN, EN_P2}, {"WAVE", 8, 0, EF_EN, EN_DWAV}, {"W VOL", 3, 3, EF_EN, EN_WVOL},
      {"NOISE", 2, 0, EF_EN, EN_DNS}, {"ENV", 14, 7, EF_ENV7, 0}, {"ZOMBIE", 100, 0, EF_ZHZ, 0}},
+    {{"DUTY", 4, 3, EF_EN, EN_DUTY}, {"PULSE 2", 4, 0, EF_EN, EN_P2}, {"TRIANGLE", 2, 0, EF_EN, EN_TRI}, {"NOISE", 2, 0, EF_EN, EN_DNS},
+     {"DECAY", 15, 0, EF_NUM, 0}, {"SWEEP", 14, 7, EF_ENV7, 0}, {"OUT", 1, 0, EF_EN, EN_NOUT}},
 };
 /* the YM2612's two ROMs (as decapped: Nuked-OPN2): a quarter sine as -log2 (Q8), and 2^x for its way back. An operator
  * adds its attenuation (Q8 octaves / 32: 0.094 dB) to the log, and the exp turns it into 13 bits and a sign */
@@ -380,7 +384,7 @@ static const uint16_t SCSP_LFOF[32] = {17, 19, 23, 27, 34, 39, 45, 55, 68, 78, 9
                                        479, 607, 718, 860, 1080, 1440, 1720, 2150, 2870, 4310, 5740, 8610, 17230};   /* (the SCSP's
                                                    32 LFO rates, cHz: LFOF) */
 static const uint8_t OPN_CAR[9] = {8, 8, 8, 8, 10, 14, 14, 15, 0};   /* YM2612: each algorithm's carriers (bit k: operator k + 1) */
-static const char *const ENG_HOST[NENG] = {"03 OSC + SAMPLE", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY"};
+static const char *const ENG_HOST[NENG] = {"03 OSC + SAMPLE", "ATARI ST / MSX", "MEGA DRIVE", "SUPER NES", "SATURN", "GAME BOY", "NES / FAMICOM"};
 #define ENG_G (P[P_ENG] < 0 ? 0 : P[P_ENG] >= NENG ? NENG - 1 : P[P_ENG])   /* (the engine, in range) */
 static int32_t p_hi(uint32_t p)                 /* a knob's top: ENGINE's seven, as its engine says */
 {
@@ -656,9 +660,11 @@ static struct {
     uint32_t em_inc;                            /* its sample clock (a phase step a sample) */
     int32_t em_lv[32], em_sh, em_mix, em_lp;   /* YM2149's log DAC; BRR's extra shift / DMG's
                                                    volume shift; mix; the console's low-pass after it (Q15) */
-    uint8_t eng, d_p2, d_wave, d_wsh, d_short, y_np, y_mix, y_env, y_nch, o_alg, o_fb, o_ssg, o_dr, s_brr, s_fir, sc_fms, sc_dsp;   /* 01 ENGINE */
+    uint8_t eng, n_p2, n_tri, n_nz, n_dec, n_fc, d_p2, d_wave, d_wsh, d_short, y_np, y_mix, y_env, y_nch, o_alg, o_fb, o_ssg, o_dr, s_brr, s_fir, sc_fms, sc_dsp;   /* 01 ENGINE */
     int32_t d_vol, d_nvol, d_edir, y_sid, y_digi, y_g, o_tl, o_ctl, s_pm, s_ev, s_fb, sc_fmd, sc_pl, sc_al;
-    uint32_t d_pw, d_eper, d_zper, d_p2mul, y_einc, y_bmul, y_mul[3], o_mul[4], o_sinc, s_d, s_rinv, s_ed, sc_linc, sc_fmr, sc_dinc;
+    uint32_t n_pw, n_p2mul, d_pw, d_eper, d_zper, d_p2mul;
+    int32_t n_sw;
+    uint32_t y_einc, y_bmul, y_mul[3], o_mul[4], o_sinc, s_d, s_rinv, s_ed, sc_linc, sc_fmr, sc_dinc;
 } K;
 static volatile int32_t v_note = 60, v_gate, v_vel = 25800;
 static volatile uint32_t v_seq, v_pseq;
@@ -685,8 +691,8 @@ static uint32_t db_lin(int32_t q)               /* 10^(q / 80): a gain in quarte
 static uint32_t emu_rate(int32_t chip, int32_t v8)   /* PRINT: RATE (Q8 %) as the chip's sample clock, Hz, on a log scale
                                                    over what its games used */
 {
-    static const uint16_t LO[6] = {0, 4000, 4000, 8000, 11025, 2048}, HI[6] = {0, 22050, 26000, 32000, 44100, 16384};
-    int32_t c = clampi(chip, 1, 5), oct = ilog2_q8(HI[c]) - ilog2_q8(LO[c]);
+    static const uint16_t LO[7] = {0, 4000, 4000, 8000, 11025, 2048, 4181}, HI[7] = {0, 22050, 26000, 32000, 44100, 16384, 33144};
+    int32_t c = clampi(chip, 1, 6), oct = ilog2_q8(HI[c]) - ilog2_q8(LO[c]);
     return (uint32_t)(((uint64_t)LO[c] * exp2_q16(v8 / 100 * oct / 256)) >> 16);
 }
 static int32_t ei(uint32_t p) { return S8[p] >> 8; }   /* the parameter, whole */
@@ -794,6 +800,8 @@ static int32_t snes_lp(int32_t *z, int32_t x)   /* the SNES's output filter afte
     z[1] = z[0]; z[0] = x; z[3] = z[2]; z[2] = y;
     return y;
 }
+#define NES_P16 680893420u                      /* (the 2A03's pulse clock, 1789773 / 16 Hz, as a phase step a sample, / 16) */
+#define NES_N16 2659739u                        /* (its CPU clock in noise steps a sample, Q16: / the period) */
 #define YM_S0 76655                             /* (the three pull-ups at 630 ohm and three channels at level 0, 16 / R) */
 #define YM_G0 75925                             /* (the pull-downs at 801 ohm and the 1 k load the ST ties them into) */
 static uint32_t pulse_w(int32_t d)               /* a pulse's duty: off, 12.5, 25, 50, 75 % (75: the 25 upside down) */
@@ -867,6 +875,11 @@ static void eng_coef(void)                      /* 01 ENGINE: the seven knobs, a
         k = e[5] - 7; K.d_edir = k < 0 ? -1 : k > 0;   /* ENV: down or up a step every (8 - n) / 64 s */
         K.d_eper = k ? (uint32_t)(8 - absi(k)) * 689u : 0u;
         K.d_zper = e[6] ? 44100u / (2u + (uint32_t)e[6] * 58u / 100u) : 0u;   /* ZOMBIE: 2 .. 60 pokes a second */
+        break;
+    case 6:                                     /* 2A03 */
+        K.n_pw = pulse_w(e[0]); K.n_p2 = (uint8_t)e[1]; K.n_p2mul = P2[e[1]]; K.n_tri = (uint8_t)e[2]; K.n_nz = (uint8_t)e[3];
+        K.n_dec = (uint8_t)e[4]; K.n_sw = e[5] - 7; K.n_fc = (uint8_t)e[6];
+        EN.qin = 0;
         break;
     default: break;
     }
@@ -1037,7 +1050,7 @@ static void k_update(uint32_t chg)              /* the coefficients; the costly 
         K.em_bits = (uint8_t)(m == 2 ? 9 - g * 3 / 100 : 16 - g * 8 / 100);   /* YM2612: 9 .. 6 bits; SCSP: 16 .. 8 */
         K.em_sh = m == 5 ? g * 3 / 101 : g / 40;   /* DMG: wave volume 100 / 50 / 25 %; S-DSP: BRR 0 .. 2 shifts coarser */
         K.em_mix = e8(P_EMIX) * 327 >> 8;
-        K.em_lp = m == 2 ? MD_LP : 32768;       /* the console's own low-pass after its DAC: the Mega Drive (model 1),
+        K.em_lp = m == 2 ? MD_LP : m == 6 ? 28310 : 32768;      /* the console's own low-pass after its DAC: the Mega Drive (model 1),
                                                    ~3.9 kHz; the SNES: its 16 kHz pair of poles (below); the others: none */
     }
     /* 09 DELAY + FLANGER */
@@ -2032,6 +2045,55 @@ static int32_t eng_dmg(uint32_t inc)
     EN.hp_x = out; EN.hp_y = k;
     return k;
 }
+static int32_t eng_nes(uint32_t inc)           /* the NES's 2A03: two pulses, the triangle, the noise; its mixer */
+{
+    static const uint16_t NP[16] = {4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068};   /* (NTSC) */
+    int32_t k, P, X, y, a, tv;
+    uint32_t pw = K.n_pw, t = K.m_len[2] ? (uint32_t)V.c_tim : 0u, nz = K.n_nz, p2 = K.n_p2, tri = K.n_tri, n;
+    if (t) {                                    /* TIMBRE: the duty, or one channel alone */
+        pw = t <= 4u ? pulse_w((int32_t)t) : 0u;
+        if (t >= 5u) { p2 = 0; tri = t == 5u ? (tri ? tri : 1u) : 0u; nz = t == 6u ? 1u : t == 7u ? 2u : 0u; }
+    }
+    if (inc != EN.qin) {                        /* a new note: its periods (11 bits), the noise's nearest of sixteen */
+        uint32_t d, best = 0, be = 0xFFFFFFFFu, tn = inc >> 12;   /* (the noise near 16 x the note, Q16 steps) */
+        EN.qin = inc;
+        EN.mpos = grid_div(NES_P16, inc, 2048u);   /* (pulse 1's period: SWEEP moves it) */
+        EN.qout[0] = NES_P16 / EN.mpos << 4;
+        EN.qout[1] = NES_P16 / grid_div(NES_P16, (uint32_t)(((uint64_t)inc * K.n_p2mul) >> 16), 2048u) << 4;
+        EN.qout[2] = (NES_P16 >> 1) / grid_div(NES_P16 >> 1, tri == 2u ? inc >> 1 : inc, 2048u) << 4;   /* (32 steps: / 32) */
+        for (k = 0; k < 16; k++) { d = NES_N16 / NP[k]; d = d > tn ? d * 16u / (tn | 1u) : tn * 16u / (d | 1u); if (d < be) { be = d; best = (uint32_t)k; } }
+        EN.qn = NES_N16 / NP[best];
+    }
+    if (++EN.ecnt >= 184) {                     /* the frame counter's quarter frame, 240 Hz: DECAY; SWEEP at half */
+        EN.ecnt = 0; EN.zcnt++;
+        if (K.n_dec && !(EN.zcnt % (uint32_t)(K.n_dec + 1))) for (k = 0; k < 3; k++) if (EN.vol[k]) EN.vol[k]--;
+        if (K.n_sw && !(EN.zcnt & 1u) && EN.mpos >= 9u && EN.mpos <= 2048u) {   /* the sweep unit: the period +- itself >> s */
+            uint32_t ch = EN.mpos >> (8 - absi(K.n_sw));
+            EN.mpos = K.n_sw > 0 ? EN.mpos - ch : EN.mpos + ch;
+            EN.qout[0] = EN.mpos >= 9u && EN.mpos <= 2048u ? NES_P16 / EN.mpos << 4 : 0u;
+        }
+    }
+    a = EN.ph[0]; EN.ph[0] = a + EN.qout[0];
+    P = EN.mpos >= 9u && EN.qout[0] ? EN.vol[0] * box_hi((uint32_t)a, EN.qout[0], pw) : 0;   /* (a period under 9: silent) */
+    if (p2) { a = EN.ph[1]; EN.ph[1] = a + EN.qout[1]; P += EN.vol[1] * box_hi((uint32_t)a, EN.qout[1], pw); }
+    tv = 0;
+    if (tri) { uint32_t st = (EN.ph[2] += EN.qout[2]) >> 27; tv = (int32_t)(st < 16u ? 15u - st : st - 16u); }
+    X = tv * 2039;
+    if (nz) {                                   /* the LFSR: 15 bits, its tap at 1 or (SHORT) 6 */
+        EN.nacc += EN.qn;
+        for (n = EN.nacc >> 16; n > 0u; n--) { uint32_t b = (EN.lfsr ^ (EN.lfsr >> (nz == 2u ? 6u : 1u))) & 1u; EN.lfsr = (EN.lfsr >> 1) | (b << 14); }
+        EN.nacc &= 0xFFFFu;
+        if (!(EN.lfsr & 1u)) X += EN.vol[2] * 1371;
+    }
+    /* the mixer, as the NES's DACs add (nesdev): pulses 95.88 / (8128 / p + 100), the rest 159.79 / (1 / x + 100) */
+    P >>= 5;
+    y = P * 6136 / ((8323072 + 100 * P) >> 10) + X * 2560 / ((16777216 + 100 * X) >> 12);
+    y = y * 5 >> 1;                             /* (one pulse at 15: about as loud as the other engines) */
+    /* its output: high-passes at 90 and 440 Hz and a low-pass at 14 kHz (the NES); the Famicom: 37 Hz and 14 kHz */
+    k = y - EN.hp_x; EN.hp_x = y; EN.hp_y = (int32_t)(((int64_t)(EN.hp_y + k) * (K.n_fc ? 32596 : 32351)) >> 15); y = EN.hp_y;
+    if (!K.n_fc) { k = y - EN.sz[0]; EN.sz[0] = y; EN.sz[1] = (int32_t)(((int64_t)(EN.sz[1] + k) * 30777) >> 15); y = EN.sz[1]; }
+    return EN.sz[2] += (int32_t)(((int64_t)(y - EN.sz[2]) * 28310) >> 15);
+}
 static int32_t eng_ym(uint32_t inc, uint32_t step)
 {
     uint32_t k, s, old, lvl, m = K.y_mix, n, tm = K.m_len[2] ? (uint32_t)V.c_tim : 0u;
@@ -2333,6 +2395,7 @@ static int32_t __attribute__((noinline)) eng_tick(uint32_t ratio)
     case 2: return eng_opn(inc, step);
     case 3: return eng_spc(inc, step);
     case 4: return eng_scsp(inc, step);
+    case 6: return eng_nes(inc);
     default: return eng_dmg(inc);
     }
 }
@@ -2491,12 +2554,15 @@ static void stage_eq(uint32_t n)
  *   DMG     the Game Boy's wave channel: 4-bit samples, the volume shift, and the output capacitor's high-pass
  * then the console's analog low-pass (the Mega Drive's); MIX against the sound before it. Its echo is the SPC700
  * engine's own */
-static struct { uint32_t ph; int32_t h[4], hp_x, hp_y, lp, sz[4], bprev, bprev2, bin[16], bout[16]; uint32_t bi; uint8_t last; } EMV;
+static struct { uint32_t ph; int32_t dmc, h[4], hp_x, hp_y, lp, sz[4], bprev, bprev2, bin[16], bout[16]; uint32_t bi; uint8_t last; } EMV;
 static int32_t emu_take(int32_t x)              /* one sample at the chip's clock: through its DAC */
 {
     int32_t y, q;
     x = clampi(x, -32767, 32767);
     switch (K.em) {
+    case 6:                                     /* the 2A03's DMC: one bit a sample, its 7-bit counter up or down by 2 */
+        EMV.dmc = clampi(EMV.dmc + ((x >> 9) + 64 > EMV.dmc ? 2 : -2), 0, 127);
+        return (EMV.dmc - 64) << 9;
     case 1: {                                   /* the nearest log step (a binary search) */
         int32_t u = x + 32768, lo = 0, hi = K.em_n - 1;
         while (hi - lo > 1) { int32_t mid = (lo + hi) >> 1; if (K.em_lv[mid] <= u) lo = mid; else hi = mid; }
@@ -2703,6 +2769,8 @@ static void eng_random(int noisy)               /* the engine's seven at random 
     case 4: set_unlocked(P_E5, rnd_range(0, 30)); set_unlocked(P_E6, rnd_range(0, 40)); break;
     case 5: set_unlocked(P_E1, noisy ? 0 : rnd_range(1, 4)); set_unlocked(P_E5, noisy ? rnd_range(1, 2) : rnd_range(0, 99) < 70 ? 0 : rnd_range(1, 2));
             set_unlocked(P_E7, rnd_range(0, 99) < 75 ? 0 : rnd_range(10, 80)); break;
+    case 6: set_unlocked(P_E1, noisy ? 0 : rnd_range(1, 4)); set_unlocked(P_E4, noisy ? rnd_range(1, 2) : rnd_range(0, 99) < 70 ? 0 : rnd_range(1, 2));
+            set_unlocked(P_E6, rnd_range(0, 99) < 60 ? 7 : rnd_range(0, 14)); set_unlocked(P_E7, 0); break;
     default: break;
     }
 }
@@ -2807,6 +2875,7 @@ static void eng_noisy(void)                     /* a noise asset on a chip: its 
     case 2: set_unlocked(P_E2, 7); break;       /* YM2612: the feedback all the way */
     case 4: set_unlocked(P_E1, 4); set_unlocked(P_E2, 60); break;   /* SCSP: FM from the noise */
     case 5: set_unlocked(P_E1, 0); set_unlocked(P_E5, 1); break;    /* DMG: the pulses off, the 15-bit noise */
+    case 6: set_unlocked(P_E1, 0); set_unlocked(P_E4, 1); set_unlocked(P_E5, 3); break;   /* 2A03: the noise, decaying */
     default: break;
     }
 }
@@ -3683,12 +3752,13 @@ static void fmt_param(uint32_t p, int32_t v, char *s)
     case F_PCT: fmt_num(s, v, 0); cat(s, "%"); break;
     case F_MLEN: if (!v) cat(s, "OFF"); else { fmt_num(s, v > 16 ? v - 16 : v, 0); cat(s, v > 16 ? " LOOP" : " ONCE"); } break;
     case F_TIM: {                               /* TIMBRE: what the step sets, the engine's own (0: its knobs) */
-        static const char *const TN[4][8] = {{"KNOBS", "12.5%", "25%", "50%", "75%", "N SHORT", "N LONG", "KNOBS"},
+        static const char *const TN[5][8] = {{"KNOBS", "12.5%", "25%", "50%", "75%", "N SHORT", "N LONG", "KNOBS"},
                                              {"KNOBS", "TONE", "NOISE", "TONE+NS", "BUZZER", "SYNCBUZ", "TONE", "TONE"},
                                              {"KNOBS", "-9dB", "-6dB", "-3dB", "0dB", "+3dB", "+6dB", "+9dB"},
-                                             {"KNOBS", "12.5%", "25%", "50%", "75%", "50%+NS", "NOISE", "SHORT"}};
+                                             {"KNOBS", "12.5%", "25%", "50%", "75%", "50%+NS", "NOISE", "SHORT"},
+                                             {"KNOBS", "12.5%", "25%", "50%", "75%", "TRI", "NOISE", "SHORT"}};
         int32_t g = P[P_ENG];
-        cat(s, g == 3 || g == 4 ? (v ? "-" : "KNOBS") : TN[g == 1 ? 1 : g == 2 ? 2 : g == 5 ? 3 : 0][clampi(v, 0, 7)]);
+        cat(s, g == 3 || g == 4 ? (v ? "-" : "KNOBS") : TN[g == 1 ? 1 : g == 2 ? 2 : g == 5 ? 3 : g == 6 ? 4 : 0][clampi(v, 0, 7)]);
         break;
     }
     case F_CENT: fmt_num(s, v, 0); cat(s, "c"); break;
@@ -4409,7 +4479,7 @@ static void vis_chips(const theme_t *th)       /* ENGINE C: the PRINT, the engin
 {
     char s[40], t[16];
     int32_t i, k;
-    static const char *const DEP[6] = {"", "LOG DAC", "9-BIT DAC", "BRR 4-BIT", "LINEAR PCM", "4-BIT WAVE"};
+    static const char *const DEP[NENG] = {"", "LOG DAC", "9-BIT DAC", "BRR 4-BIT", "LINEAR PCM", "4-BIT WAVE", "7-BIT DELTA"};
     int32_t m = ENG_G, on = m && P[P_EMIX], qfp = m >= 3, np = qfp ? 8 : m == 1 ? 10 : 8, mx = 2600, px = 0, py = 0;
     uint16_t cb = on ? th->acc : C_MUTE, cl = on ? th->cyan : C_DK;
     uint32_t q;
@@ -4586,6 +4656,27 @@ static void vis_engine(const theme_t *th)      /* 01 ENGINE A, B: the chip at wo
         cv_text_fit(108, 92, 126, K.d_wave ? EN_DWAV[K.d_wave] : EN_DUTY[K.d_vol ? clampi(P[P_E1], 0, 4) : 0], C_TXT, 2);
         break;
     }
+    case 6: {                                   /* 2A03: its four channels as level bars; the triangle's 32 steps and the
+                                                   pulse's duty, each in its own line */
+        static const char *const CN[4] = {"P1", "P2", "TRI", "NS"};
+        for (k = 0; k < 4; k++) {
+            int32_t on = k == 0 ? K.n_pw != 0 : k == 1 ? K.n_p2 && K.n_pw : k == 2 ? K.n_tri != 0 : K.n_nz != 0;
+            int32_t v = !play || !on ? 0 : k == 2 ? 15 : EN.vol[k == 3 ? 2 : k], x = 8 + k * 24;
+            for (i = 0; i < 15; i++) cv_rect(x, 82 - i * 4, 16, 3, i < v ? (k == 3 ? cm : k == 2 ? ca : cc) : on ? RGB(30, 22, 22) : RGB(16, 16, 18));
+            cv_text(x + 8 - text_w(&FONT_A, CN[k]) / 2, 92 - FONT_A_CAP, &FONT_A, CN[k], on ? C_TXT : C_MUTE);
+        }
+        for (i = 0; i < 32; i++) {              /* the triangle: 15 .. 0 .. 15, four bits */
+            int32_t v = i < 16 ? 15 - i : i - 16;
+            cv_rect(108 + i * 4, 58 - v * 2, 3, 2, K.n_tri ? ((uint32_t)i == (EN.ph[2] >> 27) && play ? C_TXT : ca) : C_DK);
+        }
+        for (i = 0; i < 32; i++) {              /* the pulse's duty */
+            int32_t hi = (uint32_t)i * 0x08000000u < K.n_pw;
+            cv_rect(108 + i * 4, hi ? 66 : 80, 4, 2, K.n_pw ? cc : C_DK);
+            if (i && hi != ((uint32_t)(i - 1) * 0x08000000u < K.n_pw)) cv_rect(108 + i * 4, 66, 1, 16, K.n_pw ? cc : C_DK);
+        }
+        cv_text_fit(108, 92, 126, K.n_fc ? "FAMICOM 37 Hz" : "NES 90 + 440 Hz", C_MUTE, 2);
+        break;
+    }
     default: {                                  /* ND07: no chip; 03 makes the sound: its wave (or its sample), as it is */
         int32_t md = P[P_MODE], px = 0, py = 0;
         if (md != 1) for (i = 0; i <= 112; i++) {
@@ -4653,7 +4744,7 @@ static void app_ota_show(uint32_t step, int32_t code)
 }
 /* ---- the start (1.8 s; a key, a knob or a note ends it): the monolith drawn edge by edge, turning once, two orbits
  * opening round it and the dust falling in; the name written under it; the scan and the progress line of the start */
-#define ND07_VER "1.9.3"
+#define ND07_VER "1.9.4"
 #define BOOT_MS 1800u
 static uint32_t boot_end;                       /* fm1_ms the start ends (0: over) */
 static void boot_paint(int32_t oy, uint32_t t)  /* one 240 x 80 strip, from y = oy (the canvas: 240 x 112 at most) */

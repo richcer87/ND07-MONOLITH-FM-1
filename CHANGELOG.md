@@ -1,5 +1,16 @@
 # ND-07 // MONOLITH · FM-1 · historial de cambios
 
+## v1.9.4: la NES
+
+- **ENGINE 2A03** (NES / Famicom): dos pulsos con su duty y su sweep, el triángulo de 32 pasos, el ruido de 15 bits
+  con sus 16 periodos y la envolvente por hardware a 240 Hz. La nota cae en el periodo de 11 bits del chip (un C7
+  suena 14 cents arriba, como en la consola).
+- La **mezcla no lineal** de la NES (nesdev): pulsos por un lado, triángulo y ruido por otro; no suman derecho.
+- **OUT:** los filtros de la NES (90 y 440 Hz abajo, 14 kHz arriba) o los de la Famicom (37 Hz).
+- **PRINT DMC:** el canal delta de 7 bits a sus 16 velocidades.
+- Los macros de D sirven con el 2A03: TIMBRE es el duty, solo triángulo o el ruido largo / corto.
+- Los demás motores suenan igual que en la 1.9.3.
+
 ## v1.9.3: los macros del driver
 
 - **ENGINE D es el editor de macros**, cuadro por cuadro a 60 Hz: VOL, PITCH y TIMBRE de 16 pasos cada uno, con su

@@ -134,6 +134,7 @@ cual suena) y el driver, que pasa a ser B.
 | **SPC700** | Super NES | SRC RATE, BRR, PMON, ECHO, E TIME, E FDBK, FIR | El sample guardado a SRC RATE (22–4 kHz), codificado a **BRR** (4 bits, bloques de 16; GRIT lo engorda) y leído con la interpolación gaussiana del S-DSP. **PMON**: el pitch movido por otra voz. El **eco** con su FIR de 8 tomas (filtros como los que ponían los juegos), E TIME en pasos de 16 ms y feedback. |
 | **SCSP** | Saturn | FM SRC, DEPTH, RATIO, LFO RATE, PLFO, ALFO, DSP | El sample como PCM de 16 bits con su fase modulada por cualquier onda (seno, saw, cuadrada, ruido o el mismo sample). El LFO del slot: **PLFO** al pitch, **ALFO** al nivel. **DSP**: un programa de su DSP (CHORUS, FLANGER, MULTITAP, WATER: lo de "bajo el agua"). |
 | **DMG** | Game Boy | DUTY, PULSE 2, WAVE, W VOL, NOISE, ENV, ZOMBIE | Dos pulsos (DUTY: 12.5, 25, 50 o 75 %), el canal de onda de 32 pasos de 4 bits con su volumen 100/50/25 %, el ruido LFSR (NOISE: LONG de 15 bits o SHORT de 7), la envolvente de volumen por hardware (64 Hz) y **ZOMBIE**: el volumen empujado hacia arriba hasta dar la vuelta. Sale por el capacitor de salida. |
+| **2A03** | NES / Famicom | DUTY, PULSE 2, TRIANGLE, NOISE, DECAY, SWEEP, OUT | Dos pulsos (DUTY: 12.5, 25, 50 o 75 %; PULSE 2 al unísono, desafinado, una octava o una quinta arriba), el **triángulo** de 32 pasos de 4 bits (sin volumen: suena o no, como en la consola; NOTE o una octava abajo), el ruido LFSR de 15 bits con sus 16 periodos NTSC (NOISE: LONG o SHORT, el modo de 93 pasos), el **DECAY** de la envolvente por hardware (cuadros de 240 Hz) y el **SWEEP** de los pulsos. **OUT**: la salida de la NES (dos pasa-altos, 90 y 440 Hz: el sonido delgado de los bajos) o la de la Famicom (solo 37 Hz). |
 
 **Con la aritmética de cada chip.** Lo que el chip hace con números se hace con sus números:
 
@@ -142,6 +143,11 @@ cual suena) y el driver, que pasa a ser B.
   también con sus periodos enteros.
 - **DMG:** la nota por su periodo de 11 bits, 131072 / (2048 − x) (un C7 suena a 2080.5 Hz); el ruido con uno de sus
   ocho divisores; el capacitor de salida con su constante real.
+- **2A03:** la nota por el periodo de 11 bits del pulso, 1789773 / 16 / (t + 1) (un C7 suena a 2110.5 Hz, 14 cents
+  arriba, como en la consola; bajo el periodo 8 el pulso se calla, como el chip); el triángulo a la mitad de esa
+  velocidad; el ruido en el periodo de su tabla más cercano. Y la **mezcla no lineal** de la NES (las fórmulas de
+  nesdev, medidas de la consola): los pulsos por un lado, triángulo y ruido por el otro, y ninguno de los dos suma
+  derecho. Por eso el triángulo baja cuando el ruido sube, como en *Super Mario Bros.*
 - **YM2612:** cada operador con las dos ROMs del chip (el seno en logaritmo y la exponencial, como en el *die*), la
   atenuación en pasos de 0.094 dB, el TOTAL LEVEL en pasos de 0.75 dB, el DECAY con la tabla de tasas del chip, la
   nota en su F-NUMBER de 11 bits, el feedback de 4π y el DAC de 9 bits con su *ladder*: no hay escalón entre −1 y +1
@@ -164,7 +170,9 @@ cual suena) y el driver, que pasa a ser B.
 - **SPC700:** el S-DSP corre a sus 32 kHz: cada muestra se calcula a 32 kHz y se sostiene, el eco gira a 32 kHz con
   su FIR en el orden del hardware (FIR 0 a la más vieja), siete tomas que dan la vuelta a 16 bits y la última
   recortada, y la salida pasa por el filtro del SNES después del DAC (dos polos a 16 kHz).
-- **PRINT** usa los mismos filtros de salida (Mega Drive, SNES).
+- **2A03** (la 1.9.4): sale por los filtros de la NES (pasa-altos de 90 y 440 Hz, pasa-bajos de 14 kHz) o de la
+  Famicom (pasa-altos de 37 Hz).
+- **PRINT** usa los mismos filtros de salida (Mega Drive, SNES, NES).
 
 Lo que queda fuera, con franqueza: el motor es **mono** (una voz de cada chip), así que el paneo duro del DMG y la
 inversión de fase L/R del S-DSP no aplican. Del SCSP no están los 32 slots ni el DSP programable completo: son una voz
@@ -186,9 +194,10 @@ antialias, como el hardware), su DAC y su filtro de salida. **PRINT** es la mezc
 | **S-DSP** | Super NES | BRR (los cuatro filtros, el mejor por bloque) y la interpolación gaussiana con su tabla | BRR más grueso |
 | **SCSP** | Saturn | PCM lineal con interpolación lineal | 16 → 8 bits |
 | **DMG** | Game Boy | El canal de onda: samples de 4 bits, el volumen 100 / 50 / 25 % y el capacitor de salida (pasa-altos) | 16 → 8 → 4 niveles |
+| **DMC** | NES / Famicom | El canal DMC: un contador de 7 bits que solo sube o baja 2 por muestra (1 bit por muestra, el *delta*), así que lo rápido se redondea en rampas; con el pasa-bajos de 14 kHz de la consola | — |
 
 - **RATE:** la frecuencia del chip, en el rango que usaban sus juegos (YM2149 4–22 kHz, YM2612 4–26 kHz, S-DSP 8–32
-  kHz, SCSP 11–44 kHz, DMG 2–16 kHz). Bajo = más aliasing, más época.
+  kHz, SCSP 11–44 kHz, DMG 2–16 kHz, DMC 4.2–33.1 kHz: sus 16 velocidades NTSC). Bajo = más aliasing, más época.
 - **D: los macros del driver de 60 Hz**, cuadro por cuadro, como los hacían los drivers de los juegos (y como los
   editan Furnace o FamiTracker). Tres macros de 16 pasos: **VOL** (0–15, por la envolvente: los 16 niveles de los
   chips), **PITCH** (±12 semitonos: los arpegios) y **TIMBRE** (lo de cada motor: el duty o el ruido del DMG y de las
@@ -211,7 +220,7 @@ ataques y el último segundo de ambos). Al girar una perilla, su celda se ilumin
 | --- | --- |
 | Inicio | el monolito se dibuja por sus orillas, dos órbitas y polvo alrededor, "ND-07" escrito con cursor y la versión; cualquier botón la salta |
 | Actualización | los cinco pasos de la instalación, el monolito llenándose de verde y "DO NOT UNPLUG"; en naranja si falla, con su código |
-| ENGINE | en A y B el chip como lo dibujaba su manual: los canales del YM2149 y la forma de su envolvente, el algoritmo del YM2612 con sus operadores encendidos por su envolvente, el bloque BRR y las tomas del FIR del SPC700, el slot y el programa del DSP del SCSP, los canales del DMG en segmentos de LCD y su wave RAM; con ND07, la onda o el sample de 03 tal cual; en C (PRINT) el DAC como pieza con sus pines y la salida en escalones; en D el pitch de los primeros 0.8 s y el sonido en bloques de 8 bits |
+| ENGINE | en A y B el chip como lo dibujaba su manual: los canales del YM2149 y la forma de su envolvente, el algoritmo del YM2612 con sus operadores encendidos por su envolvente, el bloque BRR y las tomas del FIR del SPC700, el slot y el programa del DSP del SCSP, los canales del DMG en segmentos de LCD y su wave RAM, los cuatro canales del 2A03 con el triángulo en escalones, el duty y la salida; con ND07, la onda o el sample de 03 tal cual; en C (PRINT) el DAC como pieza con sus pines y la salida en escalones; en D el pitch de los primeros 0.8 s y el sonido en bloques de 8 bits |
 | ASSETS | un espectrómetro pequeño en la línea de estado; en B los siete tipos de NEW SFX y el motor en el que va a sonar |
 | OSC & SAMPLE | el oscilador como wavetable visto de lado: el ciclo al frente y detrás la misma onda con menos COLOR; el sample como tallos con punta; en D, un anillo de trazos por voz |
 | GRAIN ENGINE | cada grano un aro que nace donde lee, sube y se encoge; las orillas del SPRAY punteadas |
@@ -277,7 +286,7 @@ señal a L y R): delay, flanger, reverb y OTT procesan un solo canal.
 | DESTROY (todo encendido) | ~110 | cada parte apagada no cuesta |
 | TRANSIENT | ~95 | ATTACK y SUSTAIN en 0 = 0 |
 | 3-BAND EQ | ~50 por banda | una banda en 0 dB no cuesta; todo plano = 0 |
-| ENGINE (un chip) | en lugar del oscilador: DMG +25; YM2149 +100; SCSP +160 (con DSP); YM2612 +225; SPC700 +310 (con eco; el codificador BRR prueba sus cuatro filtros) | ENGINE ND07 = 0 |
+| ENGINE (un chip) | en lugar del oscilador: DMG +25; 2A03 ≤ +100 (la mezcla no lineal divide); YM2149 +100; SCSP +160 (con DSP); YM2612 +225; SPC700 +310 (con eco; el codificador BRR prueba sus cuatro filtros) | ENGINE ND07 = 0 |
 | Delay / Flanger | ~80 / ~30 | MIX 0 = 0 |
 | LAYER 2 / 3 (0.7, estimado) | la FUENTE ×2 / ×3 (con SUPRSAW, lo más caro) | VOICES MONO = 0 · en SAMPLE sólo con STRETCH 1.00x |
 | SHEPARD (0.7, estimado) | ~ como SUPRSAW | — |
